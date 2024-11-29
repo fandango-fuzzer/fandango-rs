@@ -647,14 +647,14 @@ mod test {
 
         let graph = (&program).into_graph();
 
-        let dag_graphviz = Dot::with_attr_getters(
+        let rendered = Dot::with_attr_getters(
             &graph,
             &[Config::NodeNoLabel, Config::EdgeNoLabel],
             &|_, (_, _, weight)| format!("label = {:?}", format!("{}", weight)),
             &|_, (_, node)| format!("label = {:?}", format!("{}", node)),
         );
 
-        println!("{dag_graphviz}");
+        println!("{rendered}");
 
         Ok(())
     }

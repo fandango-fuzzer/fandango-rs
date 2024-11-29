@@ -60,7 +60,6 @@ dependencies = [
  "pest",
  "pest_derive",
  "petgraph",
- "unicode-ident",
 ]
 
 [[package]]
