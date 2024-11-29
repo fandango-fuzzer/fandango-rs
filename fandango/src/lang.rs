@@ -1,3 +1,5 @@
+//! Language definition for FANDANGO grammars. [`Program::try_from`] is what you want. :)
+
 use crate::graph::{FandangoNode, Traverse};
 use crate::impl_traverse;
 use crate::lang::py_literal::{parse_bytes, parse_string};
@@ -5,22 +7,33 @@ use getset::Getters;
 use pest::error::{Error as PestError, ErrorVariant};
 use pest::iterators::Pair;
 use pest::Parser;
-use pest_derive::Parser;
 use std::borrow::Cow;
 use std::fmt::Debug;
 use std::ops::RangeInclusive;
 use std::str::FromStr;
 
+mod parser {
+    #![allow(missing_docs)]
+
+    use pest_derive::Parser;
+
+    #[derive(Parser)]
+    #[grammar = "py_literal/grammar.pest"]
+    #[grammar = "fandango.pest"]
+    pub struct Fandango;
+}
+
+use parser::Fandango;
+pub use parser::Rule;
+
+/// The [`PestError`] specific to FANDANGO.
 pub type ParseError = PestError<Rule>;
 
-#[derive(Parser)]
-#[grammar = "py_literal/grammar.pest"]
-#[grammar = "fandango.pest"]
-struct Fandango;
-
+/// The root of the FANDANGO grammar.
 #[derive(Debug, Clone, Eq, PartialEq, Getters)]
 #[getset(get = "pub")]
 pub struct Program<'a> {
+    /// The statements contained within this grammar.
     statements: Vec<Statement<'a>>,
 }
 
@@ -53,10 +66,14 @@ impl<'a> TryFrom<Pair<'a, Rule>> for Program<'a> {
     }
 }
 
+/// A statement within a FANDANGO grammar.
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub enum Statement<'a> {
+    /// A production representing a rule within the grammar.
     Production(Production<'a>),
+    /// A constraint applied within the grammar.
     Constraint,
+    /// Python code present in the grammar for the definition of e.g. generators and constraints.
     Python,
 }
 
@@ -79,10 +96,13 @@ impl<'a> TryFrom<Pair<'a, Rule>> for Statement<'a> {
     }
 }
 
+/// A production rule within the grammar.
 #[derive(Debug, Clone, Eq, PartialEq, Getters)]
 #[getset(get = "pub")]
 pub struct Production<'a> {
+    /// The nonterminal which is defined by this production.
     nonterminal: Nonterminal<'a>,
+    /// An alternative which defines the rule.
     alternative: Alternative<'a>,
 }
 
@@ -104,13 +124,16 @@ impl<'a> TryFrom<Pair<'a, Rule>> for Production<'a> {
     }
 }
 
+/// A non-terminal, either at definition or use site.
 #[derive(Debug, Clone, Eq, Ord, PartialOrd, PartialEq, Getters)]
 #[getset(get = "pub")]
 pub struct Nonterminal<'a> {
+    /// The name of the non-terminal.
     name: Cow<'a, str>,
 }
 
 impl<'a> Nonterminal<'a> {
+    /// Create a non-terminal (useful for testing and referring to non-terminals directly).
     pub fn new(name: Cow<'a, str>) -> Self {
         Self { name }
     }
@@ -134,9 +157,11 @@ impl<'a> TryFrom<Pair<'a, Rule>> for Nonterminal<'a> {
     }
 }
 
+/// A list of potential instantiations.
 #[derive(Debug, Clone, Eq, PartialEq, Getters)]
 #[getset(get = "pub")]
 pub struct Alternative<'a> {
+    /// The concatenations which represent the possible alternatives.
     concatenations: Vec<Concatenation<'a>>,
 }
 
@@ -157,9 +182,11 @@ impl<'a> TryFrom<Pair<'a, Rule>> for Alternative<'a> {
     }
 }
 
+/// A concatenation of individual operators.
 #[derive(Debug, Clone, Eq, PartialEq, Getters)]
 #[getset(get = "pub")]
 pub struct Concatenation<'a> {
+    /// The concatenated operators.
     operators: Vec<Operator<'a>>,
 }
 
@@ -180,12 +207,19 @@ impl<'a> TryFrom<Pair<'a, Rule>> for Concatenation<'a> {
     }
 }
 
+/// An individual operator within a grammar.
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub enum Operator<'a> {
+    /// Kleene star (0 to many) postfix operation.
     Kleene(Symbol<'a>),
+    /// Plus (1 to many) postfix operation.
     Plus(Symbol<'a>),
+    /// Optional (0 or 1) postfix operation.
     Option(Symbol<'a>),
+    /// Repetition postfix operation, with range specified as `{n}` for exactly `n` repetitions or
+    /// `{m,n}` for any number of repetitions between `m` and `n`, inclusive.
     Repeat(Symbol<'a>, RangeInclusive<usize>),
+    /// Simple case: exactly 1 [`Symbol`].
     Symbol(Symbol<'a>),
 }
 
@@ -227,11 +261,16 @@ impl<'a> TryFrom<Pair<'a, Rule>> for Operator<'a> {
     }
 }
 
+/// A single symbol within the grammar, or a list of [`Alternative`]s.
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub enum Symbol<'a> {
+    /// A single non-terminal.
     Nonterminal(Nonterminal<'a>),
+    /// A string-like terminal.
     String(Cow<'a, str>),
+    /// A bytes-like terminal.
     Bytes(Cow<'a, [u8]>),
+    /// A list of [`Alternative`]s.
     Alternative(Alternative<'a>),
 }
 
@@ -255,7 +294,7 @@ impl<'a> TryFrom<Pair<'a, Rule>> for Symbol<'a> {
     }
 }
 
-/// This section is mostly copied from py_literal: https://github.com/jturner314/py_literal/releases/tag/0.4.0
+/// This section is mostly copied from py_literal: <https://github.com/jturner314/py_literal/releases/tag/0.4.0>
 /// This is necessary because pest does not easily allow for grammar + extract dependencies.
 mod py_literal {
     use crate::lang::{ParseError, Rule};

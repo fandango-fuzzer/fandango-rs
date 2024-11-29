@@ -10,6 +10,7 @@
 //! 4. Implementation of Rust-native generators. (12.12.)
 
 #![allow(bindings_with_variant_name)] // old school macros in py_literal
+#![warn(missing_docs)]
 
 extern crate alloc;
 extern crate core;
@@ -20,4 +21,4 @@ mod parse_macros;
 
 #[macro_use]
 pub mod graph;
-mod lang;
+pub mod lang;

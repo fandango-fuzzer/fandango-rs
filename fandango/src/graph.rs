@@ -1,3 +1,5 @@
+//! Graph operations for lifting FANDANGO grammars to a graph.
+
 use crate::lang::{
     Alternative, Concatenation, Nonterminal, Operator, Production, Program, Statement, Symbol,
 };
@@ -10,10 +12,14 @@ use std::collections::VecDeque;
 use std::fmt;
 use std::hash::{Hash, Hasher};
 
+/// Traverse this type's children, potentially recursively.
 #[allow(unused_variables)]
 pub trait Traverse: Sized {
+    /// The node type for graph.
     type Node: NodeTrait + Traverse<Node = Self::Node> + From<Self>;
 
+    /// Recurse the traversal! The order of calls to `consumer` are not guaranteed, but ultimately
+    /// will invoke [`Traverse::traverse`] for each level.
     fn recurse<F>(self, mut consumer: F)
     where
         F: FnMut(Self::Node, Self::Node, usize),
@@ -24,6 +30,8 @@ pub trait Traverse: Sized {
         })
     }
 
+    /// Traverse a single level from this node. The `consumer` function should accept two nodes, the
+    /// parent and the child, as well as an unsigned integer denoting the index of the children.
     fn traverse<F>(self, consumer: F)
     where
         F: FnMut(Self::Node, Self::Node, usize),
@@ -31,6 +39,7 @@ pub trait Traverse: Sized {
     }
 }
 
+/// Call `consumer` for each `i, child` in `children.enumerate()` with `consumer(parent, child, i)`.
 pub fn traverse_children<'program, F, T>(
     parent: T,
     children: impl Iterator<Item = T::Node>,
@@ -45,6 +54,7 @@ pub fn traverse_children<'program, F, T>(
     }
 }
 
+/// Internal macro for compiling iterator chains, for use in [`crate::impl_traverse`].
 #[macro_export]
 macro_rules! chain_field_iter {
     ($node:ty $(=> $from:tt)?, $current:expr) => {
@@ -61,6 +71,7 @@ macro_rules! chain_field_iter {
     };
 }
 
+/// Internal macro for producing iterators over fields, for use in [`crate::impl_traverse`].
 #[macro_export]
 macro_rules! field_iter {
     ($node:ty $(=> $from:tt)?) => {
@@ -81,13 +92,12 @@ macro_rules! field_iter {
     }};
 }
 
-// variant_traverse!(self, Variant(a, [b], c))
+/// Internal macro for compiling iterator chains, for use in [`crate::impl_traverse`], over enums.
 #[macro_export]
 macro_rules! variant_traverse {
-    ($from:tt, $name:ty, $consumer:tt, $node:ty, @($variant:tt { $($bindings:tt),+ } { $($iteration:tt)+ } { } $(, $($variants:tt)+)?), $($emitted:tt)*) => {
+    ($from:tt, $consumer:tt, $node:ty, @($variant:tt { $($bindings:tt),+ } { $($iteration:tt)+ } { } $(, $($variants:tt)+)?), $($emitted:tt)*) => {
         $crate::variant_traverse!(
             $from,
-            $name,
             $consumer,
             $node,
             @($($($variants)+)?),
@@ -96,10 +106,9 @@ macro_rules! variant_traverse {
         )
     };
 
-    ($from:tt, $name:ty, $consumer:tt, $node:ty, @($variant:tt { $($bindings:tt),+ } { $($iteration:tt)+ } { _ $(, $($remaining:tt),+)? } $(, $($variants:tt)+)?), $($emitted:tt)*) => {
+    ($from:tt, $consumer:tt, $node:ty, @($variant:tt { $($bindings:tt),+ } { $($iteration:tt)+ } { _ $(, $($remaining:tt),+)? } $(, $($variants:tt)+)?), $($emitted:tt)*) => {
         $crate::variant_traverse!(
             $from,
-            $name,
             $consumer,
             $node,
             @(
@@ -113,10 +122,9 @@ macro_rules! variant_traverse {
         )
     };
 
-    ($from:tt, $name:ty, $consumer:tt, $node:ty, @($variant:tt { $($bindings:tt),+ } { $($iteration:tt)+ } { $next:tt $(, $($remaining:tt),+)? } $(, $($variants:tt)+)?), $($emitted:tt)*) => {
+    ($from:tt, $consumer:tt, $node:ty, @($variant:tt { $($bindings:tt),+ } { $($iteration:tt)+ } { $next:tt $(, $($remaining:tt),+)? } $(, $($variants:tt)+)?), $($emitted:tt)*) => {
         $crate::variant_traverse!(
             $from,
-            $name,
             $consumer,
             $node,
             @(
@@ -130,10 +138,9 @@ macro_rules! variant_traverse {
         )
     };
 
-    ($from:tt, $name:ty, $consumer:tt, $node:ty, @($variant:tt { $($bindings:tt),+ } { $($iteration:tt)+ } { [ $next:tt ] $(, $($remaining:tt),+)? } $(, $($variants:tt)+)?), $($emitted:tt)*) => {
+    ($from:tt, $consumer:tt, $node:ty, @($variant:tt { $($bindings:tt),+ } { $($iteration:tt)+ } { [ $next:tt ] $(, $($remaining:tt),+)? } $(, $($variants:tt)+)?), $($emitted:tt)*) => {
         $crate::variant_traverse!(
             $from,
-            $name,
             $consumer,
             $node,
             @(
@@ -147,10 +154,9 @@ macro_rules! variant_traverse {
         )
     };
 
-    ($from:tt, $name:ty, $consumer:tt, $node:ty, @($variant:tt { } { } { $next:tt $(, $($remaining:tt),+)? } $(, $($variants:tt)+)?), $($emitted:tt)*) => {
+    ($from:tt, $consumer:tt, $node:ty, @($variant:tt { } { } { $next:tt $(, $($remaining:tt),+)? } $(, $($variants:tt)+)?), $($emitted:tt)*) => {
         $crate::variant_traverse!(
             $from,
-            $name,
             $consumer,
             $node,
             @(
@@ -164,10 +170,9 @@ macro_rules! variant_traverse {
         )
     };
 
-    ($from:tt, $name:ty, $consumer:tt, $node:ty, @($variant:tt { } { } { _ $(, $($remaining:tt),+)? } $(, $($variants:tt)+)?), $($emitted:tt)*) => {
+    ($from:tt, $consumer:tt, $node:ty, @($variant:tt { } { } { _ $(, $($remaining:tt),+)? } $(, $($variants:tt)+)?), $($emitted:tt)*) => {
         $crate::variant_traverse!(
             $from,
-            $name,
             $consumer,
             $node,
             @(
@@ -181,10 +186,9 @@ macro_rules! variant_traverse {
         )
     };
 
-    ($from:tt, $name:ty, $consumer:tt, $node:ty, @($variant:tt { } { } { [ $next:tt ] $(, $($remaining:tt),+)? } $(, $($variants:tt)+)?), $($emitted:tt)*) => {
+    ($from:tt, $consumer:tt, $node:ty, @($variant:tt { } { } { [ $next:tt ] $(, $($remaining:tt),+)? } $(, $($variants:tt)+)?), $($emitted:tt)*) => {
         $crate::variant_traverse!(
             $from,
-            $name,
             $consumer,
             $node,
             @(
@@ -198,10 +202,9 @@ macro_rules! variant_traverse {
         )
     };
 
-    ($from:tt, $name:ty, $consumer:tt, $node:ty, @($variant:tt $(, $($variants:tt)+)?), $($emitted:tt)*) => {
+    ($from:tt, $consumer:tt, $node:ty, @($variant:tt $(, $($variants:tt)+)?), $($emitted:tt)*) => {
         $crate::variant_traverse!(
             $from,
-            $name,
             $consumer,
             $node,
             @($($($variants)+)?),
@@ -210,10 +213,9 @@ macro_rules! variant_traverse {
         )
     };
 
-    ($from:tt, $name:ty, $consumer:tt, $node:ty, @($variant:tt ( $($options:tt),+ ) $(, $($variants:tt)+)?), $($emitted:tt)*) => {
+    ($from:tt, $consumer:tt, $node:ty, @($variant:tt ( $($options:tt),+ ) $(, $($variants:tt)+)?), $($emitted:tt)*) => {
         $crate::variant_traverse!(
             $from,
-            $name,
             $consumer,
             $node,
             @(
@@ -227,23 +229,65 @@ macro_rules! variant_traverse {
         )
     };
 
-    ($from:tt, $name:ty, $consumer:tt, $node:ty, { $($variants:tt)+ }) => {
+    ($from:tt, $consumer:tt, $node:ty, { $($variants:tt)+ }) => {
         $crate::variant_traverse!(
             $from,
-            $name,
             $consumer,
             $node,
             @($($variants)+),
         )
     };
 
-    ($from:tt, $name:ty, $consumer:tt, $node:ty, @(), $($emitted:tt)*) => {
+    ($from:tt, $consumer:tt, $node:ty, @(), $($emitted:tt)*) => {
         match $from {
             $($emitted)*
         }
     };
 }
 
+/// Macro which generates implementations of [`Traverse`] over fields of the provided struct or
+/// variants of the provided enum.
+///
+/// The first four fields are, in order:
+/// 1. The type for which [`Traverse`] is to be implemented.
+/// 2. The name of the raw type (e.g., if providing the type behind a reference).
+/// 3. The node type of the graph (e.g., [`FandangoNode`]).
+/// 4. The generics/lifetimes required for the implementation (optional; where clauses not supported).
+///
+/// The remaining argument(s) are a variadic list of fields or a list of match-like enum pattern
+/// bindings without the `=> { ... }` clause, surrounded by `match { }`. Fields or enum bindings
+/// which are surrounded by `[]` will be interpreted as iterables and those without will be
+/// considered as something which can be immediately [`Into::into`]'d into the corresponding node
+/// type. The order of variables will be preserved, and the enumeration will take place over the
+/// combined iterator.
+///
+/// This enum can simplify the implementation of traversal for structures with a variety of layouts.
+/// For example, `statements` here has an `iter` method, the items for which implement [`Into`] for
+/// the node type [`FandangoNode`].
+/// ```no_run
+/// # use fandango::graph::FandangoNode;
+/// # use fandango::lang::Program;
+/// fandango::impl_traverse!(
+///     &'program Program<'source>,
+///     Program,
+///     FandangoNode<'program, 'source>,
+///     <'program, 'source>,
+///     [statements]
+/// );
+/// ```
+///
+/// It is also possible to do this for enums across multiple variants:
+/// ```no_run
+/// # use fandango::graph::FandangoNode;
+/// # use fandango::lang::Statement;
+/// fandango::impl_traverse!(
+///     &'program Statement<'source>,
+///     Statement,
+///     FandangoNode<'program, 'source>,
+///     <'program, 'source>,
+///     match { Production(prod), Constraint, Python }
+/// );
+/// ```
 #[macro_export]
 macro_rules! impl_traverse {
     ($target:ty, $name:ty, $node:ty, < $($generics:tt),* >, match { $($variants:tt)+ }) => {
@@ -256,7 +300,7 @@ macro_rules! impl_traverse {
             {
                 #![allow(unused_imports)]
                 use $name::*;
-                $crate::variant_traverse!(self, $name, consumer, $node, { $($variants)+ })
+                $crate::variant_traverse!(self, consumer, $node, { $($variants)+ })
             }
         }
     };
@@ -285,15 +329,29 @@ macro_rules! impl_traverse {
 
 macro_rules! impl_fandango_traverse {
     ($target:tt, match { $($variants:tt)+ }) => {
-        impl_traverse!(&'program $target<'source>, $target, FandangoNode<'program, 'source>, <'program, 'source>, match { $($variants)+ });
+        impl_traverse!(
+            &'program $target<'source>,
+            $target,
+            FandangoNode<'program, 'source>,
+            <'program, 'source>,
+            match { $($variants)+ }
+        );
     };
 
     ($target:tt, $($fields:tt),*) => {
-        impl_traverse!(&'program $target<'source>, $target, FandangoNode<'program, 'source>, <'program, 'source>, $($fields),*);
+        impl_traverse!(
+            &'program $target<'source>,
+            $target,
+            FandangoNode<'program, 'source>,
+            <'program, 'source>,
+            $($fields),*
+        );
     };
 }
 
+/// Convert a type which implements [`Traverse`] into a [`DiGraphMap`].
 pub trait IntoGraph: Traverse {
+    /// Perform the conversion.
     fn into_graph(self) -> DiGraphMap<Self::Node, usize>;
 }
 
@@ -353,7 +411,9 @@ where
     }
 }
 
+/// The node type used to represent the grammar's graph.
 #[derive(Copy, Clone)]
+#[allow(missing_docs)]
 pub enum FandangoNode<'program, 'source> {
     Program(&'program Program<'source>),
     Statement(&'program Statement<'source>),
@@ -450,7 +510,7 @@ impl fmt::Debug for FandangoNode<'_, '_> {
     }
 }
 
-impl<'program, 'source> Traverse for FandangoNode<'program, 'source> {
+impl Traverse for FandangoNode<'_, '_> {
     type Node = Self;
 
     fn traverse<F>(self, consumer: F)
@@ -580,6 +640,7 @@ mod test {
     use petgraph::dot::{Config, Dot};
     use std::error::Error;
 
+    // this doesn't really test anything, just produces a graph in GraphViz format
     #[test]
     fn test_graph() -> Result<(), Box<dyn Error>> {
         let program = Program::try_from(SIMPLE_GRAMMAR)?;
