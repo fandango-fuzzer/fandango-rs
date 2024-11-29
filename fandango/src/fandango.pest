@@ -1,0 +1,54 @@
+fandango = { SOI ~ program ~ EOI }
+
+program = { NEWLINE* ~ (statement ~ NEWLINE*)* }
+
+// constraint is not yet supported
+// python is not yet supported
+statement = { production }
+// statement = { production | constraint | python }
+
+// expression is not yet supported
+production = {
+  (
+    nonterminal ~ "::=" ~ alternative ~ ";"
+  )
+}
+
+nonterminal = { "<" ~ name ~ ">" }
+name = { XID_START ~ XID_CONTINUE* }
+
+alternative = { concatenation ~ ( "|" ~ concatenation )* }
+
+concatenation = { operator ~ ( operator )* }
+
+operator = {
+  kleene
+| plus
+| option
+| repeat
+| symbol
+}
+
+// char_set is currently ambiguous and therefore omitted
+symbol = {
+  (
+    nonterminal
+  | string
+  | bytes
+  | "(" ~ alternative ~ ")"
+  )
+}
+
+kleene = { symbol ~ "*" }
+plus   = { symbol ~ "+" }
+option = { symbol ~ "?" }
+repeat = {
+  ( symbol ~ "{" ~ integer ~ "}" )
+| ( symbol ~ "{" ~ integer ~ "," ~ integer ~ "}" )
+}
+
+// TODO actually implement
+constraint = { "" }
+python = { "" }
+
+WHITESPACE = _{ PATTERN_WHITE_SPACE }
