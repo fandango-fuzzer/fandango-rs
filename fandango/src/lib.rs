@@ -21,4 +21,5 @@ mod parse_macros;
 
 #[macro_use]
 pub mod graph;
+pub mod gen;
 pub mod lang;

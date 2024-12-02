@@ -9,8 +9,10 @@ use pest::iterators::Pair;
 use pest::Parser;
 use std::borrow::Cow;
 use std::fmt::Debug;
-use std::ops::RangeInclusive;
+use std::ops::{Deref, DerefMut, RangeInclusive};
 use std::str::FromStr;
+
+pub use pest::Span;
 
 mod parser {
     #![allow(missing_docs)]
@@ -27,19 +29,80 @@ use parser::Fandango;
 pub use parser::Rule;
 
 /// The [`PestError`] specific to FANDANGO.
-pub type ParseError = PestError<Rule>;
+pub type ParseError = Box<PestError<Rule>>;
+
+/// A source position tag for a given grammar element.
+#[derive(Debug, Clone, Eq, PartialEq, Getters)]
+pub struct Tagged<'source, T> {
+    #[getset(get_copy = "pub")]
+    span: Span<'source>,
+    inner: T,
+}
+
+impl<'source, T> Tagged<'source, T> {
+    pub(crate) fn new(inner: T, span: Span<'source>) -> Self {
+        Self { inner, span }
+    }
+}
+
+impl<T> Deref for Tagged<'_, T> {
+    type Target = T;
+
+    fn deref(&self) -> &Self::Target {
+        &self.inner
+    }
+}
+
+impl<T> DerefMut for Tagged<'_, T> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.inner
+    }
+}
+
+impl<'source, T> TryFrom<Pair<'source, Rule>> for Tagged<'source, T>
+where
+    T: TryFrom<Pair<'source, Rule>>,
+{
+    type Error = T::Error;
+
+    fn try_from(value: Pair<'source, Rule>) -> Result<Self, Self::Error> {
+        let span = value.as_span();
+        Ok(Self {
+            span,
+            inner: value.try_into()?,
+        })
+    }
+}
+
+impl<'program, 'source, T, U> From<&'program Tagged<'source, T>> for (U, Span<'source>)
+where
+    U: From<&'program T>,
+{
+    fn from(value: &'program Tagged<'source, T>) -> Self {
+        ((&value.inner).into(), value.span)
+    }
+}
+
+impl<'source, T> PartialEq<T> for Tagged<'source, T>
+where
+    T: PartialEq<T>,
+{
+    fn eq(&self, other: &T) -> bool {
+        self.inner == *other
+    }
+}
 
 /// The root of the FANDANGO grammar.
 #[derive(Debug, Clone, Eq, PartialEq, Getters)]
 #[getset(get = "pub")]
 pub struct Program<'a> {
     /// The statements contained within this grammar.
-    statements: Vec<Statement<'a>>,
+    statements: Vec<Tagged<'a, Statement<'a>>>,
 }
 
 impl_fandango_traverse!(Program, [statements]);
 
-impl<'a> TryFrom<&'a str> for Program<'a> {
+impl<'a> TryFrom<&'a str> for Tagged<'a, Program<'a>> {
     type Error = ParseError;
 
     fn try_from(value: &'a str) -> Result<Self, Self::Error> {
@@ -47,7 +110,10 @@ impl<'a> TryFrom<&'a str> for Program<'a> {
             parse_pairs_as!(Fandango::parse(Rule::fandango, value)?, (Rule::fandango,));
         let (program, _) = parse_pairs_as!(grammar.into_inner(), (Rule::program, Rule::EOI));
 
-        Program::try_from(program)
+        Ok(Tagged {
+            span: program.as_span(),
+            inner: Program::try_from(program)?,
+        })
     }
 }
 
@@ -60,7 +126,7 @@ impl<'a> TryFrom<Pair<'a, Rule>> for Program<'a> {
         Ok(Self {
             statements: value
                 .into_inner()
-                .map(Statement::try_from)
+                .map(Pair::try_into)
                 .collect::<Result<_, ParseError>>()?,
         })
     }
@@ -70,7 +136,7 @@ impl<'a> TryFrom<Pair<'a, Rule>> for Program<'a> {
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub enum Statement<'a> {
     /// A production representing a rule within the grammar.
-    Production(Production<'a>),
+    Production(Tagged<'a, Production<'a>>),
     /// A constraint applied within the grammar.
     Constraint,
     /// Python code present in the grammar for the definition of e.g. generators and constraints.
@@ -88,7 +154,7 @@ impl<'a> TryFrom<Pair<'a, Rule>> for Statement<'a> {
         let inner = value.into_inner().next().unwrap();
 
         Ok(match inner.as_rule() {
-            Rule::production => Statement::Production(Production::try_from(inner)?),
+            Rule::production => Statement::Production(Pair::try_into(inner)?),
             Rule::constraint => todo!("Constraints are not yet implemented"),
             Rule::python => todo!("Python parsing is not yet implemented"),
             _ => unreachable!("This case is not represented within the grammar."),
@@ -101,9 +167,9 @@ impl<'a> TryFrom<Pair<'a, Rule>> for Statement<'a> {
 #[getset(get = "pub")]
 pub struct Production<'a> {
     /// The nonterminal which is defined by this production.
-    nonterminal: Nonterminal<'a>,
+    nonterminal: Tagged<'a, Nonterminal<'a>>,
     /// An alternative which defines the rule.
-    alternative: Alternative<'a>,
+    alternative: Tagged<'a, Alternative<'a>>,
 }
 
 impl_fandango_traverse!(Production, nonterminal, alternative);
@@ -139,7 +205,7 @@ impl<'a> Nonterminal<'a> {
     }
 }
 
-impl<'program, 'source> Traverse for &'program Nonterminal<'source> {
+impl<'program, 'source> Traverse<'source> for &'program Nonterminal<'source> {
     type Node = FandangoNode<'program, 'source>;
 }
 
@@ -162,7 +228,7 @@ impl<'a> TryFrom<Pair<'a, Rule>> for Nonterminal<'a> {
 #[getset(get = "pub")]
 pub struct Alternative<'a> {
     /// The concatenations which represent the possible alternatives.
-    concatenations: Vec<Concatenation<'a>>,
+    concatenations: Vec<Tagged<'a, Concatenation<'a>>>,
 }
 
 impl_fandango_traverse!(Alternative, [concatenations]);
@@ -176,7 +242,7 @@ impl<'a> TryFrom<Pair<'a, Rule>> for Alternative<'a> {
         Ok(Self {
             concatenations: value
                 .into_inner()
-                .map(Concatenation::try_from)
+                .map(Pair::try_into)
                 .collect::<Result<_, ParseError>>()?,
         })
     }
@@ -187,7 +253,7 @@ impl<'a> TryFrom<Pair<'a, Rule>> for Alternative<'a> {
 #[getset(get = "pub")]
 pub struct Concatenation<'a> {
     /// The concatenated operators.
-    operators: Vec<Operator<'a>>,
+    operators: Vec<Tagged<'a, Operator<'a>>>,
 }
 
 impl_fandango_traverse!(Concatenation, [operators]);
@@ -201,7 +267,7 @@ impl<'a> TryFrom<Pair<'a, Rule>> for Concatenation<'a> {
         Ok(Self {
             operators: value
                 .into_inner()
-                .map(Operator::try_from)
+                .map(Pair::try_into)
                 .collect::<Result<_, ParseError>>()?,
         })
     }
@@ -211,28 +277,28 @@ impl<'a> TryFrom<Pair<'a, Rule>> for Concatenation<'a> {
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub enum Operator<'a> {
     /// Kleene star (0 to many) postfix operation.
-    Kleene(Symbol<'a>),
+    Kleene(Tagged<'a, Symbol<'a>>),
     /// Plus (1 to many) postfix operation.
-    Plus(Symbol<'a>),
+    Plus(Tagged<'a, Symbol<'a>>),
     /// Optional (0 or 1) postfix operation.
-    Option(Symbol<'a>),
+    Option(Tagged<'a, Symbol<'a>>),
     /// Repetition postfix operation, with range specified as `{n}` for exactly `n` repetitions or
     /// `{m,n}` for any number of repetitions between `m` and `n`, inclusive.
-    Repeat(Symbol<'a>, RangeInclusive<usize>),
+    Repeat(Tagged<'a, Symbol<'a>>, RangeInclusive<usize>),
     /// Simple case: exactly 1 [`Symbol`].
-    Symbol(Symbol<'a>),
+    Symbol(Tagged<'a, Symbol<'a>>),
 }
 
 impl_fandango_traverse!(Operator, match { Kleene(sym), Plus(sym), Option(sym), Repeat(sym, _), Symbol(sym) });
 
 fn parse_range(pair: Pair<Rule>) -> Result<usize, ParseError> {
     usize::from_str(pair.as_str()).map_err(|_| {
-        PestError::new_from_span(
+        Box::new(PestError::new_from_span(
             ErrorVariant::CustomError {
                 message: "invalid range specifier".to_string(),
             },
             pair.as_span(),
-        )
+        ))
     })
 }
 
@@ -265,13 +331,13 @@ impl<'a> TryFrom<Pair<'a, Rule>> for Operator<'a> {
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub enum Symbol<'a> {
     /// A single non-terminal.
-    Nonterminal(Nonterminal<'a>),
+    Nonterminal(Tagged<'a, Nonterminal<'a>>),
     /// A string-like terminal.
-    String(Cow<'a, str>),
+    String(Tagged<'a, Cow<'a, str>>),
     /// A bytes-like terminal.
-    Bytes(Cow<'a, [u8]>),
+    Bytes(Tagged<'a, Cow<'a, [u8]>>),
     /// A list of [`Alternative`]s.
-    Alternative(Alternative<'a>),
+    Alternative(Tagged<'a, Alternative<'a>>),
 }
 
 impl_fandango_traverse!(Symbol, match { Nonterminal(nt), String(s), Bytes(b), Alternative(alt) });
@@ -297,9 +363,9 @@ impl<'a> TryFrom<Pair<'a, Rule>> for Symbol<'a> {
 /// This section is mostly copied from py_literal: <https://github.com/jturner314/py_literal/releases/tag/0.4.0>
 /// This is necessary because pest does not easily allow for grammar + extract dependencies.
 mod py_literal {
-    use crate::lang::{ParseError, Rule};
+    use crate::lang::{ParseError, Rule, Tagged};
     use alloc::borrow::Cow;
-    use pest::error::ErrorVariant;
+    use pest::error::{Error as PestError, ErrorVariant};
     use pest::iterators::Pair;
 
     fn parse_string_escape_seq(escape_seq: Pair<'_, Rule>) -> Result<char, ParseError> {
@@ -323,41 +389,42 @@ mod py_literal {
                 u32::from_str_radix(seq.as_str(), 8).unwrap(),
             )
             .ok_or_else(|| {
-                ParseError::new_from_span(
+                Box::new(PestError::new_from_span(
                     ErrorVariant::CustomError {
                         message: format!("Octal escape is invalid: \\{}", seq.as_str()),
                     },
                     seq.as_span(),
-                )
+                ))
             }),
             Rule::hex_escape | Rule::unicode_hex_escape => {
                 ::std::char::from_u32(u32::from_str_radix(&seq.as_str()[1..], 16).unwrap())
                     .ok_or_else(|| {
-                        ParseError::new_from_span(
+                        Box::new(PestError::new_from_span(
                             ErrorVariant::CustomError {
                                 message: format!("Hex escape is invalid: \\x{}", seq.as_str()),
                             },
                             seq.as_span(),
-                        )
+                        ))
                     })
             }
-            Rule::name_escape => Err(ParseError::new_from_span(
+            Rule::name_escape => Err(Box::new(PestError::new_from_span(
                 ErrorVariant::CustomError {
                     message: "Unicode name escapes are not supported.".into(),
                 },
                 seq.as_span(),
-            )),
+            ))),
             _ => unreachable!(),
         }
     }
 
-    pub fn parse_string(string: Pair<Rule>) -> Result<Cow<str>, ParseError> {
+    pub fn parse_string(string: Pair<Rule>) -> Result<Tagged<Cow<str>>, ParseError> {
         debug_assert_eq!(string.as_rule(), Rule::string);
         let (string_body,) = parse_pairs_as!(string.into_inner(), (_,));
         match string_body.as_rule() {
             Rule::short_string_body | Rule::long_string_body => {
                 let mut out = String::new();
                 let orig = string_body.as_str();
+                let span = string_body.as_span();
                 for item in string_body.into_inner() {
                     match item.as_rule() {
                         Rule::short_string_non_escape
@@ -370,9 +437,9 @@ mod py_literal {
                 }
                 // escapes always increase length
                 if orig.len() == out.len() {
-                    Ok(Cow::Borrowed(orig))
+                    Ok(Tagged::new(Cow::Borrowed(orig), span))
                 } else {
-                    Ok(Cow::Owned(out))
+                    Ok(Tagged::new(Cow::Owned(out), span))
                 }
             }
             _ => unreachable!(),
@@ -397,25 +464,26 @@ mod py_literal {
                 _ => unreachable!(),
             }),
             Rule::octal_escape => u8::from_str_radix(seq.as_str(), 8).map_err(|err| {
-                ParseError::new_from_span(
+                Box::new(PestError::new_from_span(
                     ErrorVariant::CustomError {
                         message: format!("failed to parse \\{} as u8: {}", seq.as_str(), err,),
                     },
                     seq.as_span(),
-                )
+                ))
             }),
             Rule::hex_escape => Ok(u8::from_str_radix(&seq.as_str()[1..], 16).unwrap()),
             _ => unreachable!(),
         }
     }
 
-    pub fn parse_bytes(bytes: Pair<Rule>) -> Result<Cow<[u8]>, ParseError> {
+    pub fn parse_bytes(bytes: Pair<Rule>) -> Result<Tagged<Cow<[u8]>>, ParseError> {
         debug_assert_eq!(bytes.as_rule(), Rule::bytes);
         let (bytes_body,) = parse_pairs_as!(bytes.into_inner(), (_,));
         match bytes_body.as_rule() {
             Rule::short_bytes_body | Rule::long_bytes_body => {
                 let mut out = Vec::new();
                 let orig = bytes_body.as_str().as_bytes();
+                let span = bytes_body.as_span();
                 for item in bytes_body.into_inner() {
                     match item.as_rule() {
                         Rule::short_bytes_non_escape
@@ -429,9 +497,9 @@ mod py_literal {
                     }
                 }
                 if orig.len() == out.len() {
-                    Ok(Cow::Borrowed(orig))
+                    Ok(Tagged::new(Cow::Borrowed(orig), span))
                 } else {
-                    Ok(Cow::Owned(out))
+                    Ok(Tagged::new(Cow::Owned(out), span))
                 }
             }
             _ => unreachable!(),
@@ -441,9 +509,10 @@ mod py_literal {
 
 #[cfg(test)]
 pub(crate) mod test {
+    use crate::lang::parser::Fandango;
     use crate::lang::{
-        parse_string, Alternative, Concatenation, Fandango, Nonterminal, Operator, Production,
-        Program, Rule, Statement, Symbol,
+        parse_string, Alternative, Concatenation, Nonterminal, Operator, Production, Program, Rule,
+        Statement, Symbol, Tagged,
     };
     use alloc::borrow::Cow;
     use alloc::boxed::Box;
@@ -455,8 +524,8 @@ pub(crate) mod test {
         let (symbol,) = parse_pairs_as!(operator.into_inner(), (Rule::symbol,));
         let (string,) = parse_pairs_as!(symbol.into_inner(), (Rule::string,));
         let actual = parse_string(string).expect("Expected valid string");
-        assert_eq!(matches!(actual, Cow::Borrowed(_)), BORROW);
-        assert_eq!(actual, expected);
+        assert_eq!(matches!(&*actual, Cow::Borrowed(_)), BORROW);
+        assert_eq!(&*actual, expected);
     }
 
     fn check_nonterminal_symbol(symbol: Pair<'_, Rule>, expected: &str) {
@@ -487,21 +556,21 @@ pub(crate) mod test {
     }
 
     pub const SIMPLE_GRAMMAR: &str = r#"
-    <start> ::= <expr>;
-    <expr> ::= <number> | <number> "+" <expr>;
-    <number> ::= <non_zero><digit>* | "0";
-    <non_zero> ::=
-                  "1"
-                | "2"
-                | "3"
-                | "4"
-                | "5"
-                | "6"
-                | "7"
-                | "8"
-                | "9"
-                ;
-    <digit> ::= "0" | <non_zero>;
+<start> ::= <expr>;
+<expr> ::= <number> | <number> "+" <expr>;
+<number> ::= <non_zero><digit>* | "0";
+<non_zero> ::=
+              "1"
+            | "2"
+            | "3"
+            | "4"
+            | "5"
+            | "6"
+            | "7"
+            | "8"
+            | "9"
+            ;
+<digit> ::= "0" | <non_zero>;
 "#;
 
     #[test]
@@ -603,117 +672,181 @@ pub(crate) mod test {
         Ok(())
     }
 
+    macro_rules! untag_or_die {
+        ($value:ident, $etype:tt :: $variant:tt ( $($names:ident),+ )) => {{
+            let $etype :: $variant ($($names),+) = $value.inner else {
+                panic!("Invalid untagging.");
+            };
+            ($($names),+)
+        }};
+
+        ($value:ident, $stype:tt { $($names:ident),+ }) => {{
+            let $stype { $($names),+ } = $value.inner;
+            ($($names),+)
+        }};
+    }
+
     #[test]
     fn test_fullparse() -> Result<(), Box<dyn Error>> {
-        let program = Program::try_from(SIMPLE_GRAMMAR)?;
+        let program = Tagged::<Program>::try_from(SIMPLE_GRAMMAR)?;
 
-        assert_eq!(
-            program,
-            Program {
-                statements: vec![
-                    Statement::Production(Production {
-                        nonterminal: Nonterminal {
-                            name: Cow::Borrowed("start")
-                        },
-                        alternative: Alternative {
-                            concatenations: vec![Concatenation {
-                                operators: vec![Operator::Symbol(Symbol::Nonterminal(
-                                    Nonterminal {
-                                        name: Cow::Borrowed("expr")
-                                    }
-                                ))],
-                            },]
-                        },
-                    }),
-                    Statement::Production(Production {
-                        nonterminal: Nonterminal {
-                            name: Cow::Borrowed("expr")
-                        },
-                        alternative: Alternative {
-                            concatenations: vec![
-                                Concatenation {
-                                    operators: vec![Operator::Symbol(Symbol::Nonterminal(
-                                        Nonterminal {
-                                            name: Cow::Borrowed("number")
-                                        }
-                                    ))],
-                                },
-                                Concatenation {
-                                    operators: vec![
-                                        Operator::Symbol(Symbol::Nonterminal(Nonterminal {
-                                            name: Cow::Borrowed("number")
-                                        })),
-                                        Operator::Symbol(Symbol::String(Cow::Borrowed("+"))),
-                                        Operator::Symbol(Symbol::Nonterminal(Nonterminal {
-                                            name: Cow::Borrowed("expr")
-                                        }))
-                                    ],
-                                },
-                            ]
-                        },
-                    }),
-                    Statement::Production(Production {
-                        nonterminal: Nonterminal {
-                            name: Cow::Borrowed("number")
-                        },
-                        alternative: Alternative {
-                            concatenations: vec![
-                                Concatenation {
-                                    operators: vec![
-                                        Operator::Symbol(Symbol::Nonterminal(Nonterminal {
-                                            name: Cow::Borrowed("non_zero")
-                                        })),
-                                        Operator::Kleene(Symbol::Nonterminal(Nonterminal {
-                                            name: Cow::Borrowed("digit")
-                                        }))
-                                    ],
-                                },
-                                Concatenation {
-                                    operators: vec![Operator::Symbol(Symbol::String(
-                                        Cow::Borrowed("0")
-                                    ))],
-                                }
-                            ]
-                        },
-                    }),
-                    Statement::Production(Production {
-                        nonterminal: Nonterminal {
-                            name: Cow::Borrowed("non_zero")
-                        },
-                        alternative: Alternative {
-                            concatenations: (1..=9u8)
-                                .map(|i| Concatenation {
-                                    operators: vec![Operator::Symbol(Symbol::String(Cow::Owned(
-                                        i.to_string()
-                                    )))]
-                                })
-                                .collect()
-                        },
-                    }),
-                    Statement::Production(Production {
-                        nonterminal: Nonterminal {
-                            name: Cow::Borrowed("digit")
-                        },
-                        alternative: Alternative {
-                            concatenations: vec![
-                                Concatenation {
-                                    operators: vec![Operator::Symbol(Symbol::String(
-                                        Cow::Borrowed("0")
-                                    )),]
-                                },
-                                Concatenation {
-                                    operators: vec![Operator::Symbol(Symbol::Nonterminal(
-                                        Nonterminal {
-                                            name: Cow::Borrowed("non_zero")
-                                        }
-                                    ))]
-                                }
-                            ]
-                        },
-                    })
-                ],
+        let [start, expr, number, non_zero, digit] = program.inner.statements.try_into().unwrap();
+
+        let prod = untag_or_die!(start, Statement::Production(prod));
+        let (nt, alt) = untag_or_die!(
+            prod,
+            Production {
+                nonterminal,
+                alternative
             }
         );
+
+        let name = untag_or_die!(nt, Nonterminal { name });
+        assert_eq!(name, "start");
+
+        let [concat] = untag_or_die!(alt, Alternative { concatenations })
+            .try_into()
+            .unwrap();
+        let [op] = untag_or_die!(concat, Concatenation { operators })
+            .try_into()
+            .unwrap();
+        let sym = untag_or_die!(op, Operator::Symbol(nt));
+        let nt = untag_or_die!(sym, Symbol::Nonterminal(sym));
+        let name = untag_or_die!(nt, Nonterminal { name });
+        assert_eq!(name, "expr");
+
+        let prod = untag_or_die!(expr, Statement::Production(prod));
+        let (nt, alt) = untag_or_die!(
+            prod,
+            Production {
+                nonterminal,
+                alternative
+            }
+        );
+
+        let name = untag_or_die!(nt, Nonterminal { name });
+        assert_eq!(name, "expr");
+
+        let [c1, c2] = untag_or_die!(alt, Alternative { concatenations })
+            .try_into()
+            .unwrap();
+
+        let [op] = untag_or_die!(c1, Concatenation { operators })
+            .try_into()
+            .unwrap();
+        let sym = untag_or_die!(op, Operator::Symbol(nt));
+        let nt = untag_or_die!(sym, Symbol::Nonterminal(sym));
+        let name = untag_or_die!(nt, Nonterminal { name });
+        assert_eq!(name, "number");
+
+        let [op1, op2, op3] = untag_or_die!(c2, Concatenation { operators })
+            .try_into()
+            .unwrap();
+
+        let sym = untag_or_die!(op1, Operator::Symbol(nt));
+        let nt = untag_or_die!(sym, Symbol::Nonterminal(sym));
+        let name = untag_or_die!(nt, Nonterminal { name });
+        assert_eq!(name, "number");
+
+        let sym = untag_or_die!(op2, Operator::Symbol(nt));
+        let value = untag_or_die!(sym, Symbol::String(sym));
+        assert_eq!(value.inner, "+");
+
+        let sym = untag_or_die!(op3, Operator::Symbol(nt));
+        let nt = untag_or_die!(sym, Symbol::Nonterminal(sym));
+        let name = untag_or_die!(nt, Nonterminal { name });
+        assert_eq!(name, "expr");
+
+        let prod = untag_or_die!(number, Statement::Production(prod));
+        let (nt, alt) = untag_or_die!(
+            prod,
+            Production {
+                nonterminal,
+                alternative
+            }
+        );
+
+        let name = untag_or_die!(nt, Nonterminal { name });
+        assert_eq!(name, "number");
+
+        let [c1, c2] = untag_or_die!(alt, Alternative { concatenations })
+            .try_into()
+            .unwrap();
+
+        let [op1, op2] = untag_or_die!(c1, Concatenation { operators })
+            .try_into()
+            .unwrap();
+
+        let sym = untag_or_die!(op1, Operator::Symbol(nt));
+        let nt = untag_or_die!(sym, Symbol::Nonterminal(sym));
+        let name = untag_or_die!(nt, Nonterminal { name });
+        assert_eq!(name, "non_zero");
+
+        let sym = untag_or_die!(op2, Operator::Kleene(nt));
+        let nt = untag_or_die!(sym, Symbol::Nonterminal(sym));
+        let name = untag_or_die!(nt, Nonterminal { name });
+        assert_eq!(name, "digit");
+
+        let [op] = untag_or_die!(c2, Concatenation { operators })
+            .try_into()
+            .unwrap();
+        let sym = untag_or_die!(op, Operator::Symbol(nt));
+        let value = untag_or_die!(sym, Symbol::String(sym));
+        assert_eq!(value.inner, "0");
+
+        let prod = untag_or_die!(non_zero, Statement::Production(prod));
+        let (nt, alt) = untag_or_die!(
+            prod,
+            Production {
+                nonterminal,
+                alternative
+            }
+        );
+
+        let name = untag_or_die!(nt, Nonterminal { name });
+        assert_eq!(name, "non_zero");
+
+        let concats = untag_or_die!(alt, Alternative { concatenations });
+
+        for (concat, i) in concats.into_iter().zip(1..=9u8) {
+            let [op] = untag_or_die!(concat, Concatenation { operators })
+                .try_into()
+                .unwrap();
+            let sym = untag_or_die!(op, Operator::Symbol(nt));
+            let value = untag_or_die!(sym, Symbol::String(sym));
+            assert_eq!(value.inner, format!("{}", i));
+        }
+
+        let prod = untag_or_die!(digit, Statement::Production(prod));
+        let (nt, alt) = untag_or_die!(
+            prod,
+            Production {
+                nonterminal,
+                alternative
+            }
+        );
+
+        let name = untag_or_die!(nt, Nonterminal { name });
+        assert_eq!(name, "digit");
+
+        let [c1, c2] = untag_or_die!(alt, Alternative { concatenations })
+            .try_into()
+            .unwrap();
+
+        let [op] = untag_or_die!(c1, Concatenation { operators })
+            .try_into()
+            .unwrap();
+        let sym = untag_or_die!(op, Operator::Symbol(nt));
+        let value = untag_or_die!(sym, Symbol::String(sym));
+        assert_eq!(value.inner, "0");
+
+        let [op] = untag_or_die!(c2, Concatenation { operators })
+            .try_into()
+            .unwrap();
+        let sym = untag_or_die!(op, Operator::Symbol(nt));
+        let nt = untag_or_die!(sym, Symbol::Nonterminal(sym));
+        let name = untag_or_die!(nt, Nonterminal { name });
+        assert_eq!(name, "non_zero");
 
         Ok(())
     }
