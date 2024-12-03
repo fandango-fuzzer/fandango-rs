@@ -10,4 +10,4 @@
 //! 4. Implementation of Rust-native generators. (12.12.)
 
 pub use fandango_core::*;
-pub use fandango_macros::*;
+pub use fandango_derive::*;

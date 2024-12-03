@@ -1,0 +1,13 @@
+[package]
+name = "fandango-derive"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+
+[dependencies]
+fandango-generator = { path = "../generator" }
+syn.workspace = true
+
+[lib]
+path = "src/lib.rs"
+proc-macro = true

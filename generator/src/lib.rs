@@ -1,9 +1,7 @@
-extern crate self as fandango;
 use fandango_core::graph::{FandangoNode, IntoGraph};
 use fandango_core::lang::{Nonterminal, ParseError, Program, Span, Tagged};
 use pest::error::{InputLocation, LineColLocation};
 use petgraph::graphmap::DiGraphMap;
-use proc_macro::TokenStream;
 use quote::{format_ident, quote};
 use std::borrow::Cow;
 use std::collections::{BTreeMap, HashSet};
@@ -13,11 +11,11 @@ use std::io::Read;
 use std::path::{Path, PathBuf};
 use syn::parse::{Parse, ParseStream};
 use syn::spanned::Spanned;
-use syn::{DeriveInput, Expr, ExprLit, Lit, Meta, parse_macro_input};
+use syn::{DeriveInput, Expr, ExprLit, Lit, Meta};
 
-use proc_macro2::{Ident, TokenStream as TokenStream2};
+use proc_macro2::{Ident, TokenStream};
 
-struct FandangoDerivation {
+pub struct FandangoDerivation {
     ident: Ident,
     merged: String,
     offsets: BTreeMap<usize, PathBuf>,
@@ -41,7 +39,7 @@ impl FandangoDerivation {
             })
     }
 
-    fn to_compile_error(&self, mut error: ParseError) -> TokenStream2 {
+    fn to_compile_error(&self, mut error: ParseError) -> TokenStream {
         let first_file;
         let mut second_file = None;
         match error.location {
@@ -159,7 +157,7 @@ trait IntoRustSource<C> {
     type OutputError;
 
     /// Emits the types for this structure.
-    fn typeinfo(&self, ctx: &mut C, output: &mut TokenStream2) -> Result<(), Self::OutputError>;
+    fn typeinfo(&self, ctx: &mut C, output: &mut TokenStream) -> Result<(), Self::OutputError>;
 }
 
 impl<'source> IntoRustSource<DiGraphMap<Self, Span<'source>>> for FandangoNode<'_, 'source> {
@@ -168,7 +166,7 @@ impl<'source> IntoRustSource<DiGraphMap<Self, Span<'source>>> for FandangoNode<'
     fn typeinfo(
         &self,
         graph: &mut DiGraphMap<Self, Span<'source>>,
-        output: &mut TokenStream2,
+        output: &mut TokenStream,
     ) -> Result<(), Self::OutputError> {
         let FandangoNode::Nonterminal(nt) = self else {
             unimplemented!("Can only transforms non-terminals into source code.")
@@ -262,7 +260,7 @@ impl<'graph, 'program, 'source> IntoRustSource<FandangoGenContext<'graph, 'progr
     fn typeinfo(
         &self,
         ctx: &mut FandangoGenContext<'graph, 'program, 'source>,
-        output: &mut TokenStream2,
+        output: &mut TokenStream,
     ) -> Result<(), Self::OutputError> {
         let (name, _parent, weight, visited, graph) = ctx;
         if visited.contains(self) {
@@ -386,7 +384,9 @@ impl<'graph, 'program, 'source> IntoRustSource<FandangoGenContext<'graph, 'progr
     }
 }
 
-fn derive_fandango_or_emit_error(source: FandangoDerivation) -> Result<TokenStream, TokenStream> {
+pub fn derive_fandango_or_emit_error(
+    source: FandangoDerivation,
+) -> Result<TokenStream, TokenStream> {
     let mod_name = format_ident!("parser_{}", source.ident);
     let inner_name = format_ident!("parser_{}_inner", source.ident);
     // let ident = &source.ident;
@@ -397,7 +397,7 @@ fn derive_fandango_or_emit_error(source: FandangoDerivation) -> Result<TokenStre
     let mut graph = (&parsed).into_graph();
     let start = Nonterminal::new(Cow::Borrowed("start"));
     let start = FandangoNode::Nonterminal(&start);
-    let mut tokenized = TokenStream2::new();
+    let mut tokenized = TokenStream::new();
 
     start.typeinfo(&mut graph, &mut tokenized).unwrap();
 
@@ -411,12 +411,4 @@ fn derive_fandango_or_emit_error(source: FandangoDerivation) -> Result<TokenStre
             }
         }
     }))
-}
-
-#[proc_macro_derive(Fandango, attributes(grammar))]
-pub fn derive_fandango(item: TokenStream) -> TokenStream {
-    let source = parse_macro_input!(item as FandangoDerivation);
-    match derive_fandango_or_emit_error(source) {
-        Ok(s) | Err(s) => s,
-    }
 }

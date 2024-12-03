@@ -555,7 +555,7 @@ pub(crate) mod test {
         checker(alternative);
     }
 
-    pub const SIMPLE_GRAMMAR: &str = include_str!("../../fandango/tests/macros/simple.fan");
+    pub const SIMPLE_GRAMMAR: &str = include_str!("../../tests/macros/simple.fan");
 
     #[test]
     fn test_grammar() -> Result<(), Box<dyn Error>> {
