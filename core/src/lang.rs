@@ -83,7 +83,7 @@ where
     }
 }
 
-impl<'source, T> PartialEq<T> for Tagged<'source, T>
+impl<T> PartialEq<T> for Tagged<'_, T>
 where
     T: PartialEq<T>,
 {

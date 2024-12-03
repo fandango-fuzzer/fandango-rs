@@ -1,3 +1,6 @@
+//! Code generation routines for FANDANGO. Only usable if the crate `fandango` is a dependency,
+//! and may not be renamed.
+
 use fandango_core::graph::{FandangoNode, IntoGraph};
 use fandango_core::lang::{Nonterminal, ParseError, Program, Span, Tagged};
 use pest::error::{InputLocation, LineColLocation};
@@ -15,6 +18,7 @@ use syn::{DeriveInput, Expr, ExprLit, Lit, Meta};
 
 use proc_macro2::{Ident, TokenStream};
 
+/// A `#[derive]`-style derivation of a FANDANGO grammar.
 pub struct FandangoDerivation {
     ident: Ident,
     merged: String,
@@ -384,6 +388,7 @@ impl<'graph, 'program, 'source> IntoRustSource<FandangoGenContext<'graph, 'progr
     }
 }
 
+/// Perform the derivation, or emit a compiler error with a (potentially useful) warning.
 pub fn derive_fandango_or_emit_error(
     source: FandangoDerivation,
 ) -> Result<TokenStream, TokenStream> {
@@ -401,7 +406,7 @@ pub fn derive_fandango_or_emit_error(
 
     start.typeinfo(&mut graph, &mut tokenized).unwrap();
 
-    Ok(TokenStream::from(quote! {
+    Ok(quote! {
         mod #mod_name {
             #![allow(non_snake_case)]
             #![allow(non_camel_case_types)]
@@ -410,5 +415,5 @@ pub fn derive_fandango_or_emit_error(
                 #tokenized
             }
         }
-    }))
+    })
 }

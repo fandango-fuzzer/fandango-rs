@@ -11,6 +11,9 @@ fandango-derive = { path = "derive" }
 [dev-dependencies]
 trybuild.workspace = true
 
+[lints]
+workspace = true
+
 [workspace]
 members = [".", "core", "derive", "generator"]
 resolver = "2"
@@ -29,3 +32,7 @@ proc-macro2 = "1.0"
 quote = "1.0"
 syn = "2.0"
 trybuild = "1.0"
+
+[workspace.lints.rust]
+bindings_with_variant_name = "allow"
+missing_docs = "warn"

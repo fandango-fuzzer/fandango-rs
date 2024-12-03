@@ -11,3 +11,6 @@ syn.workspace = true
 [lib]
 path = "src/lib.rs"
 proc-macro = true
+
+[lints]
+workspace = true
