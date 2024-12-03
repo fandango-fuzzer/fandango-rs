@@ -1,13 +1,15 @@
 [package]
 name = "fandango"
-version = "0.1.0"
-edition = "2021"
+authors.workspace = true
+version.workspace = true
+edition.workspace = true
 
 [lib]
 path = "src/lib.rs"
 
 [dependencies]
-getset.workspace = true
-pest.workspace = true
-pest_derive.workspace = true
-petgraph.workspace = true
+fandango-core = { path = "../fandango-core" }
+fandango-macros = { path = "../fandango-macros" }
+
+[dev-dependencies]
+trybuild.workspace = true

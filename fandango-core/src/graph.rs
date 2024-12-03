@@ -268,7 +268,7 @@ macro_rules! variant_traverse {
 /// This enum can simplify the implementation of traversal for structures with a variety of layouts.
 /// For example, `statements` here has an `iter` method, the items for which implement [`Into`] for
 /// the node type [`FandangoNode`].
-/// ```no_run
+/// ```rust,ignore
 /// # use fandango::graph::FandangoNode;
 /// # use fandango::lang::Program;
 /// fandango::impl_traverse!(
@@ -281,7 +281,7 @@ macro_rules! variant_traverse {
 /// ```
 ///
 /// It is also possible to do this for enums across multiple variants:
-/// ```no_run
+/// ```rust,ignore
 /// # use fandango::graph::FandangoNode;
 /// # use fandango::lang::Statement;
 /// fandango::impl_traverse!(
@@ -485,16 +485,13 @@ impl fmt::Debug for FandangoNode<'_, '_> {
                 .finish_non_exhaustive(),
             FandangoNode::Operator(op) => {
                 let mut debug = f.debug_struct("FandangoNode::Operator");
-                debug.field(
-                    "variant",
-                    &match op {
-                        Operator::Kleene(_) => "Kleene",
-                        Operator::Plus(_) => "Plus",
-                        Operator::Option(_) => "Option",
-                        Operator::Repeat(_, _) => "Repeat",
-                        Operator::Symbol(_) => "Symbol",
-                    },
-                );
+                debug.field("variant", &match op {
+                    Operator::Kleene(_) => "Kleene",
+                    Operator::Plus(_) => "Plus",
+                    Operator::Option(_) => "Option",
+                    Operator::Repeat(_, _) => "Repeat",
+                    Operator::Symbol(_) => "Symbol",
+                });
                 if let Operator::Repeat(_, range) = op {
                     debug.field("count", &format!("{{{},{}}}", range.start(), range.end()));
                 }

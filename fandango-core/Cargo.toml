@@ -1,0 +1,11 @@
+[package]
+name = "fandango-core"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+
+[dependencies]
+getset.workspace = true
+pest.workspace = true
+pest_derive.workspace = true
+petgraph.workspace = true

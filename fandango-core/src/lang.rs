@@ -4,9 +4,9 @@ use crate::graph::{FandangoNode, Traverse};
 use crate::impl_traverse;
 use crate::lang::py_literal::{parse_bytes, parse_string};
 use getset::Getters;
+use pest::Parser;
 use pest::error::{Error as PestError, ErrorVariant};
 use pest::iterators::Pair;
-use pest::Parser;
 use std::borrow::Cow;
 use std::fmt::Debug;
 use std::ops::{Deref, DerefMut, RangeInclusive};
@@ -511,13 +511,13 @@ mod py_literal {
 pub(crate) mod test {
     use crate::lang::parser::Fandango;
     use crate::lang::{
-        parse_string, Alternative, Concatenation, Nonterminal, Operator, Production, Program, Rule,
-        Statement, Symbol, Tagged,
+        Alternative, Concatenation, Nonterminal, Operator, Production, Program, Rule, Statement,
+        Symbol, Tagged, parse_string,
     };
     use alloc::borrow::Cow;
     use alloc::boxed::Box;
-    use pest::iterators::Pair;
     use pest::Parser;
+    use pest::iterators::Pair;
     use std::error::Error;
 
     fn check_string_operator<const BORROW: bool>(operator: Pair<'_, Rule>, expected: &str) {
@@ -555,23 +555,7 @@ pub(crate) mod test {
         checker(alternative);
     }
 
-    pub const SIMPLE_GRAMMAR: &str = r#"
-<start> ::= <expr>;
-<expr> ::= <number> | <number> "+" <expr>;
-<number> ::= <non_zero><digit>* | "0";
-<non_zero> ::=
-              "1"
-            | "2"
-            | "3"
-            | "4"
-            | "5"
-            | "6"
-            | "7"
-            | "8"
-            | "9"
-            ;
-<digit> ::= "0" | <non_zero>;
-"#;
+    pub const SIMPLE_GRAMMAR: &str = include_str!("../../fandango/tests/macros/simple.fan");
 
     #[test]
     fn test_grammar() -> Result<(), Box<dyn Error>> {
@@ -693,13 +677,10 @@ pub(crate) mod test {
         let [start, expr, number, non_zero, digit] = program.inner.statements.try_into().unwrap();
 
         let prod = untag_or_die!(start, Statement::Production(prod));
-        let (nt, alt) = untag_or_die!(
-            prod,
-            Production {
-                nonterminal,
-                alternative
-            }
-        );
+        let (nt, alt) = untag_or_die!(prod, Production {
+            nonterminal,
+            alternative
+        });
 
         let name = untag_or_die!(nt, Nonterminal { name });
         assert_eq!(name, "start");
@@ -716,13 +697,10 @@ pub(crate) mod test {
         assert_eq!(name, "expr");
 
         let prod = untag_or_die!(expr, Statement::Production(prod));
-        let (nt, alt) = untag_or_die!(
-            prod,
-            Production {
-                nonterminal,
-                alternative
-            }
-        );
+        let (nt, alt) = untag_or_die!(prod, Production {
+            nonterminal,
+            alternative
+        });
 
         let name = untag_or_die!(nt, Nonterminal { name });
         assert_eq!(name, "expr");
@@ -758,13 +736,10 @@ pub(crate) mod test {
         assert_eq!(name, "expr");
 
         let prod = untag_or_die!(number, Statement::Production(prod));
-        let (nt, alt) = untag_or_die!(
-            prod,
-            Production {
-                nonterminal,
-                alternative
-            }
-        );
+        let (nt, alt) = untag_or_die!(prod, Production {
+            nonterminal,
+            alternative
+        });
 
         let name = untag_or_die!(nt, Nonterminal { name });
         assert_eq!(name, "number");
@@ -795,13 +770,10 @@ pub(crate) mod test {
         assert_eq!(value.inner, "0");
 
         let prod = untag_or_die!(non_zero, Statement::Production(prod));
-        let (nt, alt) = untag_or_die!(
-            prod,
-            Production {
-                nonterminal,
-                alternative
-            }
-        );
+        let (nt, alt) = untag_or_die!(prod, Production {
+            nonterminal,
+            alternative
+        });
 
         let name = untag_or_die!(nt, Nonterminal { name });
         assert_eq!(name, "non_zero");
@@ -818,13 +790,10 @@ pub(crate) mod test {
         }
 
         let prod = untag_or_die!(digit, Statement::Production(prod));
-        let (nt, alt) = untag_or_die!(
-            prod,
-            Production {
-                nonterminal,
-                alternative
-            }
-        );
+        let (nt, alt) = untag_or_die!(prod, Production {
+            nonterminal,
+            alternative
+        });
 
         let name = untag_or_die!(nt, Nonterminal { name });
         assert_eq!(name, "digit");
