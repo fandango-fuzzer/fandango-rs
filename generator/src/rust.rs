@@ -1,9 +1,10 @@
 use fandango_core::graph::FandangoNode;
-use fandango_core::lang::Operator;
+use fandango_core::lang::{Nonterminal, Operator};
 use pest::Span;
 use petgraph::graphmap::DiGraphMap;
 use proc_macro2::{Ident, TokenStream};
 use quote::{format_ident, quote};
+use std::borrow::Cow;
 use std::collections::HashSet;
 use std::convert::Infallible;
 
@@ -16,19 +17,18 @@ pub trait IntoRustSource<C> {
     fn emit_rust(&self, ctx: &mut C, output: &mut TokenStream) -> Result<(), Self::OutputError>;
 }
 
-impl<'source> IntoRustSource<DiGraphMap<Self, Span<'source>>> for FandangoNode<'_, 'source> {
+impl<'source> IntoRustSource<()> for DiGraphMap<FandangoNode<'_, 'source>, Span<'source>> {
     type OutputError = Infallible;
 
-    fn emit_rust(
-        &self,
-        graph: &mut DiGraphMap<Self, Span<'source>>,
-        output: &mut TokenStream,
-    ) -> Result<(), Self::OutputError> {
-        let FandangoNode::Nonterminal(nt) = self else {
+    fn emit_rust(&self, _: &mut (), output: &mut TokenStream) -> Result<(), Self::OutputError> {
+        let start_node = Nonterminal::new(Cow::Borrowed("start"));
+        let start_node = FandangoNode::Nonterminal(&start_node);
+
+        let FandangoNode::Nonterminal(nt) = start_node else {
             unimplemented!("Can only transforms non-terminals into source code.")
         };
 
-        let mut edges = graph.edges(*self);
+        let mut edges = self.edges(start_node);
         let (_, child, &weight) = edges
             .next()
             .expect("Nonterminals should have exactly one definition.");
@@ -40,13 +40,14 @@ impl<'source> IntoRustSource<DiGraphMap<Self, Span<'source>>> for FandangoNode<'
         let input = weight.get_input();
         output.extend(quote! {
             const SOURCE: &'static str = #input;
+            pub type ParseError = Box<::fandango::error::Error<Rule>>;
         });
 
-        for production in graph
+        for production in self
             .nodes()
             .filter(|n| matches!(n, FandangoNode::Production(_)))
         {
-            let mut edges = graph.edges(production);
+            let mut edges = self.edges(production);
             let (_, child, &weight) = edges
                 .next()
                 .expect("Productions should have exactly one definition.");
@@ -67,6 +68,7 @@ impl<'source> IntoRustSource<DiGraphMap<Self, Span<'source>>> for FandangoNode<'
             });
         }
 
+        let pest_name = format_ident!("{}", nt.name());
         let name = format_ident!("nonterminal_{}", nt.name());
         let mut visited = HashSet::new();
 
@@ -112,11 +114,27 @@ impl<'source> IntoRustSource<DiGraphMap<Self, Span<'source>>> for FandangoNode<'
                 fn children(&self) -> Self::ChildrenRef<'_> {{ (&self.child_0,) }}
                 fn children_mut(&mut self) -> Self::ChildrenRefMut<'_> {{ (&mut self.child_0,) }}
             }
+
+            impl<'source> ::core::convert::TryFrom<::fandango::iterators::Pair<'source, Rule>> for #name<'source> {
+                type Error = ParseError;
+
+                fn try_from(value: ::fandango::iterators::Pair<'source, Rule>) -> Result<Self, Self::Error> {
+                    debug_assert_eq!(value.as_rule(), Rule::#pest_name);
+
+                    let span = value.as_span();
+                    let (inner,) = ::fandango::parse_pairs_as!(value.into_inner(), (Rule::#pest_child_name,));
+
+                    Ok(Self {
+                        span: Some(span),
+                        child_0: #child_name::try_from(inner)?.into()
+                    })
+                }
+            }
         });
 
-        visited.insert(*self);
+        visited.insert(start_node);
         child.emit_rust(
-            &mut (child_name, pest_child_name, weight, visited, graph),
+            &mut (child_name, pest_child_name, weight, visited, self),
             output,
         )
     }
@@ -127,7 +145,7 @@ type FandangoGenContext<'graph, 'program, 'source> = (
     Ident,
     Span<'source>,
     HashSet<FandangoNode<'program, 'source>>,
-    &'graph mut DiGraphMap<FandangoNode<'program, 'source>, Span<'source>>,
+    &'graph DiGraphMap<FandangoNode<'program, 'source>, Span<'source>>,
 );
 
 impl<'graph, 'program, 'source> IntoRustSource<FandangoGenContext<'graph, 'program, 'source>>
@@ -140,25 +158,24 @@ impl<'graph, 'program, 'source> IntoRustSource<FandangoGenContext<'graph, 'progr
         ctx: &mut FandangoGenContext<'graph, 'program, 'source>,
         output: &mut TokenStream,
     ) -> Result<(), Self::OutputError> {
-        let (name, _pest_child_name, weight, visited, graph) = ctx;
-        if visited.contains(self) {
+        let (name, pest_name, weight, visited, graph) = ctx;
+        if !visited.insert(*self) {
             return Ok(());
         }
-        visited.insert(*self);
 
         let mut children = graph
             .edges(*self)
             .map(|(n1, n2, &w)| (n1, n2, w))
             .collect::<Vec<_>>();
         children.sort_by_key(|(_, _, w)| w.start());
-        let pest_names = children
+        let pest_child_names = children
             .iter()
             .enumerate()
             .map(|(i, (_, child, _))| {
                 if let FandangoNode::Nonterminal(nt) = child {
                     format_ident!("{}", nt.name())
                 } else {
-                    format_ident!("{name}_{i}")
+                    format_ident!("{pest_name}_{i}")
                 }
             })
             .collect::<Vec<_>>();
@@ -229,19 +246,120 @@ impl<'graph, 'program, 'source> IntoRustSource<FandangoGenContext<'graph, 'progr
                         fn children(&self) -> Self::ChildrenRef<'_> {{ (&#s,) }}
                         fn children_mut(&mut self) -> Self::ChildrenRefMut<'_> {{ (&#s,) }}
                     }
+
+                    impl<'source> ::core::convert::TryFrom<::fandango::iterators::Pair<'source, Rule>> for #name<'source> {
+                        type Error = ParseError;
+
+                        fn try_from(value: ::fandango::iterators::Pair<'source, Rule>) -> Result<Self, Self::Error> {
+                            let span = value.as_span();
+                            debug_assert_eq!(span.as_str(), #s);
+
+                            Ok(Self { span: Some(span), })
+                        }
+                    }
                 });
             }
             FandangoNode::Alternative(_) => {
                 let child_variants = (0..children.len())
-                    .map(|i| format_ident!("alt_child_{i}"))
+                    .map(|i| format_ident!("variant_{i}"))
                     .collect::<Vec<_>>();
                 output.extend(quote! {
                     pub enum #name<'source> {
                         #( #child_variants ( #child_field_types ) ),*
                     }
+
+                    impl<'source> ::core::convert::TryFrom<::fandango::iterators::Pair<'source, Rule>> for #name<'source> {
+                        type Error = ParseError;
+
+                        fn try_from(value: ::fandango::iterators::Pair<'source, Rule>) -> Result<Self, Self::Error> {
+                            debug_assert_eq!(value.as_rule(), Rule::#pest_name);
+
+                            let span = value.as_span();
+                            let mut children = value.into_inner();
+                            let child_0 = children.next().expect("Expected exactly one descendent.");
+                            debug_assert!(children.next().is_none(), "Expected exactly one descendent.");
+
+                            Ok(match child_0.as_rule() {
+                                #(Rule::#pest_child_names => #name::#child_variants(
+                                    #child_types::try_from(child_0)?.into()
+                                )),*,
+                                _ => unimplemented!("Not a child of this alternative.")
+                            })
+                        }
+                    }
+                });
+            }
+            FandangoNode::Operator(op) => {
+                assert_eq!(children.len(), 1);
+
+                let start = children[0].2.start();
+                let end = children[0].2.end();
+
+                let range_check_fail = match op {
+                    Operator::Repeat(_, r) => {
+                        let start = r.start();
+                        let end = r.end();
+                        quote! {
+                            if children.len() < #start || #end < children.len() {
+                                todo!()
+                            }
+                        }
+                    }
+                    Operator::Option(_) | Operator::Kleene(_) | Operator::Plus(_) => {
+                        TokenStream::new()
+                    }
+                    Operator::Symbol(_) => {
+                        unimplemented!("Unexpected symbol; should be elided.")
+                    }
+                };
+
+                output.extend(quote! {
+                    pub struct #name<'source> {
+                        span: ::core::option::Option<::fandango::Span<'source>>,
+                        child_0: #(#child_field_types)*
+                    }
+
+                    impl<'source> ::fandango::typing::Node<'source> for #name<'source> {
+                        const SOURCE: &'static str = SOURCE;
+
+                        fn span(&self) -> ::core::option::Option<::fandango::Span<'source>> { self.span }
+                    }
+
+                    impl<'source> ::fandango::typing::Children<'source> for #name<'source> {
+                        type ChildrenRef<'program> = &'program #(#child_field_types),* where 'source: 'program;
+                        type ChildrenRefMut<'program> = &'program mut #(#child_field_types),* where 'source: 'program;
+
+                        const DEF_SPANS: &'static [(usize, usize)] = &[(#start, #end)];
+
+                        fn children(&self) -> Self::ChildrenRef<'_> { &self.child_0 }
+                        fn children_mut(&mut self) -> Self::ChildrenRefMut<'_> { &mut self.child_0 }
+                    }
+
+                    impl<'source> ::core::convert::TryFrom<::fandango::iterators::Pair<'source, Rule>> for #name<'source> {
+                        type Error = ParseError;
+
+                        fn try_from(value: ::fandango::iterators::Pair<'source, Rule>) -> Result<Self, Self::Error> {
+                            debug_assert_eq!(value.as_rule(), Rule::#pest_name);
+
+                            let span = value.as_span();
+                            let child_0 = value.into_inner().map(|value| {
+                                debug_assert_eq!(value.as_rule(), #(Rule::#pest_child_names),*);
+
+                                Ok(#(#child_types::try_from(value)?.into()),*)
+                            }).collect::<Result<_, Self::Error>>()?;
+
+                            #range_check_fail
+
+                            Ok(Self {
+                                span: Some(span),
+                                child_0,
+                            })
+                        }
+                    }
                 });
             }
             _ => {
+                assert_ne!(children.len(), 0);
                 let child_names = (0..children.len())
                     .map(|i| format_ident!("child_{i}"))
                     .collect::<Vec<_>>();
@@ -266,19 +384,35 @@ impl<'graph, 'program, 'source> IntoRustSource<FandangoGenContext<'graph, 'progr
                     }
 
                     impl<'source> ::fandango::typing::Children<'source> for #name<'source> {
-                        type ChildrenRef<'program> = ( #( &'program #child_field_types ),* ) where 'source: 'program;
-                        type ChildrenRefMut<'program> = ( #( &'program mut #child_field_types ),* ) where 'source: 'program;
+                        type ChildrenRef<'program> = ( #( &'program #child_field_types ),*, ) where 'source: 'program;
+                        type ChildrenRefMut<'program> = ( #( &'program mut #child_field_types ),*, ) where 'source: 'program;
 
                         const DEF_SPANS: &'static [(usize, usize)] = &[#(#child_spans),*];
 
-                        fn children(&self) -> Self::ChildrenRef<'_> { (#(&self.#child_names),*) }
-                        fn children_mut(&mut self) -> Self::ChildrenRefMut<'_> { (#(&mut self.#child_names),*) }
+                        fn children(&self) -> Self::ChildrenRef<'_> { (#(&self.#child_names),*,) }
+                        fn children_mut(&mut self) -> Self::ChildrenRefMut<'_> { (#(&mut self.#child_names),*,) }
+                    }
+
+                    impl<'source> ::core::convert::TryFrom<::fandango::iterators::Pair<'source, Rule>> for #name<'source> {
+                        type Error = ParseError;
+
+                        fn try_from(value: ::fandango::iterators::Pair<'source, Rule>) -> Result<Self, Self::Error> {
+                            debug_assert_eq!(value.as_rule(), Rule::#pest_name);
+
+                            let span = value.as_span();
+                            let (#(#child_names),*,) = ::fandango::parse_pairs_as!(value.into_inner(), (#(#pest_child_names),*,));
+
+                            Ok(Self {
+                                span: Some(span),
+                                #(#child_names: #child_types::try_from(#child_names)?.into()),*
+                            })
+                        }
                     }
                 });
             }
         }
         for (((_, child, i), name), pest_name) in
-            children.into_iter().zip(child_types).zip(pest_names)
+            children.into_iter().zip(child_types).zip(pest_child_names)
         {
             ctx.0 = name;
             ctx.1 = pest_name;

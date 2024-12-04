@@ -4,8 +4,8 @@
 mod pest;
 mod rust;
 
-use fandango_core::graph::{FandangoNode, IntoGraph};
-use fandango_core::lang::{Nonterminal, ParseError, Program, Tagged};
+use fandango_core::graph::IntoGraph;
+use fandango_core::lang::{ParseError, Program, Tagged};
 use pest::error::{InputLocation, LineColLocation};
 use quote::quote;
 use std::borrow::Cow;
@@ -168,14 +168,12 @@ pub fn derive_fandango_or_emit_error(
         .map_err(|e| source.to_compile_error(e))?;
 
     let mut graph = (&parsed).into_graph();
-    let start = Nonterminal::new(Cow::Borrowed("start"));
-    let start = FandangoNode::Nonterminal(&start);
     let mut tokenized = TokenStream::new();
 
-    start.emit_rust(&mut graph, &mut tokenized).unwrap();
+    graph.emit_rust(&mut (), &mut tokenized).unwrap();
 
     let mut grammar_source = String::new();
-    graph.emit_pest(&(), &mut grammar_source).unwrap();
+    graph.emit_pest(&mut (), &mut grammar_source).unwrap();
 
     let mocked = quote! {
         #[derive(Parser)]
@@ -202,6 +200,17 @@ pub fn derive_fandango_or_emit_error(
     Ok(quote! {
         // debug: pest grammar source
         pub const _PEST_SOURCE: &'static str = #grammar_source;
+
+        impl #ident {
+            pub fn extract(source: &str) -> ::core::result::Result<nonterminal_start<'_>, ParseError> {
+                use ::fandango::Parser;
+                let (grammar,) = ::fandango::parse_pairs_as!(#ident::parse(Rule::start, source)?, (Rule::start,));
+                if grammar.as_span().as_str() != source {
+                    todo!()
+                }
+                nonterminal_start::try_from(grammar)
+            }
+        }
 
         #tokenized
 

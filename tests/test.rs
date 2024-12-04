@@ -3,6 +3,7 @@
 mod macros {
     use fandango::Parser;
     use fandango::parse_pairs_as;
+    use fandango_core::typing::{Children, Node};
 
     mod simple {
         use fandango::Fandango;
@@ -13,26 +14,26 @@ mod macros {
     }
 
     #[test]
-    fn parse() {
+    fn parse() -> Result<(), simple::ParseError> {
         use simple::*;
 
         println!("{}", _PEST_SOURCE);
 
         const SAMPLE: &str = "1+2";
 
-        let (start,) = parse_pairs_as!(Simple::parse(Rule::start, SAMPLE).unwrap(), (Rule::start,));
+        let start = Simple::extract(SAMPLE)?;
+        let expr = start.children().0;
+        if let nonterminal_expr_0::variant_0(expr) = expr.children().0 {
+            let (number, plus, expr) = expr.children();
+            assert_eq!(number.span().unwrap().as_str(), "1");
+            assert_eq!(plus.span().unwrap().as_str(), "+");
+            if let nonterminal_expr_0::variant_1(number) = expr.children().0 {
+                assert_eq!(number.span().unwrap().as_str(), "2");
+                return Ok(());
+            }
+        }
 
-        assert_eq!(start.as_span().as_str(), SAMPLE); // consume whole string
-
-        let (expr,) = parse_pairs_as!(start.into_inner(), (Rule::expr,));
-        let (number, expr) = parse_pairs_as!(expr.into_inner(), (Rule::number, Rule::expr));
-
-        let (non_zero,) = parse_pairs_as!(number.into_inner(), (Rule::non_zero,));
-        assert_eq!(non_zero.as_span().as_str(), "1");
-
-        let (number,) = parse_pairs_as!(expr.into_inner(), (Rule::number,));
-        let (non_zero,) = parse_pairs_as!(number.into_inner(), (Rule::non_zero,));
-        assert_eq!(non_zero.as_span().as_str(), "2");
+        panic!("Parse did not match expected value!");
     }
 
     mod pest_renamed {
@@ -44,18 +45,23 @@ mod macros {
     }
 
     #[test]
-    fn pest_name_sanity() {
+    fn pest_name_sanity() -> Result<(), pest_renamed::ParseError> {
         use pest_renamed::*;
 
         println!("{}", _PEST_SOURCE);
 
         const SAMPLE: &str = "hello!";
 
-        let (start,) = parse_pairs_as!(
-            PestRenamed::parse(Rule::start, SAMPLE).unwrap(),
-            (Rule::start,)
-        );
+        let (start,) = parse_pairs_as!(PestRenamed::parse(Rule::start, SAMPLE)?, (Rule::start,));
         let (actual,) = parse_pairs_as!(start.into_inner(), (Rule::pest,));
         assert_eq!(actual.as_span().as_str(), SAMPLE);
+
+        let start = PestRenamed::extract(SAMPLE)?;
+        let pest = start.children().0;
+        let string = pest.children().0.children().0;
+
+        assert_eq!(string, SAMPLE);
+
+        Ok(())
     }
 }
