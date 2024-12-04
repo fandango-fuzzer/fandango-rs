@@ -1,14 +1,15 @@
 //! Code generation routines for FANDANGO. Only usable if the crate `fandango` is a dependency,
 //! and may not be renamed.
 
+mod pest;
+mod rust;
+
 use fandango_core::graph::{FandangoNode, IntoGraph};
-use fandango_core::lang::{Nonterminal, ParseError, Program, Span, Tagged};
+use fandango_core::lang::{Nonterminal, ParseError, Program, Tagged};
 use pest::error::{InputLocation, LineColLocation};
-use petgraph::graphmap::DiGraphMap;
-use quote::{format_ident, quote};
+use quote::quote;
 use std::borrow::Cow;
-use std::collections::{BTreeMap, HashSet};
-use std::convert::Infallible;
+use std::collections::BTreeMap;
 use std::fs::File;
 use std::io::Read;
 use std::path::{Path, PathBuf};
@@ -16,7 +17,9 @@ use syn::parse::{Parse, ParseStream};
 use syn::spanned::Spanned;
 use syn::{DeriveInput, Expr, ExprLit, Lit, Meta};
 
-use proc_macro2::{Ident, TokenStream};
+use crate::pest::IntoPestSource;
+use crate::rust::IntoRustSource;
+use proc_macro2::{Ident, TokenStream, TokenTree};
 
 /// A `#[derive]`-style derivation of a FANDANGO grammar.
 pub struct FandangoDerivation {
@@ -155,246 +158,11 @@ impl Parse for FandangoDerivation {
     }
 }
 
-/// Produces a Rust source tree using the provided context.
-trait IntoRustSource<C> {
-    /// The error type which is encountered as a result of trying to emit the source code.
-    type OutputError;
-
-    /// Emits the types for this structure.
-    fn typeinfo(&self, ctx: &mut C, output: &mut TokenStream) -> Result<(), Self::OutputError>;
-}
-
-impl<'source> IntoRustSource<DiGraphMap<Self, Span<'source>>> for FandangoNode<'_, 'source> {
-    type OutputError = Infallible;
-
-    fn typeinfo(
-        &self,
-        graph: &mut DiGraphMap<Self, Span<'source>>,
-        output: &mut TokenStream,
-    ) -> Result<(), Self::OutputError> {
-        let FandangoNode::Nonterminal(nt) = self else {
-            unimplemented!("Can only transforms non-terminals into source code.")
-        };
-
-        let mut edges = graph.edges(*self);
-        let (_, child, &weight) = edges
-            .next()
-            .expect("Nonterminals should have exactly one definition.");
-        assert!(
-            edges.next().is_none(),
-            "Nonterminals should have exactly one definition."
-        );
-
-        let input = weight.get_input();
-        output.extend(quote! {
-            const SOURCE: &'static str = #input;
-        });
-
-        for production in graph
-            .nodes()
-            .filter(|n| matches!(n, FandangoNode::Production(_)))
-        {
-            let mut edges = graph.edges(production);
-            let (_, child, &weight) = edges
-                .next()
-                .expect("Productions should have exactly one definition.");
-            assert!(
-                edges.next().is_none(),
-                "Productions should have exactly one definition."
-            );
-            let FandangoNode::Nonterminal(nt) = child else {
-                unreachable!("Production children should be strictly nonterminals.");
-            };
-            let name = format_ident!("{}", nt.name());
-            let start = weight.start();
-            let end = weight.end();
-            output.extend(quote! {
-                impl ::fandango::typing::NonterminalProduction for #name {
-                    const DEF_SPAN: (usize, usize) = (#start, #end);
-                }
-            });
-        }
-
-        let name = format_ident!("{}", nt.name());
-        let mut visited = HashSet::new();
-
-        let child_name = if let FandangoNode::Nonterminal(nt) = child {
-            format_ident!("{}", nt.name())
-        } else {
-            format_ident!("{name}_0")
-        };
-
-        let start = weight.start();
-        let end = weight.end();
-        output.extend(quote! {
-            pub struct #name {
-                child_0: #child_name,
-            }
-
-            impl ::fandango::typing::Children for #name {
-                type ChildrenRef<'a> = (&'a #child_name,);
-                type ChildrenRefMut<'a> = (&'a mut #child_name,);
-
-                const SOURCE: &'static str = SOURCE;
-                const DEF_SPANS: &'static [(usize, usize)] = &[(#start, #end)];
-
-                fn children(&self) -> Self::ChildrenRef<'_> {{ (&self.child_0,) }}
-                fn children_mut(&mut self) -> Self::ChildrenRefMut<'_> {{ (&mut self.child_0,) }}
-            }
-        });
-
-        visited.insert(*self);
-        child.typeinfo(&mut (child_name, *self, weight, visited, graph), output)
-    }
-}
-
-type FandangoGenContext<'graph, 'program, 'source> = (
-    Ident,
-    FandangoNode<'program, 'source>,
-    Span<'source>,
-    HashSet<FandangoNode<'program, 'source>>,
-    &'graph mut DiGraphMap<FandangoNode<'program, 'source>, Span<'source>>,
-);
-
-impl<'graph, 'program, 'source> IntoRustSource<FandangoGenContext<'graph, 'program, 'source>>
-    for FandangoNode<'program, 'source>
-{
-    type OutputError = Infallible;
-
-    fn typeinfo(
-        &self,
-        ctx: &mut FandangoGenContext<'graph, 'program, 'source>,
-        output: &mut TokenStream,
-    ) -> Result<(), Self::OutputError> {
-        let (name, _parent, weight, visited, graph) = ctx;
-        if visited.contains(self) {
-            return Ok(());
-        }
-        visited.insert(*self);
-
-        let mut children = graph
-            .edges(*self)
-            .map(|(n1, n2, &w)| (n1, n2, w))
-            .collect::<Vec<_>>();
-        children.sort_by_key(|(_, _, w)| w.start());
-        let child_types = children
-            .iter()
-            .enumerate()
-            .map(|(i, (_, child, _))| {
-                if let FandangoNode::Nonterminal(nt) = child {
-                    format_ident!("{}", nt.name())
-                } else {
-                    format_ident!("{name}_{i}")
-                }
-            })
-            .collect::<Vec<_>>();
-        let child_field_types = children
-            .iter()
-            .zip(&child_types)
-            .map(|((_, child, _), name)| match child {
-                FandangoNode::Nonterminal(_) => {
-                    quote! { Box<#name> }
-                }
-                _ => {
-                    quote! { #name }
-                }
-            })
-            .collect::<Vec<_>>();
-
-        let start = weight.start();
-        let end = weight.end();
-
-        match self {
-            FandangoNode::String(s) => {
-                output.extend(quote! {
-                    pub struct #name;
-
-                    impl ::fandango::typing::Children for #name {
-                        type ChildrenRef<'a> = (&'static str,);
-                        type ChildrenRefMut<'a> = (&'static str,);
-
-                        const SOURCE: &'static str = SOURCE;
-                        const DEF_SPANS: &'static [(usize, usize)] = &[(#start, #end)];
-
-                        fn children(&self) -> Self::ChildrenRef<'_> {{ (&#s,) }}
-                        fn children_mut(&mut self) -> Self::ChildrenRefMut<'_> {{ (&#s,) }}
-                    }
-                });
-            }
-            FandangoNode::Bytes(bytes) => {
-                output.extend(quote! {
-                    pub struct #name;
-
-                    impl ::fandango::typing::Children for #name {
-                        type ChildrenRef<'a> = (&'static [u8],);
-                        type ChildrenRefMut<'a> = (&'static [u8],);
-
-                        const SOURCE: &'static str = SOURCE;
-                        const DEF_SPANS: &'static [(usize, usize)] = &[(#start, #end)];
-
-                        fn children(&self) -> Self::ChildrenRef<'_> { (&[#(#bytes),*],) }
-                        fn children_mut(&mut self) -> Self::ChildrenRefMut<'_> { (&[#(#bytes),*],) }
-                    }
-                });
-            }
-            FandangoNode::Alternative(_) => {
-                let child_variants = (0..children.len())
-                    .map(|i| format_ident!("alt_child_{i}"))
-                    .collect::<Vec<_>>();
-                output.extend(quote! {
-                    pub enum #name {
-                        #( #child_variants ( #child_field_types ) ),*
-                    }
-                });
-            }
-            _ => {
-                let child_names = (0..children.len())
-                    .map(|i| format_ident!("child_{i}"))
-                    .collect::<Vec<_>>();
-                let child_spans = children
-                    .iter()
-                    .map(|(_, _, span)| {
-                        let start = span.start();
-                        let end = span.end();
-
-                        quote! { (#start, #end) }
-                    })
-                    .collect::<Vec<_>>();
-                output.extend(quote! {
-                    pub struct #name {
-                        #( #child_names: #child_field_types ),*
-                    }
-
-                    impl ::fandango::typing::Children for #name {
-                        type ChildrenRef<'a> = ( #( &'a #child_types ),* );
-                        type ChildrenRefMut<'a> = ( #( &'a mut #child_types ),* );
-
-                        const SOURCE: &'static str = SOURCE;
-                        const DEF_SPANS: &'static [(usize, usize)] = &[#(#child_spans),*];
-
-                        fn children(&self) -> Self::ChildrenRef<'_> { (#(&self.#child_names),*) }
-                        fn children_mut(&mut self) -> Self::ChildrenRefMut<'_> { (#(&mut self.#child_names),*) }
-                    }
-                });
-            }
-        }
-        for ((_, child, i), name) in children.into_iter().zip(child_types) {
-            ctx.0 = name;
-            ctx.2 = i;
-            child.typeinfo(ctx, output)?;
-        }
-
-        Ok(())
-    }
-}
-
 /// Perform the derivation, or emit a compiler error with a (potentially useful) warning.
 pub fn derive_fandango_or_emit_error(
     source: FandangoDerivation,
 ) -> Result<TokenStream, TokenStream> {
-    let mod_name = format_ident!("parser_{}", source.ident);
-    let inner_name = format_ident!("parser_{}_inner", source.ident);
-    // let ident = &source.ident;
+    let ident = &source.ident;
 
     let parsed = Tagged::<Program>::try_from(source.merged.as_str())
         .map_err(|e| source.to_compile_error(e))?;
@@ -404,16 +172,39 @@ pub fn derive_fandango_or_emit_error(
     let start = FandangoNode::Nonterminal(&start);
     let mut tokenized = TokenStream::new();
 
-    start.typeinfo(&mut graph, &mut tokenized).unwrap();
+    start.emit_rust(&mut graph, &mut tokenized).unwrap();
+
+    let mut grammar_source = String::new();
+    graph.emit_pest(&(), &mut grammar_source).unwrap();
+
+    let mocked = quote! {
+        #[derive(Parser)]
+        #[grammar_inline = #grammar_source]
+        pub struct #ident;
+    };
+
+    let grammar = pest_generator::derive_parser(mocked, false);
+    // rewrite: we don't want to force people to import other dependencies
+    let grammar = grammar
+        .into_iter()
+        .map(|e| match e {
+            TokenTree::Ident(ident) => {
+                if ident == "pest" || ident == "pest_derive" {
+                    TokenTree::Ident(Ident::new("fandango", proc_macro2::Span::mixed_site()))
+                } else {
+                    TokenTree::Ident(ident)
+                }
+            }
+            other => other,
+        })
+        .collect::<TokenStream>();
 
     Ok(quote! {
-        mod #mod_name {
-            #![allow(non_snake_case)]
-            #![allow(non_camel_case_types)]
+        // debug: pest grammar source
+        pub const _PEST_SOURCE: &'static str = #grammar_source;
 
-            mod #inner_name {
-                #tokenized
-            }
-        }
+        #tokenized
+
+        #grammar
     })
 }

@@ -9,6 +9,7 @@ getset.workspace = true
 pest.workspace = true
 pest_derive.workspace = true
 petgraph.workspace = true
+rand_core.workspace = true
 
 [lints]
 workspace = true

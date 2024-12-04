@@ -1,0 +1,2 @@
+<start> ::= <pest>;
+<pest> ::= "hello!";

@@ -401,9 +401,7 @@ where
                         graph.update_edge(n1, n2, w);
                         n2.traverse(|n1, n2, w| work.push_back((n1, n2, w)))
                     }
-                    FandangoNode::Nonterminal(_)
-                    | FandangoNode::String(_)
-                    | FandangoNode::Bytes(_) => {
+                    FandangoNode::Nonterminal(_) | FandangoNode::String(_) => {
                         graph.update_edge(n1, n2, w);
                     }
                     _ => n2.traverse(|_, n2, w| work.push_back((n1, n2, w))),
@@ -429,7 +427,6 @@ pub enum FandangoNode<'program, 'source> {
     Operator(&'program Operator<'source>),
     Symbol(&'program Symbol<'source>),
     String(&'program Cow<'source, str>),
-    Bytes(&'program Cow<'source, [u8]>),
 }
 
 impl fmt::Display for FandangoNode<'_, '_> {
@@ -456,7 +453,6 @@ impl fmt::Display for FandangoNode<'_, '_> {
             },
             FandangoNode::Symbol(_) => f.write_str("SYM"),
             FandangoNode::String(s) => fmt::Debug::fmt(s, f),
-            FandangoNode::Bytes(b) => fmt::Debug::fmt(b, f),
         }
     }
 }
@@ -504,10 +500,6 @@ impl fmt::Debug for FandangoNode<'_, '_> {
                 .debug_struct("FandangoNode::String")
                 .field("content", s)
                 .finish(),
-            FandangoNode::Bytes(b) => f
-                .debug_struct("FandangoNode::Bytes")
-                .field("content", b)
-                .finish(),
         }
     }
 }
@@ -527,7 +519,7 @@ impl<'source> Traverse<'source> for FandangoNode<'_, 'source> {
             FandangoNode::Concatenation(s) => s.traverse(consumer),
             FandangoNode::Operator(s) => s.traverse(consumer),
             FandangoNode::Symbol(s) => s.traverse(consumer),
-            FandangoNode::Nonterminal(_) | FandangoNode::String(_) | FandangoNode::Bytes(_) => {} // nothing to do
+            FandangoNode::Nonterminal(_) | FandangoNode::String(_) => {} // nothing to do
         }
     }
 }
@@ -559,7 +551,6 @@ impl_node_from!(Concatenation);
 impl_node_from!(Operator);
 impl_node_from!(Symbol);
 impl_node_from!(String, Cow, str);
-impl_node_from!(Bytes, Cow, [u8]);
 
 /// Transforms a full grammar tree into a node describing only the head.
 pub trait IntoNode {
@@ -582,7 +573,6 @@ impl FandangoNode<'_, '_> {
             FandangoNode::Operator(_) => 6,
             FandangoNode::Symbol(_) => 7,
             FandangoNode::String(_) => 8,
-            FandangoNode::Bytes(_) => 9,
         }
     }
 
@@ -597,7 +587,6 @@ impl FandangoNode<'_, '_> {
             FandangoNode::Operator(s) => s as *const _ as usize,
             FandangoNode::Symbol(s) => s as *const _ as usize,
             FandangoNode::String(s) => s as *const _ as usize,
-            FandangoNode::Bytes(s) => s as *const _ as usize,
         }
     }
 }

@@ -2,7 +2,7 @@
 
 use crate::graph::{FandangoNode, Traverse};
 use crate::impl_traverse;
-use crate::lang::py_literal::{parse_bytes, parse_string};
+use crate::lang::py_literal::parse_string;
 use getset::Getters;
 use pest::Parser;
 use pest::error::{Error as PestError, ErrorVariant};
@@ -334,13 +334,11 @@ pub enum Symbol<'a> {
     Nonterminal(Tagged<'a, Nonterminal<'a>>),
     /// A string-like terminal.
     String(Tagged<'a, Cow<'a, str>>),
-    /// A bytes-like terminal.
-    Bytes(Tagged<'a, Cow<'a, [u8]>>),
     /// A list of [`Alternative`]s.
     Alternative(Tagged<'a, Alternative<'a>>),
 }
 
-impl_fandango_traverse!(Symbol, match { Nonterminal(nt), String(s), Bytes(b), Alternative(alt) });
+impl_fandango_traverse!(Symbol, match { Nonterminal(nt), String(s), Alternative(alt) });
 
 impl<'a> TryFrom<Pair<'a, Rule>> for Symbol<'a> {
     type Error = ParseError;
@@ -353,7 +351,6 @@ impl<'a> TryFrom<Pair<'a, Rule>> for Symbol<'a> {
         Ok(match inner.as_rule() {
             Rule::nonterminal => Symbol::Nonterminal(inner.try_into()?),
             Rule::string => Symbol::String(parse_string(inner)?),
-            Rule::bytes => Symbol::Bytes(parse_bytes(inner)?),
             Rule::alternative => Symbol::Alternative(inner.try_into()?),
             _ => unreachable!("This case is not represented within the grammar."),
         })
@@ -445,66 +442,6 @@ mod py_literal {
             _ => unreachable!(),
         }
     }
-
-    fn parse_bytes_escape_seq(escape_seq: Pair<'_, Rule>) -> Result<u8, ParseError> {
-        debug_assert_eq!(escape_seq.as_rule(), Rule::bytes_escape_seq);
-        let (seq,) = parse_pairs_as!(escape_seq.into_inner(), (_,));
-        match seq.as_rule() {
-            Rule::char_escape => Ok(match seq.as_str() {
-                "\\" => b'\\',
-                "'" => b'\'',
-                "\"" => b'"',
-                "a" => b'\x07',
-                "b" => b'\x08',
-                "f" => b'\x0C',
-                "n" => b'\n',
-                "r" => b'\r',
-                "t" => b'\t',
-                "v" => b'\x0B',
-                _ => unreachable!(),
-            }),
-            Rule::octal_escape => u8::from_str_radix(seq.as_str(), 8).map_err(|err| {
-                Box::new(PestError::new_from_span(
-                    ErrorVariant::CustomError {
-                        message: format!("failed to parse \\{} as u8: {}", seq.as_str(), err,),
-                    },
-                    seq.as_span(),
-                ))
-            }),
-            Rule::hex_escape => Ok(u8::from_str_radix(&seq.as_str()[1..], 16).unwrap()),
-            _ => unreachable!(),
-        }
-    }
-
-    pub fn parse_bytes(bytes: Pair<Rule>) -> Result<Tagged<Cow<[u8]>>, ParseError> {
-        debug_assert_eq!(bytes.as_rule(), Rule::bytes);
-        let (bytes_body,) = parse_pairs_as!(bytes.into_inner(), (_,));
-        match bytes_body.as_rule() {
-            Rule::short_bytes_body | Rule::long_bytes_body => {
-                let mut out = Vec::new();
-                let orig = bytes_body.as_str().as_bytes();
-                let span = bytes_body.as_span();
-                for item in bytes_body.into_inner() {
-                    match item.as_rule() {
-                        Rule::short_bytes_non_escape
-                        | Rule::long_bytes_non_escape
-                        | Rule::bytes_unknown_escape => {
-                            out.extend_from_slice(item.as_str().as_bytes())
-                        }
-                        Rule::line_continuation_seq => (),
-                        Rule::bytes_escape_seq => out.push(parse_bytes_escape_seq(item)?),
-                        _ => unreachable!(),
-                    }
-                }
-                if orig.len() == out.len() {
-                    Ok(Tagged::new(Cow::Borrowed(orig), span))
-                } else {
-                    Ok(Tagged::new(Cow::Owned(out), span))
-                }
-            }
-            _ => unreachable!(),
-        }
-    }
 }
 
 #[cfg(test)]
@@ -555,7 +492,7 @@ pub(crate) mod test {
         checker(alternative);
     }
 
-    pub const SIMPLE_GRAMMAR: &str = include_str!("../../tests/macros/simple.fan");
+    pub const SIMPLE_GRAMMAR: &str = include_str!("../../tests/grammars/simple.fan");
 
     #[test]
     fn test_grammar() -> Result<(), Box<dyn Error>> {
@@ -583,7 +520,7 @@ pub(crate) mod test {
         {
             let (production,) = parse_pairs_as!(expr.into_inner(), (Rule::production,));
             check_production(production, "expr", |alternative| {
-                let (number, addition) = parse_pairs_as!(
+                let (addition, number) = parse_pairs_as!(
                     alternative.into_inner(),
                     (Rule::concatenation, Rule::concatenation)
                 );
@@ -604,7 +541,7 @@ pub(crate) mod test {
         {
             let (production,) = parse_pairs_as!(number.into_inner(), (Rule::production,));
             check_production(production, "number", |alternative| {
-                let (number, zero) = parse_pairs_as!(
+                let (zero, number) = parse_pairs_as!(
                     alternative.into_inner(),
                     (Rule::concatenation, Rule::concatenation)
                 );
@@ -709,15 +646,7 @@ pub(crate) mod test {
             .try_into()
             .unwrap();
 
-        let [op] = untag_or_die!(c1, Concatenation { operators })
-            .try_into()
-            .unwrap();
-        let sym = untag_or_die!(op, Operator::Symbol(nt));
-        let nt = untag_or_die!(sym, Symbol::Nonterminal(sym));
-        let name = untag_or_die!(nt, Nonterminal { name });
-        assert_eq!(name, "number");
-
-        let [op1, op2, op3] = untag_or_die!(c2, Concatenation { operators })
+        let [op1, op2, op3] = untag_or_die!(c1, Concatenation { operators })
             .try_into()
             .unwrap();
 
@@ -735,6 +664,14 @@ pub(crate) mod test {
         let name = untag_or_die!(nt, Nonterminal { name });
         assert_eq!(name, "expr");
 
+        let [op] = untag_or_die!(c2, Concatenation { operators })
+            .try_into()
+            .unwrap();
+        let sym = untag_or_die!(op, Operator::Symbol(nt));
+        let nt = untag_or_die!(sym, Symbol::Nonterminal(sym));
+        let name = untag_or_die!(nt, Nonterminal { name });
+        assert_eq!(name, "number");
+
         let prod = untag_or_die!(number, Statement::Production(prod));
         let (nt, alt) = untag_or_die!(prod, Production {
             nonterminal,
@@ -748,7 +685,14 @@ pub(crate) mod test {
             .try_into()
             .unwrap();
 
-        let [op1, op2] = untag_or_die!(c1, Concatenation { operators })
+        let [op] = untag_or_die!(c1, Concatenation { operators })
+            .try_into()
+            .unwrap();
+        let sym = untag_or_die!(op, Operator::Symbol(nt));
+        let value = untag_or_die!(sym, Symbol::String(sym));
+        assert_eq!(value.inner, "0");
+
+        let [op1, op2] = untag_or_die!(c2, Concatenation { operators })
             .try_into()
             .unwrap();
 
@@ -761,13 +705,6 @@ pub(crate) mod test {
         let nt = untag_or_die!(sym, Symbol::Nonterminal(sym));
         let name = untag_or_die!(nt, Nonterminal { name });
         assert_eq!(name, "digit");
-
-        let [op] = untag_or_die!(c2, Concatenation { operators })
-            .try_into()
-            .unwrap();
-        let sym = untag_or_die!(op, Operator::Symbol(nt));
-        let value = untag_or_die!(sym, Symbol::String(sym));
-        assert_eq!(value.inner, "0");
 
         let prod = untag_or_die!(non_zero, Statement::Production(prod));
         let (nt, alt) = untag_or_die!(prod, Production {

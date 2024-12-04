@@ -1,4 +1,5 @@
 /// Debug assertion that the value matches the pattern.
+#[macro_export]
 macro_rules! debug_assert_match {
     ($pattern:pat, $value:expr) => {
         if cfg!(debug_assertions) {
@@ -52,21 +53,22 @@ macro_rules! debug_assert_match {
 ///     out
 /// }
 /// ```
+#[macro_export]
 macro_rules! parse_pairs_as {
     // Entry point, fixed number of pairs, no trailing comma.
     ($pair:expr, ($($rules:pat),*)) => {
-        parse_pairs_as!($pair, ($($rules),*,))
+        $crate::parse_pairs_as!($pair, ($($rules),*,))
     };
     // Entry point, variable number of pairs, no trailing comma.
     ($pair:expr, ($($rules:pat),*), ..) => {
-        parse_pairs_as!($pair, ($($rules),*,), ..)
+        $crate::parse_pairs_as!($pair, ($($rules),*,), ..)
     };
     // Entry point, fixed number of pairs, with trailing comma.
     ($pair:expr, ($($rules:pat),*,)) => {
         {
             let iter = &mut $pair;
-            let out = parse_pairs_as!(@recur iter, (), ($($rules),*,));
-            debug_assert_match!(Option::None, iter.next());
+            let out = $crate::parse_pairs_as!(@recur iter, (), ($($rules),*,));
+            $crate::debug_assert_match!(Option::None, iter.next());
             out
         }
     };
@@ -74,7 +76,7 @@ macro_rules! parse_pairs_as {
     ($pair:expr, ($($rules:pat),*,), ..) => {
         {
             let iter = &mut $pair;
-            parse_pairs_as!(@recur iter, (), ($($rules),*,))
+            $crate::parse_pairs_as!(@recur iter, (), ($($rules),*,))
         }
     };
     // Start processing the patterns.
@@ -83,12 +85,12 @@ macro_rules! parse_pairs_as {
         (),
         ($head_rule:pat, $($remaining_rules:pat),*,)
     ) => {
-        parse_pairs_as!(@recur
+        $crate::parse_pairs_as!(@recur
             $iter,
             (
                 {
                     let tmp = $iter.next().unwrap();
-                    debug_assert_match!($head_rule, tmp.as_rule());
+                    $crate::debug_assert_match!($head_rule, tmp.as_rule());
                     tmp
                 },
             ),
@@ -101,13 +103,13 @@ macro_rules! parse_pairs_as {
         ($($processed:expr),*,),
         ($head_rule:pat, $($remaining_rules:pat),*,)
     ) => {
-        parse_pairs_as!(@recur
+        $crate::parse_pairs_as!(@recur
             $iter,
             (
                 $($processed),*,
                 {
                     let tmp = $iter.next().unwrap();
-                    debug_assert_match!($head_rule, tmp.as_rule());
+                    $crate::debug_assert_match!($head_rule, tmp.as_rule());
                     tmp
                 },
             ),
@@ -119,7 +121,7 @@ macro_rules! parse_pairs_as {
         (
             {
                 let tmp = $iter.next().unwrap();
-                debug_assert_match!($head_rule, tmp.as_rule());
+                $crate::debug_assert_match!($head_rule, tmp.as_rule());
                 tmp
             },
         )
@@ -130,7 +132,7 @@ macro_rules! parse_pairs_as {
             $($processed),*,
             {
                 let tmp = $iter.next().unwrap();
-                debug_assert_match!($head_rule, tmp.as_rule());
+                $crate::debug_assert_match!($head_rule, tmp.as_rule());
                 tmp
             },
         )

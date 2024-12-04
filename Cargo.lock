@@ -58,6 +58,8 @@ version = "0.1.0"
 dependencies = [
  "fandango-core",
  "fandango-derive",
+ "pest",
+ "pest_derive",
  "trybuild",
 ]
 
@@ -69,6 +71,7 @@ dependencies = [
  "pest",
  "pest_derive",
  "petgraph",
+ "rand_core",
 ]
 
 [[package]]
@@ -85,6 +88,7 @@ version = "0.1.0"
 dependencies = [
  "fandango-core",
  "pest",
+ "pest_generator",
  "petgraph",
  "proc-macro2",
  "quote",
@@ -259,6 +263,12 @@ checksum = "b5b9d34b8991d19d98081b46eacdd8eb58c6f2b201139f7c5f643cc155a633af"
 dependencies = [
  "proc-macro2",
 ]
+
+[[package]]
+name = "rand_core"
+version = "0.6.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ec0be4795e2f6a28069bec0b5ff3e2ac9bafc99e6a9a7dc3547996c5c816922c"
 
 [[package]]
 name = "ryu"

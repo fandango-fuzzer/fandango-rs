@@ -11,3 +11,6 @@
 
 pub use fandango_core::*;
 pub use fandango_derive::*;
+
+pub use pest::*;
+pub use pest_derive::*;

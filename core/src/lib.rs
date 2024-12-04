@@ -11,3 +11,5 @@ mod parse_macros;
 pub mod graph;
 pub mod lang;
 pub mod typing;
+
+pub use rand_core;

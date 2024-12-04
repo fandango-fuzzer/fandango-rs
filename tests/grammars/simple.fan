@@ -1,6 +1,6 @@
 <start> ::= <expr>;
-<expr> ::= <number> | <number> "+" <expr>;
-<number> ::= <non_zero><digit>* | "0";
+<expr> ::= <number> "+" <expr> | <number>;
+<number> ::= "0" | <non_zero><digit>*;
 <non_zero> ::=
               "1"
             | "2"
