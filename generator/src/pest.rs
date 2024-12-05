@@ -34,10 +34,30 @@ impl<'source> IntoPestSource<()> for DiGraphMap<FandangoNode<'_, 'source>, Span<
             }
         }
 
-        let pest_name = Cow::Borrowed("start");
-        let start = Nonterminal::new(pest_name.clone());
+        let pest_name = "start";
+        let start = Nonterminal::new(pest_name);
         let start = FandangoNode::Nonterminal(&start);
-        start.emit_pest(&mut (self, HashSet::new(), pest_name), output)
+
+        let mut visited = HashSet::new();
+        visited.insert(start);
+
+        let mut children = self.edges(start);
+        let (_, child, _) = children.next().expect("Start node has exactly one member.");
+        assert!(children.next().is_none());
+
+        let pest_child_name = if let FandangoNode::Nonterminal(nt) = child {
+            Cow::Borrowed(nt.name())
+        } else {
+            Cow::Owned(format!("{pest_name}_0"))
+        };
+
+        writeln!(
+            output,
+            "{pest_name} = {{ SOI ~ {} ~ EOI }}",
+            pest_child_name
+        )?;
+
+        child.emit_pest(&mut (self, HashSet::new(), pest_child_name), output)
     }
 }
 
@@ -68,7 +88,7 @@ impl<'program, 'source> IntoPestSource<PestContext<'_, 'program, 'source>>
             .enumerate()
             .map(|(i, (_, child, _))| {
                 if let FandangoNode::Nonterminal(nt) = child {
-                    nt.name().clone()
+                    Cow::Borrowed(nt.name())
                 } else {
                     Cow::Owned(format!("{pest_name}_{i}"))
                 }

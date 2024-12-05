@@ -3,11 +3,11 @@
 use crate::lang::{
     Alternative, Concatenation, Nonterminal, Operator, Production, Program, Statement, Symbol,
 };
-use alloc::borrow::Cow;
 use core::fmt::{Formatter, Write};
 use pest::Span;
 use petgraph::data::Build;
 use petgraph::graphmap::{DiGraphMap, NodeTrait};
+use std::borrow::Cow;
 use std::cmp::Ordering;
 use std::collections::VecDeque;
 use std::fmt;
@@ -16,15 +16,15 @@ use std::ops::Deref;
 
 /// Traverse this type's children, potentially recursively.
 #[allow(unused_variables)]
-pub trait Traverse<'source>: Sized {
+pub trait Traverse<'program>: Sized {
     /// The node type for graph.
-    type Node: NodeTrait + Traverse<'source, Node = Self::Node> + From<Self>;
+    type Node: NodeTrait + Traverse<'program, Node = Self::Node> + From<Self>;
 
     /// Recurse the traversal! The order of calls to `consumer` are not guaranteed, but ultimately
     /// will invoke [`Traverse::traverse`] for each level.
     fn recurse<F>(self, mut consumer: F)
     where
-        F: FnMut(Self::Node, Self::Node, Span<'source>),
+        F: FnMut(Self::Node, Self::Node, Span<'program>),
     {
         self.traverse(|n1, n2, w| {
             consumer(n1, n2, w);
@@ -36,7 +36,7 @@ pub trait Traverse<'source>: Sized {
     /// parent and the child, as well as an unsigned integer denoting the index of the children.
     fn traverse<F>(self, consumer: F)
     where
-        F: FnMut(Self::Node, Self::Node, Span<'source>),
+        F: FnMut(Self::Node, Self::Node, Span<'program>),
     {
     }
 }
@@ -256,7 +256,7 @@ macro_rules! variant_traverse {
 /// 1. The type for which [`Traverse`] is to be implemented.
 /// 2. The name of the raw type (e.g., if providing the type behind a reference).
 /// 3. The node type of the graph (e.g., [`FandangoNode`]).
-/// 4. The generics/lifetimes required for the implementation (optional; where clauses not supported).
+/// 4. The generics/lifetimes required for the implementation (optional).
 ///
 /// The remaining argument(s) are a variadic list of fields or a list of match-like enum pattern
 /// bindings without the `=> { ... }` clause, surrounded by `match { }`. Fields or enum bindings
@@ -275,7 +275,7 @@ macro_rules! variant_traverse {
 ///     &'program Program<'source>,
 ///     Program,
 ///     FandangoNode<'program, 'source>,
-///     <'program>,
+///     <'source: 'program>,
 ///     [statements]
 /// );
 /// ```
@@ -288,19 +288,19 @@ macro_rules! variant_traverse {
 ///     &'program Statement<'source>,
 ///     Statement,
 ///     FandangoNode<'program, 'source>,
-///     <'program>,
+///     <'source: 'program>,
 ///     match { Production(prod), Constraint, Python }
 /// );
 /// ```
 #[macro_export]
 macro_rules! impl_traverse {
-    ($target:ty, $name:ty, $node:ty, < $($generics:tt),* >, match { $($variants:tt)+ }) => {
-        impl<'source, $($generics),*> $crate::graph::Traverse<'source> for $target {
+    ($target:ty, $name:ty, $node:ty, < $($generics:tt $(: $constraints:tt)?),* >, match { $($variants:tt)+ }) => {
+        impl<'program, $($generics $(: $constraints)?),*> $crate::graph::Traverse<'program> for $target {
             type Node = $node;
 
             fn traverse<F>(self, consumer: F)
             where
-                F: ::core::ops::FnMut(Self::Node, Self::Node, $crate::lang::Span<'source>),
+                F: ::core::ops::FnMut(Self::Node, Self::Node, $crate::lang::Span<'program>),
             {
                 #![allow(unused_imports)]
                 use $name::*;
@@ -309,13 +309,13 @@ macro_rules! impl_traverse {
         }
     };
 
-    ($target:ty, $name:ty, $node:ty, < $($generics:tt),* >, $($fields:tt),*) => {
-        impl<'source, $($generics),*> $crate::graph::Traverse<'source> for $target {
+    ($target:ty, $name:ty, $node:ty, < $($generics:tt $(: $constraints:tt)?),* >, $($fields:tt),*) => {
+        impl<'program, $($generics $(: $constraints)?),*> $crate::graph::Traverse<'program> for $target {
             type Node = $node;
 
             fn traverse<F>(self, consumer: F)
             where
-                F: ::core::ops::FnMut(Self::Node, Self::Node,  $crate::lang::Span<'source>),
+                F: ::core::ops::FnMut(Self::Node, Self::Node,  $crate::lang::Span<'program>),
             {
                 $crate::graph::traverse_children(self, $crate::field_iter!($node => self, $($fields),*), consumer);
             }
@@ -337,7 +337,7 @@ macro_rules! impl_fandango_traverse {
             &'program $target<'source>,
             $target,
             FandangoNode<'program, 'source>,
-            <'program>,
+            <'source: 'program>,
             match { $($variants)+ }
         );
     };
@@ -347,7 +347,7 @@ macro_rules! impl_fandango_traverse {
             &'program $target<'source>,
             $target,
             FandangoNode<'program, 'source>,
-            <'program>,
+            <'source: 'program>,
             $($fields),*
         );
     };
@@ -359,12 +359,12 @@ pub trait IntoGraph<'a>: Traverse<'a> {
     fn into_graph(self) -> DiGraphMap<Self::Node, Span<'a>>;
 }
 
-impl<'program, 'source, T> IntoGraph<'source> for T
+impl<'program, 'source, T> IntoGraph<'program> for T
 where
-    T: Traverse<'source, Node = FandangoNode<'program, 'source>>,
+    T: Traverse<'program, Node = FandangoNode<'program, 'source>>,
     'source: 'program,
 {
-    fn into_graph(self) -> DiGraphMap<Self::Node, Span<'source>> {
+    fn into_graph(self) -> DiGraphMap<Self::Node, Span<'program>> {
         let mut graph = DiGraphMap::new();
         let mut work = VecDeque::new();
         self.traverse(|n1, n2, w| work.push_back((n1, n2, w)));
@@ -471,7 +471,7 @@ impl fmt::Debug for FandangoNode<'_, '_> {
                 .finish_non_exhaustive(),
             FandangoNode::Nonterminal(nt) => f
                 .debug_struct("FandangoNode::Nonterminal")
-                .field("name", nt.name())
+                .field("name", &nt.name())
                 .finish(),
             FandangoNode::Alternative(_) => f
                 .debug_struct("FandangoNode::Alternative")
@@ -504,12 +504,12 @@ impl fmt::Debug for FandangoNode<'_, '_> {
     }
 }
 
-impl<'source> Traverse<'source> for FandangoNode<'_, 'source> {
+impl<'program> Traverse<'program> for FandangoNode<'program, '_> {
     type Node = Self;
 
     fn traverse<F>(self, consumer: F)
     where
-        F: FnMut(Self::Node, Self::Node, Span<'source>),
+        F: FnMut(Self::Node, Self::Node, Span<'program>),
     {
         match self {
             FandangoNode::Program(s) => s.traverse(consumer),
@@ -644,7 +644,7 @@ mod test {
     // this doesn't really test anything, just produces a graph in GraphViz format
     #[test]
     fn test_graph() -> Result<(), Box<dyn Error>> {
-        let program = Tagged::<Program>::try_from(SIMPLE_GRAMMAR)?;
+        let program = Program::try_from(SIMPLE_GRAMMAR)?;
 
         let graph = (&program).into_graph();
 

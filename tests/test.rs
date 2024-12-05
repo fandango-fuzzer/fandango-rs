@@ -1,23 +1,23 @@
 //! Build tests for FANDANGO, to ensure that we are generating code as expected.
 
-mod macros {
-    use fandango::Parser;
-    use fandango::parse_pairs_as;
-    use fandango_core::typing::{Children, Node};
+use fandango::Parser;
+use fandango::parse_pairs_as;
+use fandango_core::graph::Traverse;
+use fandango_core::typing::{Children, Node};
 
-    mod simple {
-        use fandango::Fandango;
+mod simple {
+    use super::*;
+    use fandango::Fandango;
 
-        #[derive(Fandango)]
-        #[grammar = "tests/grammars/simple.fan"]
-        pub struct Simple;
-    }
+    #[derive(Fandango)]
+    #[grammar = "tests/grammars/simple.fan"]
+    pub struct Simple;
 
     #[test]
-    fn parse() -> Result<(), simple::ParseError> {
-        use simple::*;
-
+    fn parse() -> Result<(), ParseError> {
         println!("{}", _PEST_SOURCE);
+
+        STRUCTURE.recurse(|_, _, _| {});
 
         const SAMPLE: &str = "1+2";
 
@@ -35,25 +35,28 @@ mod macros {
 
         panic!("Parse did not match expected value!");
     }
+}
 
-    mod pest_renamed {
-        use fandango::Fandango;
+mod pest_renamed {
+    use super::*;
+    use fandango::Fandango;
 
-        #[derive(Fandango)]
-        #[grammar = "tests/grammars/pest-renamed.fan"]
-        pub struct PestRenamed;
-    }
+    #[derive(Fandango)]
+    #[grammar = "tests/grammars/pest-renamed.fan"]
+    pub struct PestRenamed;
 
     #[test]
-    fn pest_name_sanity() -> Result<(), pest_renamed::ParseError> {
+    fn pest_name_sanity() -> Result<(), ParseError> {
         use pest_renamed::*;
 
         println!("{}", _PEST_SOURCE);
 
+        STRUCTURE.recurse(|_, _, _| {});
+
         const SAMPLE: &str = "hello!";
 
         let (start,) = parse_pairs_as!(PestRenamed::parse(Rule::start, SAMPLE)?, (Rule::start,));
-        let (actual,) = parse_pairs_as!(start.into_inner(), (Rule::pest,));
+        let (actual, _) = parse_pairs_as!(start.into_inner(), (Rule::pest, Rule::EOI));
         assert_eq!(actual.as_span().as_str(), SAMPLE);
 
         let start = PestRenamed::extract(SAMPLE)?;

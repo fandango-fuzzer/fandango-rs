@@ -32,16 +32,39 @@ pub use parser::Rule;
 pub type ParseError = Box<PestError<Rule>>;
 
 /// A source position tag for a given grammar element.
-#[derive(Debug, Clone, Eq, PartialEq, Getters)]
+#[derive(Debug, Clone, Eq, PartialEq)]
 pub struct Tagged<'source, T> {
-    #[getset(get_copy = "pub")]
-    span: Span<'source>,
+    source: &'source str,
+    span: (usize, usize),
     inner: T,
 }
 
 impl<'source, T> Tagged<'source, T> {
     pub(crate) fn new(inner: T, span: Span<'source>) -> Self {
-        Self { inner, span }
+        Self {
+            inner,
+            source: span.get_input(),
+            span: (span.start(), span.end()),
+        }
+    }
+
+    pub fn span(&self) -> Span<'_> {
+        Span::new(self.source, self.span.0, self.span.1)
+            .expect("Should never construct Tagged with invalid span bounds")
+    }
+}
+
+impl<T> Tagged<'static, T> {
+    pub const fn known(inner: T, source: &'static str, start: usize, end: usize) -> Self {
+        Self {
+            source,
+            span: (start, end),
+            inner,
+        }
+    }
+
+    pub const fn inner(&self) -> &T {
+        &self.inner
     }
 }
 
@@ -67,19 +90,16 @@ where
 
     fn try_from(value: Pair<'source, Rule>) -> Result<Self, Self::Error> {
         let span = value.as_span();
-        Ok(Self {
-            span,
-            inner: value.try_into()?,
-        })
+        Ok(Self::new(value.try_into()?, span))
     }
 }
 
-impl<'program, 'source, T, U> From<&'program Tagged<'source, T>> for (U, Span<'source>)
+impl<'program, 'source, T, U> From<&'program Tagged<'source, T>> for (U, Span<'program>)
 where
     U: From<&'program T>,
 {
     fn from(value: &'program Tagged<'source, T>) -> Self {
-        ((&value.inner).into(), value.span)
+        ((&value.inner).into(), value.span())
     }
 }
 
@@ -97,12 +117,20 @@ where
 #[getset(get = "pub")]
 pub struct Program<'a> {
     /// The statements contained within this grammar.
-    statements: Vec<Tagged<'a, Statement<'a>>>,
+    statements: Cow<'a, [Tagged<'a, Statement<'a>>]>,
+}
+
+impl Program<'static> {
+    pub const fn known(statements: &'static [Tagged<'static, Statement<'static>>]) -> Self {
+        Self {
+            statements: Cow::Borrowed(statements),
+        }
+    }
 }
 
 impl_fandango_traverse!(Program, [statements]);
 
-impl<'a> TryFrom<&'a str> for Tagged<'a, Program<'a>> {
+impl<'a> TryFrom<&'a str> for Program<'a> {
     type Error = ParseError;
 
     fn try_from(value: &'a str) -> Result<Self, Self::Error> {
@@ -110,10 +138,15 @@ impl<'a> TryFrom<&'a str> for Tagged<'a, Program<'a>> {
             parse_pairs_as!(Fandango::parse(Rule::fandango, value)?, (Rule::fandango,));
         let (program, _) = parse_pairs_as!(grammar.into_inner(), (Rule::program, Rule::EOI));
 
-        Ok(Tagged {
-            span: program.as_span(),
-            inner: Program::try_from(program)?,
-        })
+        Program::try_from(program)
+    }
+}
+
+impl<'a> TryFrom<&'a String> for Program<'a> {
+    type Error = ParseError;
+
+    fn try_from(value: &'a String) -> Result<Self, Self::Error> {
+        Self::try_from(value.as_str())
     }
 }
 
@@ -172,6 +205,18 @@ pub struct Production<'a> {
     alternative: Tagged<'a, Alternative<'a>>,
 }
 
+impl Production<'static> {
+    pub const fn known(
+        nonterminal: Tagged<'static, Nonterminal<'static>>,
+        alternative: Tagged<'static, Alternative<'static>>,
+    ) -> Self {
+        Self {
+            nonterminal,
+            alternative,
+        }
+    }
+}
+
 impl_fandango_traverse!(Production, nonterminal, alternative);
 
 impl<'a> TryFrom<Pair<'a, Rule>> for Production<'a> {
@@ -191,21 +236,24 @@ impl<'a> TryFrom<Pair<'a, Rule>> for Production<'a> {
 }
 
 /// A non-terminal, either at definition or use site.
-#[derive(Debug, Clone, Eq, Ord, PartialOrd, PartialEq, Getters)]
-#[getset(get = "pub")]
+#[derive(Debug, Clone, Eq, Ord, PartialOrd, PartialEq)]
 pub struct Nonterminal<'a> {
     /// The name of the non-terminal.
-    name: Cow<'a, str>,
+    name: &'a str,
 }
 
 impl<'a> Nonterminal<'a> {
     /// Create a non-terminal (useful for testing and referring to non-terminals directly).
-    pub fn new(name: Cow<'a, str>) -> Self {
+    pub const fn new(name: &'a str) -> Self {
         Self { name }
+    }
+
+    pub const fn name(&self) -> &'a str {
+        self.name
     }
 }
 
-impl<'program, 'source> Traverse<'source> for &'program Nonterminal<'source> {
+impl<'program, 'source> Traverse<'program> for &'program Nonterminal<'source> {
     type Node = FandangoNode<'program, 'source>;
 }
 
@@ -218,7 +266,7 @@ impl<'a> TryFrom<Pair<'a, Rule>> for Nonterminal<'a> {
         let (name,) = parse_pairs_as!(value.into_inner(), (Rule::name,));
 
         Ok(Self {
-            name: Cow::Borrowed(name.as_str()),
+            name: name.as_str(),
         })
     }
 }
@@ -228,7 +276,15 @@ impl<'a> TryFrom<Pair<'a, Rule>> for Nonterminal<'a> {
 #[getset(get = "pub")]
 pub struct Alternative<'a> {
     /// The concatenations which represent the possible alternatives.
-    concatenations: Vec<Tagged<'a, Concatenation<'a>>>,
+    concatenations: Cow<'a, [Tagged<'a, Concatenation<'a>>]>,
+}
+
+impl Alternative<'static> {
+    pub const fn known(concatenations: &'static [Tagged<'static, Concatenation<'static>>]) -> Self {
+        Self {
+            concatenations: Cow::Borrowed(concatenations),
+        }
+    }
 }
 
 impl_fandango_traverse!(Alternative, [concatenations]);
@@ -253,7 +309,15 @@ impl<'a> TryFrom<Pair<'a, Rule>> for Alternative<'a> {
 #[getset(get = "pub")]
 pub struct Concatenation<'a> {
     /// The concatenated operators.
-    operators: Vec<Tagged<'a, Operator<'a>>>,
+    operators: Cow<'a, [Tagged<'a, Operator<'a>>]>,
+}
+
+impl Concatenation<'static> {
+    pub const fn known(operators: &'static [Tagged<'static, Operator<'static>>]) -> Self {
+        Self {
+            operators: Cow::Borrowed(operators),
+        }
+    }
 }
 
 impl_fandango_traverse!(Concatenation, [operators]);
@@ -361,9 +425,9 @@ impl<'a> TryFrom<Pair<'a, Rule>> for Symbol<'a> {
 /// This is necessary because pest does not easily allow for grammar + extract dependencies.
 mod py_literal {
     use crate::lang::{ParseError, Rule, Tagged};
-    use alloc::borrow::Cow;
     use pest::error::{Error as PestError, ErrorVariant};
     use pest::iterators::Pair;
+    use std::borrow::Cow;
 
     fn parse_string_escape_seq(escape_seq: Pair<'_, Rule>) -> Result<char, ParseError> {
         debug_assert_eq!(escape_seq.as_rule(), Rule::string_escape_seq);
@@ -451,10 +515,10 @@ pub(crate) mod test {
         Alternative, Concatenation, Nonterminal, Operator, Production, Program, Rule, Statement,
         Symbol, Tagged, parse_string,
     };
-    use alloc::borrow::Cow;
-    use alloc::boxed::Box;
     use pest::Parser;
     use pest::iterators::Pair;
+    use std::borrow::Cow;
+    use std::boxed::Box;
     use std::error::Error;
 
     fn check_string_operator<const BORROW: bool>(operator: Pair<'_, Rule>, expected: &str) {
@@ -609,9 +673,10 @@ pub(crate) mod test {
 
     #[test]
     fn test_fullparse() -> Result<(), Box<dyn Error>> {
-        let program = Tagged::<Program>::try_from(SIMPLE_GRAMMAR)?;
+        let program = Program::try_from(SIMPLE_GRAMMAR)?;
 
-        let [start, expr, number, non_zero, digit] = program.inner.statements.try_into().unwrap();
+        let [start, expr, number, non_zero, digit] =
+            program.statements.into_owned().try_into().unwrap();
 
         let prod = untag_or_die!(start, Statement::Production(prod));
         let (nt, alt) = untag_or_die!(prod, Production {
@@ -623,9 +688,11 @@ pub(crate) mod test {
         assert_eq!(name, "start");
 
         let [concat] = untag_or_die!(alt, Alternative { concatenations })
+            .into_owned()
             .try_into()
             .unwrap();
         let [op] = untag_or_die!(concat, Concatenation { operators })
+            .into_owned()
             .try_into()
             .unwrap();
         let sym = untag_or_die!(op, Operator::Symbol(nt));
@@ -643,10 +710,12 @@ pub(crate) mod test {
         assert_eq!(name, "expr");
 
         let [c1, c2] = untag_or_die!(alt, Alternative { concatenations })
+            .into_owned()
             .try_into()
             .unwrap();
 
         let [op1, op2, op3] = untag_or_die!(c1, Concatenation { operators })
+            .into_owned()
             .try_into()
             .unwrap();
 
@@ -665,6 +734,7 @@ pub(crate) mod test {
         assert_eq!(name, "expr");
 
         let [op] = untag_or_die!(c2, Concatenation { operators })
+            .into_owned()
             .try_into()
             .unwrap();
         let sym = untag_or_die!(op, Operator::Symbol(nt));
@@ -682,10 +752,12 @@ pub(crate) mod test {
         assert_eq!(name, "number");
 
         let [c1, c2] = untag_or_die!(alt, Alternative { concatenations })
+            .into_owned()
             .try_into()
             .unwrap();
 
         let [op] = untag_or_die!(c1, Concatenation { operators })
+            .into_owned()
             .try_into()
             .unwrap();
         let sym = untag_or_die!(op, Operator::Symbol(nt));
@@ -693,6 +765,7 @@ pub(crate) mod test {
         assert_eq!(value.inner, "0");
 
         let [op1, op2] = untag_or_die!(c2, Concatenation { operators })
+            .into_owned()
             .try_into()
             .unwrap();
 
@@ -715,10 +788,11 @@ pub(crate) mod test {
         let name = untag_or_die!(nt, Nonterminal { name });
         assert_eq!(name, "non_zero");
 
-        let concats = untag_or_die!(alt, Alternative { concatenations });
+        let concats = untag_or_die!(alt, Alternative { concatenations }).into_owned();
 
         for (concat, i) in concats.into_iter().zip(1..=9u8) {
             let [op] = untag_or_die!(concat, Concatenation { operators })
+                .into_owned()
                 .try_into()
                 .unwrap();
             let sym = untag_or_die!(op, Operator::Symbol(nt));
@@ -736,10 +810,12 @@ pub(crate) mod test {
         assert_eq!(name, "digit");
 
         let [c1, c2] = untag_or_die!(alt, Alternative { concatenations })
+            .into_owned()
             .try_into()
             .unwrap();
 
         let [op] = untag_or_die!(c1, Concatenation { operators })
+            .into_owned()
             .try_into()
             .unwrap();
         let sym = untag_or_die!(op, Operator::Symbol(nt));
@@ -747,6 +823,7 @@ pub(crate) mod test {
         assert_eq!(value.inner, "0");
 
         let [op] = untag_or_die!(c2, Concatenation { operators })
+            .into_owned()
             .try_into()
             .unwrap();
         let sym = untag_or_die!(op, Operator::Symbol(nt));

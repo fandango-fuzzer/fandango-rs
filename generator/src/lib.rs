@@ -4,10 +4,11 @@
 mod pest;
 mod rust;
 
-use fandango_core::graph::IntoGraph;
-use fandango_core::lang::{ParseError, Program, Tagged};
+use ::pest::Span;
+use fandango_core::graph::{FandangoNode, IntoGraph, Traverse};
+use fandango_core::lang::{Operator, ParseError, Program, Statement, Symbol, Tagged};
 use pest::error::{InputLocation, LineColLocation};
-use quote::quote;
+use quote::{format_ident, quote};
 use std::borrow::Cow;
 use std::collections::BTreeMap;
 use std::fs::File;
@@ -158,22 +159,175 @@ impl Parse for FandangoDerivation {
     }
 }
 
+fn tokenize_metadata(node: FandangoNode, span: Span, arrays: &mut Vec<TokenStream>) -> TokenStream {
+    // is there a better way to do this? yes. do I care? no.
+    let mut children = Vec::new();
+    node.traverse(|_, n2, s| children.push(tokenize_metadata(n2, s, arrays)));
+
+    let base = match node {
+        FandangoNode::Program(_) => {
+            let count = arrays.len();
+            let name = format_ident!("FANDANGO_ARRAY_{}", count);
+            arrays.push(quote! {
+                const #name: &'static [::fandango::lang::Tagged<'static, ::fandango::lang::Statement<'static>>] = &[
+                    #(#children),*
+                ];
+            });
+            quote! {
+                ::fandango::lang::Program::known(#name)
+            }
+        }
+        FandangoNode::Statement(s) => match s {
+            Statement::Production(_) => {
+                quote! {
+                    ::fandango::lang::Statement::Production(
+                        #(#children),*
+                    )
+                }
+            }
+            Statement::Constraint | Statement::Python => unimplemented!(),
+        },
+        FandangoNode::Production(_) => {
+            quote! {
+                ::fandango::lang::Production::known(
+                    #(#children),*
+                )
+            }
+        }
+        FandangoNode::Nonterminal(nt) => {
+            let name = nt.name();
+            quote! {
+                ::fandango::lang::Nonterminal::new(#name)
+            }
+        }
+        FandangoNode::Alternative(_) => {
+            let count = arrays.len();
+            let name = format_ident!("FANDANGO_ARRAY_{}", count);
+            arrays.push(quote! {
+                const #name: &'static [::fandango::lang::Tagged<'static, ::fandango::lang::Concatenation<'static>>] = &[
+                    #(#children),*
+                ];
+            });
+            quote! {
+                ::fandango::lang::Alternative::known(#name)
+            }
+        }
+        FandangoNode::Concatenation(_) => {
+            let count = arrays.len();
+            let name = format_ident!("FANDANGO_ARRAY_{}", count);
+            arrays.push(quote! {
+                const #name: &'static [::fandango::lang::Tagged<'static, ::fandango::lang::Operator<'static>>] = &[
+                    #(#children),*
+                ];
+            });
+            quote! {
+                ::fandango::lang::Concatenation::known(#name)
+            }
+        }
+        FandangoNode::Operator(o) => match o {
+            Operator::Kleene(_) => {
+                quote! {
+                    ::fandango::lang::Operator::Kleene(
+                        #(#children),*
+                    )
+                }
+            }
+            Operator::Plus(_) => {
+                quote! {
+                    ::fandango::lang::Operator::Plus(
+                        #(#children),*
+                    )
+                }
+            }
+            Operator::Option(_) => {
+                quote! {
+                    ::fandango::lang::Operator::Option(
+                        #(#children),*
+                    )
+                }
+            }
+            Operator::Repeat(_, r) => {
+                let start = r.start();
+                let end = r.end();
+                quote! {
+                    ::fandango::lang::Operator::Repeat(
+                        #(#children),*,
+                        #start..=#end
+                    )
+                }
+            }
+            Operator::Symbol(_) => {
+                quote! {
+                    ::fandango::lang::Operator::Symbol(
+                        #(#children),*
+                    )
+                }
+            }
+        },
+        FandangoNode::Symbol(s) => match s {
+            Symbol::Nonterminal(_) => {
+                quote! {
+                    ::fandango::lang::Symbol::Nonterminal(
+                        #(#children),*
+                    )
+                }
+            }
+            Symbol::String(_) => {
+                quote! {
+                    ::fandango::lang::Symbol::String(
+                        #(#children),*
+                    )
+                }
+            }
+            Symbol::Alternative(_) => {
+                quote! {
+                    ::fandango::lang::Symbol::Alternative(
+                        #(#children),*
+                    )
+                }
+            }
+        },
+        FandangoNode::String(s) => {
+            quote! {
+                ::std::borrow::Cow::Borrowed(#s)
+            }
+        }
+    };
+    let start = span.start();
+    let end = span.end();
+
+    quote! {
+        ::fandango::lang::Tagged::known(
+            #base,
+            SOURCE,
+            #start,
+            #end,
+        )
+    }
+}
+
 /// Perform the derivation, or emit a compiler error with a (potentially useful) warning.
 pub fn derive_fandango_or_emit_error(
     source: FandangoDerivation,
 ) -> Result<TokenStream, TokenStream> {
-    let ident = &source.ident;
+    let mut grammar_source = String::new();
 
-    let parsed = Tagged::<Program>::try_from(source.merged.as_str())
-        .map_err(|e| source.to_compile_error(e))?;
+    let parsed = Program::try_from(&source.merged).map_err(|e| source.to_compile_error(e))?;
 
-    let mut graph = (&parsed).into_graph();
+    let mut arrays = Vec::new();
+    let metadata = tokenize_metadata(
+        FandangoNode::from(&parsed),
+        Span::new(&source.merged, 0, source.merged.len()).unwrap(),
+        &mut arrays,
+    );
+
+    let graph = (&parsed).into_graph();
     let mut tokenized = TokenStream::new();
 
     graph.emit_rust(&mut (), &mut tokenized).unwrap();
-
-    let mut grammar_source = String::new();
     graph.emit_pest(&mut (), &mut grammar_source).unwrap();
+
+    let ident = &source.ident;
 
     let mocked = quote! {
         #[derive(Parser)]
@@ -198,21 +352,30 @@ pub fn derive_fandango_or_emit_error(
         .collect::<TokenStream>();
 
     Ok(quote! {
+        #tokenized
+
+        #(#arrays)*
+
+        pub const STRUCTURE: ::fandango::lang::Tagged<
+            'static,
+            ::fandango::lang::Program
+        > = #metadata;
+
         // debug: pest grammar source
         pub const _PEST_SOURCE: &'static str = #grammar_source;
 
         impl #ident {
-            pub fn extract(source: &str) -> ::core::result::Result<nonterminal_start<'_>, ParseError> {
+            pub fn extract<'source>(
+                source: &'source str
+            ) -> ::std::result::Result<nonterminal_start<'_>, ParseError> {
                 use ::fandango::Parser;
+
                 let (grammar,) = ::fandango::parse_pairs_as!(#ident::parse(Rule::start, source)?, (Rule::start,));
-                if grammar.as_span().as_str() != source {
-                    todo!()
-                }
-                nonterminal_start::try_from(grammar)
+                let source = ::std::rc::Rc::new(::std::borrow::Cow::Borrowed(source));
+
+                nonterminal_start::try_from((source, grammar))
             }
         }
-
-        #tokenized
 
         #grammar
     })
