@@ -3,8 +3,9 @@ use fandango_core::lang::{Nonterminal, Operator};
 use pest::Span;
 use petgraph::graphmap::DiGraphMap;
 use proc_macro2::{Ident, TokenStream};
-use quote::{ToTokens, format_ident, quote};
-use std::collections::HashSet;
+use quote::{format_ident, quote};
+use std::collections::HashMap;
+use std::collections::hash_map::Entry;
 use std::convert::Infallible;
 
 /// Produces a Rust source tree using the provided context.
@@ -13,19 +14,29 @@ pub trait IntoRustSource<C> {
     type OutputError;
 
     /// Emits the corresponding Rust code for this structure.
-    fn emit_rust(&self, ctx: &mut C, output: &mut TokenStream) -> Result<(), Self::OutputError>;
+    fn emit_rust(&self, ctx: C, output: &mut TokenStream) -> Result<(), Self::OutputError>;
 }
 
-impl<'source> IntoRustSource<()> for DiGraphMap<FandangoNode<'_, 'source>, Span<'source>> {
+impl<'graph, 'program, 'source>
+    IntoRustSource<&'graph mut HashMap<FandangoNode<'program, 'source>, Ident>>
+    for DiGraphMap<FandangoNode<'program, 'source>, Span<'source>>
+where
+    'program: 'graph,
+{
     type OutputError = Infallible;
 
-    fn emit_rust(&self, _: &mut (), output: &mut TokenStream) -> Result<(), Self::OutputError> {
-        let start_node = Nonterminal::new("start");
-        let start_node = FandangoNode::Nonterminal(&start_node);
-
-        let FandangoNode::Nonterminal(nt) = start_node else {
-            unimplemented!("Can only transforms non-terminals into source code.")
-        };
+    fn emit_rust(
+        &self,
+        mapped_names: &'graph mut HashMap<FandangoNode<'program, 'source>, Ident>,
+        output: &mut TokenStream,
+    ) -> Result<(), Self::OutputError> {
+        let start_node = self
+            .nodes()
+            .find(|n| match n {
+                FandangoNode::Nonterminal(nt) if nt.name() == "start" => true,
+                _ => false,
+            })
+            .expect("No start node?");
 
         let mut edges = self.edges(start_node);
         let (_, child, &weight) = edges
@@ -36,6 +47,10 @@ impl<'source> IntoRustSource<()> for DiGraphMap<FandangoNode<'_, 'source>, Span<
             "Nonterminals should have exactly one definition."
         );
 
+        let FandangoNode::Nonterminal(nt) = start_node else {
+            unimplemented!("Can only transforms non-terminals into source code.")
+        };
+
         let input = weight.get_input();
         output.extend(quote! {
             const SOURCE: &'static str = #input;
@@ -44,7 +59,6 @@ impl<'source> IntoRustSource<()> for DiGraphMap<FandangoNode<'_, 'source>, Span<
 
         let pest_name = format_ident!("{}", nt.name());
         let name = format_ident!("nonterminal_{}", nt.name());
-        let mut visited = HashSet::new();
 
         let pest_child_name = if let FandangoNode::Nonterminal(nt) = child {
             format_ident!("{}", nt.name())
@@ -63,8 +77,6 @@ impl<'source> IntoRustSource<()> for DiGraphMap<FandangoNode<'_, 'source>, Span<
             _ => quote! { #child_name<'source> },
         };
 
-        let start = weight.start();
-        let end = weight.end();
         output.extend(quote! {
             pub struct #name<'source> {
                 span: ::std::option::Option<(::std::rc::Rc<::std::borrow::Cow<'source, str>>, usize, usize)>,
@@ -100,35 +112,38 @@ impl<'source> IntoRustSource<()> for DiGraphMap<FandangoNode<'_, 'source>, Span<
             }
         });
 
-        visited.insert(start_node);
+        mapped_names.insert(start_node, name);
         child.emit_rust(
-            &mut (child_name, pest_child_name, weight, visited, self),
+            (child_name, pest_child_name, weight, mapped_names, self),
             output,
         )
     }
 }
 
-type FandangoGenContext<'graph, 'program, 'source> = (
+type FandangoGenContext<'names, 'graph, 'program, 'source> = (
     Ident,
     Ident,
     Span<'source>,
-    HashSet<FandangoNode<'program, 'source>>,
+    &'names mut HashMap<FandangoNode<'program, 'source>, Ident>,
     &'graph DiGraphMap<FandangoNode<'program, 'source>, Span<'source>>,
 );
 
-impl<'graph, 'program, 'source> IntoRustSource<FandangoGenContext<'graph, 'program, 'source>>
+impl<'program, 'source> IntoRustSource<FandangoGenContext<'_, '_, 'program, 'source>>
     for FandangoNode<'program, 'source>
 {
     type OutputError = Infallible;
 
     fn emit_rust(
         &self,
-        ctx: &mut FandangoGenContext<'graph, 'program, 'source>,
+        ctx: FandangoGenContext<'_, '_, 'program, 'source>,
         output: &mut TokenStream,
     ) -> Result<(), Self::OutputError> {
-        let (name, pest_name, weight, visited, graph) = ctx;
-        if !visited.insert(*self) {
-            return Ok(());
+        let (name, pest_name, _, mapped_names, graph) = ctx;
+        match mapped_names.entry(*self) {
+            Entry::Occupied(_) => return Ok(()),
+            Entry::Vacant(e) => {
+                e.insert(name.clone());
+            }
         }
 
         let mut children = graph
@@ -188,9 +203,6 @@ impl<'graph, 'program, 'source> IntoRustSource<FandangoGenContext<'graph, 'progr
                 }
             })
             .collect::<Vec<_>>();
-
-        let start = weight.start();
-        let end = weight.end();
 
         match self {
             FandangoNode::String(s) => {
@@ -254,9 +266,6 @@ impl<'graph, 'program, 'source> IntoRustSource<FandangoGenContext<'graph, 'progr
             }
             FandangoNode::Operator(op) => {
                 assert_eq!(children.len(), 1);
-
-                let start = children[0].2.start();
-                let end = children[0].2.end();
 
                 let range_check_fail = match op {
                     Operator::Repeat(_, r) => {
@@ -322,14 +331,6 @@ impl<'graph, 'program, 'source> IntoRustSource<FandangoGenContext<'graph, 'progr
                 let child_names = (0..children.len())
                     .map(|i| format_ident!("child_{i}"))
                     .collect::<Vec<_>>();
-                let child_spans = children
-                    .iter()
-                    .map(|(_, _, span)| {
-                        let start = span.start();
-                        let end = span.end();
-                        quote! { (#start, #end) }
-                    })
-                    .collect::<Vec<_>>();
                 output.extend(quote! {
                     pub struct #name<'source> {
                         span: ::std::option::Option<(::std::rc::Rc<::std::borrow::Cow<'source, str>>, usize, usize)>,
@@ -369,10 +370,7 @@ impl<'graph, 'program, 'source> IntoRustSource<FandangoGenContext<'graph, 'progr
         for (((_, child, i), name), pest_name) in
             children.into_iter().zip(child_types).zip(pest_child_names)
         {
-            ctx.0 = name;
-            ctx.1 = pest_name;
-            ctx.2 = i;
-            child.emit_rust(ctx, output)?;
+            child.emit_rust((name, pest_name, i, mapped_names, graph), output)?;
         }
 
         Ok(())

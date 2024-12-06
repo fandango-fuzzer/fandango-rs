@@ -3,7 +3,6 @@
 use crate::graph::{FandangoNode, Traverse};
 use crate::impl_traverse;
 use crate::lang::py_literal::parse_string;
-use getset::Getters;
 use pest::Parser;
 use pest::error::{Error as PestError, ErrorVariant};
 use pest::iterators::Pair;
@@ -32,7 +31,7 @@ pub use parser::Rule;
 pub type ParseError = Box<PestError<Rule>>;
 
 /// A source position tag for a given grammar element.
-#[derive(Debug, Clone, Eq, PartialEq)]
+#[derive(Debug, Copy, Clone, Eq, PartialEq)]
 pub struct Tagged<'source, T> {
     source: &'source str,
     span: (usize, usize),
@@ -48,9 +47,13 @@ impl<'source, T> Tagged<'source, T> {
         }
     }
 
-    pub fn span(&self) -> Span<'_> {
+    pub fn span(&self) -> Span<'source> {
         Span::new(self.source, self.span.0, self.span.1)
             .expect("Should never construct Tagged with invalid span bounds")
+    }
+
+    pub const fn inner(&self) -> &T {
+        &self.inner
     }
 }
 
@@ -61,10 +64,6 @@ impl<T> Tagged<'static, T> {
             span: (start, end),
             inner,
         }
-    }
-
-    pub const fn inner(&self) -> &T {
-        &self.inner
     }
 }
 
@@ -113,11 +112,16 @@ where
 }
 
 /// The root of the FANDANGO grammar.
-#[derive(Debug, Clone, Eq, PartialEq, Getters)]
-#[getset(get = "pub")]
+#[derive(Debug, Clone, Eq, PartialEq)]
 pub struct Program<'a> {
     /// The statements contained within this grammar.
     statements: Cow<'a, [Tagged<'a, Statement<'a>>]>,
+}
+
+impl<'a> Program<'a> {
+    pub const fn statements(&self) -> &Cow<'a, [Tagged<'a, Statement<'a>>]> {
+        &self.statements
+    }
 }
 
 impl Program<'static> {
@@ -196,13 +200,22 @@ impl<'a> TryFrom<Pair<'a, Rule>> for Statement<'a> {
 }
 
 /// A production rule within the grammar.
-#[derive(Debug, Clone, Eq, PartialEq, Getters)]
-#[getset(get = "pub")]
+#[derive(Debug, Clone, Eq, PartialEq)]
 pub struct Production<'a> {
     /// The nonterminal which is defined by this production.
     nonterminal: Tagged<'a, Nonterminal<'a>>,
     /// An alternative which defines the rule.
     alternative: Tagged<'a, Alternative<'a>>,
+}
+
+impl<'a> Production<'a> {
+    pub const fn nonterminal(&self) -> &Tagged<'a, Nonterminal<'a>> {
+        &self.nonterminal
+    }
+
+    pub const fn alternative(&self) -> &Tagged<'a, Alternative<'a>> {
+        &self.alternative
+    }
 }
 
 impl Production<'static> {
@@ -272,11 +285,16 @@ impl<'a> TryFrom<Pair<'a, Rule>> for Nonterminal<'a> {
 }
 
 /// A list of potential instantiations.
-#[derive(Debug, Clone, Eq, PartialEq, Getters)]
-#[getset(get = "pub")]
+#[derive(Debug, Clone, Eq, PartialEq)]
 pub struct Alternative<'a> {
     /// The concatenations which represent the possible alternatives.
     concatenations: Cow<'a, [Tagged<'a, Concatenation<'a>>]>,
+}
+
+impl<'a> Alternative<'a> {
+    pub const fn concatenations(&self) -> &Cow<'a, [Tagged<'a, Concatenation<'a>>]> {
+        &self.concatenations
+    }
 }
 
 impl Alternative<'static> {
@@ -305,11 +323,16 @@ impl<'a> TryFrom<Pair<'a, Rule>> for Alternative<'a> {
 }
 
 /// A concatenation of individual operators.
-#[derive(Debug, Clone, Eq, PartialEq, Getters)]
-#[getset(get = "pub")]
+#[derive(Debug, Clone, Eq, PartialEq)]
 pub struct Concatenation<'a> {
     /// The concatenated operators.
     operators: Cow<'a, [Tagged<'a, Operator<'a>>]>,
+}
+
+impl<'a> Concatenation<'a> {
+    pub const fn operators(&self) -> &Cow<'a, [Tagged<'a, Operator<'a>>]> {
+        &self.operators
+    }
 }
 
 impl Concatenation<'static> {

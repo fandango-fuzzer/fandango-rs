@@ -2,6 +2,7 @@
 
 use crate::lang::{
     Alternative, Concatenation, Nonterminal, Operator, Production, Program, Statement, Symbol,
+    Tagged,
 };
 use core::fmt::{Formatter, Write};
 use pest::Span;

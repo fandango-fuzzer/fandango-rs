@@ -1,5 +1,7 @@
 //! Type information used in generated FANDANGO grammars.
 
+use crate::graph::FandangoNode;
+use crate::lang::Tagged;
 use pest::Span;
 use std::borrow::Cow;
 use std::rc::Rc;
@@ -11,6 +13,18 @@ pub fn maybe_owned_span<'node, 'source>(
     source
         .as_ref()
         .and_then(|(source, start, end)| Span::new(source, *start, *end))
+}
+
+pub trait Structured
+where
+    FandangoNode<'static, 'static>: From<&'static Self::FandangoType>,
+{
+    type FandangoType: 'static;
+    const STRUCTURE: &'static Tagged<'static, Self::FandangoType>;
+
+    fn as_node(&self) -> FandangoNode<'static, 'static> {
+        FandangoNode::from(Self::STRUCTURE.inner())
+    }
 }
 
 /// A node representing an entry in a grammar or a derivation tree.
