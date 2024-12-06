@@ -7,7 +7,7 @@ use pest::Parser;
 use pest::error::{Error as PestError, ErrorVariant};
 use pest::iterators::Pair;
 use std::borrow::Cow;
-use std::fmt::Debug;
+use std::fmt::{Debug, Formatter};
 use std::ops::{Deref, DerefMut, RangeInclusive};
 use std::str::FromStr;
 
@@ -31,11 +31,23 @@ pub use parser::Rule;
 pub type ParseError = Box<PestError<Rule>>;
 
 /// A source position tag for a given grammar element.
-#[derive(Debug, Copy, Clone, Eq, PartialEq)]
+#[derive(Clone, Ord, PartialOrd, Eq, PartialEq, Hash)]
 pub struct Tagged<'source, T> {
     source: &'source str,
     span: (usize, usize),
     inner: T,
+}
+
+impl<T> Debug for Tagged<'_, T>
+where
+    T: Debug,
+{
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Tagged")
+            .field("inner", &self.inner)
+            .field("span", &self.span().as_str())
+            .finish()
+    }
 }
 
 impl<'source, T> Tagged<'source, T> {
@@ -95,10 +107,10 @@ where
 
 impl<'program, 'source, T, U> From<&'program Tagged<'source, T>> for (U, Span<'program>)
 where
-    U: From<&'program T>,
+    U: From<&'program Tagged<'source, T>>,
 {
     fn from(value: &'program Tagged<'source, T>) -> Self {
-        ((&value.inner).into(), value.span())
+        (U::from(value), value.span())
     }
 }
 
@@ -112,7 +124,7 @@ where
 }
 
 /// The root of the FANDANGO grammar.
-#[derive(Debug, Clone, Eq, PartialEq)]
+#[derive(Debug, Clone, Ord, PartialOrd, Eq, PartialEq, Hash)]
 pub struct Program<'a> {
     /// The statements contained within this grammar.
     statements: Cow<'a, [Tagged<'a, Statement<'a>>]>,
@@ -170,7 +182,7 @@ impl<'a> TryFrom<Pair<'a, Rule>> for Program<'a> {
 }
 
 /// A statement within a FANDANGO grammar.
-#[derive(Debug, Clone, Eq, PartialEq)]
+#[derive(Debug, Clone, Ord, PartialOrd, Eq, PartialEq, Hash)]
 pub enum Statement<'a> {
     /// A production representing a rule within the grammar.
     Production(Tagged<'a, Production<'a>>),
@@ -200,7 +212,7 @@ impl<'a> TryFrom<Pair<'a, Rule>> for Statement<'a> {
 }
 
 /// A production rule within the grammar.
-#[derive(Debug, Clone, Eq, PartialEq)]
+#[derive(Debug, Clone, Ord, PartialOrd, Eq, PartialEq, Hash)]
 pub struct Production<'a> {
     /// The nonterminal which is defined by this production.
     nonterminal: Tagged<'a, Nonterminal<'a>>,
@@ -249,7 +261,7 @@ impl<'a> TryFrom<Pair<'a, Rule>> for Production<'a> {
 }
 
 /// A non-terminal, either at definition or use site.
-#[derive(Debug, Clone, Eq, Ord, PartialOrd, PartialEq)]
+#[derive(Debug, Clone, Ord, PartialOrd, Eq, PartialEq, Hash)]
 pub struct Nonterminal<'a> {
     /// The name of the non-terminal.
     name: &'a str,
@@ -285,7 +297,7 @@ impl<'a> TryFrom<Pair<'a, Rule>> for Nonterminal<'a> {
 }
 
 /// A list of potential instantiations.
-#[derive(Debug, Clone, Eq, PartialEq)]
+#[derive(Debug, Clone, Ord, PartialOrd, Eq, PartialEq, Hash)]
 pub struct Alternative<'a> {
     /// The concatenations which represent the possible alternatives.
     concatenations: Cow<'a, [Tagged<'a, Concatenation<'a>>]>,
@@ -323,7 +335,7 @@ impl<'a> TryFrom<Pair<'a, Rule>> for Alternative<'a> {
 }
 
 /// A concatenation of individual operators.
-#[derive(Debug, Clone, Eq, PartialEq)]
+#[derive(Debug, Clone, Ord, PartialOrd, Eq, PartialEq, Hash)]
 pub struct Concatenation<'a> {
     /// The concatenated operators.
     operators: Cow<'a, [Tagged<'a, Operator<'a>>]>,
@@ -361,7 +373,7 @@ impl<'a> TryFrom<Pair<'a, Rule>> for Concatenation<'a> {
 }
 
 /// An individual operator within a grammar.
-#[derive(Debug, Clone, Eq, PartialEq)]
+#[derive(Debug, Clone, Ord, PartialOrd, Eq, PartialEq, Hash)]
 pub enum Operator<'a> {
     /// Kleene star (0 to many) postfix operation.
     Kleene(Tagged<'a, Symbol<'a>>),
@@ -371,12 +383,12 @@ pub enum Operator<'a> {
     Option(Tagged<'a, Symbol<'a>>),
     /// Repetition postfix operation, with range specified as `{n}` for exactly `n` repetitions or
     /// `{m,n}` for any number of repetitions between `m` and `n`, inclusive.
-    Repeat(Tagged<'a, Symbol<'a>>, RangeInclusive<usize>),
+    Repeat(Tagged<'a, Symbol<'a>>, usize, usize),
     /// Simple case: exactly 1 [`Symbol`].
     Symbol(Tagged<'a, Symbol<'a>>),
 }
 
-impl_fandango_traverse!(Operator, match { Kleene(sym), Plus(sym), Option(sym), Repeat(sym, _), Symbol(sym) });
+impl_fandango_traverse!(Operator, match { Kleene(sym), Plus(sym), Option(sym), Repeat(sym, _, _), Symbol(sym) });
 
 fn parse_range(pair: Pair<Rule>) -> Result<usize, ParseError> {
     usize::from_str(pair.as_str()).map_err(|_| {
@@ -406,7 +418,7 @@ impl<'a> TryFrom<Pair<'a, Rule>> for Operator<'a> {
                 let symbol = pairs.next().unwrap().try_into()?;
                 let range_start = parse_range(pairs.next().unwrap())?;
                 let range_end = pairs.next().map_or(Ok(range_start), parse_range)?;
-                Operator::Repeat(symbol, range_start..=range_end)
+                Operator::Repeat(symbol, range_start, range_end)
             }
             Rule::symbol => Operator::Symbol(inner.try_into()?),
             _ => unreachable!("This case is not represented within the grammar."),
@@ -415,7 +427,7 @@ impl<'a> TryFrom<Pair<'a, Rule>> for Operator<'a> {
 }
 
 /// A single symbol within the grammar, or a list of [`Alternative`]s.
-#[derive(Debug, Clone, Eq, PartialEq)]
+#[derive(Debug, Clone, Ord, PartialOrd, Eq, PartialEq, Hash)]
 pub enum Symbol<'a> {
     /// A single non-terminal.
     Nonterminal(Tagged<'a, Nonterminal<'a>>),
@@ -536,7 +548,7 @@ pub(crate) mod test {
     use crate::lang::parser::Fandango;
     use crate::lang::{
         Alternative, Concatenation, Nonterminal, Operator, Production, Program, Rule, Statement,
-        Symbol, Tagged, parse_string,
+        Symbol, parse_string,
     };
     use pest::Parser;
     use pest::iterators::Pair;

@@ -23,14 +23,15 @@ impl<'source> IntoPestSource<()> for DiGraphMap<FandangoNode<'_, 'source>, Span<
     fn emit_pest(&self, _ctx: &mut (), output: &mut String) -> Result<(), Self::OutputError> {
         let mut hashes = HashSet::new();
         for string in self.nodes().filter_map(|n| match n {
-            FandangoNode::String(s) => Some(s.clone()),
+            FandangoNode::String(s) => Some(s),
             _ => None,
         }) {
             let mut hasher = DefaultHasher::new();
             string.hash(&mut hasher);
             let hash = hasher.finish();
             if hashes.insert(hash) {
-                writeln!(output, "lit_{hash} = {{ {string:?} }}")?;
+                let actual = string.inner();
+                writeln!(output, "lit_{hash} = {{ {actual:?} }}")?;
             }
         }
 
@@ -125,7 +126,7 @@ impl<'program, 'source> IntoPestSource<PestContext<'_, 'program, 'source>>
                         Operator::Option(_) => {
                             '?'
                         }
-                        Operator::Kleene(_) | Operator::Repeat(_, _) => {
+                        Operator::Kleene(_) | Operator::Repeat(_, _, _) => {
                             // we secretly emit repeats as *, since pest doesn't have a clean way to handle
                             // this for large repetitions
                             '*'
@@ -156,6 +157,30 @@ impl<'program, 'source> IntoPestSource<PestContext<'_, 'program, 'source>>
             ctx.2 = pest_child_name;
             alternative.emit_pest(ctx, output)?;
         }
+        Ok(())
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use crate::pest::IntoPestSource;
+    use fandango_core::graph::IntoGraph;
+    use fandango_core::lang::Program;
+    use std::error::Error;
+
+    const SIMPLE_GRAMMAR: &str = include_str!("../../tests/grammars/simple.fan");
+
+    #[test]
+    fn produce_grammar() -> Result<(), Box<dyn Error>> {
+        let program = Program::try_from(SIMPLE_GRAMMAR)?;
+
+        let graph = (&program).into_graph();
+
+        let mut pest_grammar = String::new();
+        graph.emit_pest(&mut (), &mut pest_grammar)?;
+
+        println!("{pest_grammar}");
+
         Ok(())
     }
 }

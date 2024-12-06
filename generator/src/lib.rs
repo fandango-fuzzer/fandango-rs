@@ -6,7 +6,7 @@ mod rust;
 mod structure;
 
 use ::pest::Span;
-use fandango_core::graph::{FandangoNode, IntoGraph, Traverse};
+use fandango_core::graph::{FandangoNode, IntoGraph};
 use fandango_core::lang::{ParseError, Program};
 use pest::error::{InputLocation, LineColLocation};
 use quote::quote;

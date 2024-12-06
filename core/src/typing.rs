@@ -7,8 +7,8 @@ use std::borrow::Cow;
 use std::rc::Rc;
 
 /// Convert a maybe owned string span into a span. Only for use with generated code.
-pub fn maybe_owned_span<'node, 'source>(
-    source: &'node Option<(Rc<Cow<'source, str>>, usize, usize)>,
+pub fn maybe_owned_span<'node>(
+    source: &'node Option<(Rc<Cow<'_, str>>, usize, usize)>,
 ) -> Option<Span<'node>> {
     source
         .as_ref()
@@ -17,13 +17,13 @@ pub fn maybe_owned_span<'node, 'source>(
 
 pub trait Structured
 where
-    FandangoNode<'static, 'static>: From<&'static Self::FandangoType>,
+    FandangoNode<'static, 'static>: From<&'static Tagged<'static, Self::FandangoType>>,
 {
     type FandangoType: 'static;
     const STRUCTURE: &'static Tagged<'static, Self::FandangoType>;
 
     fn as_node(&self) -> FandangoNode<'static, 'static> {
-        FandangoNode::from(Self::STRUCTURE.inner())
+        FandangoNode::from(Self::STRUCTURE)
     }
 }
 

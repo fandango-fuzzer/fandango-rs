@@ -1,12 +1,8 @@
 use crate::type_eq::type_eq;
 use crate::typing::Node;
-use std::borrow::Cow;
-use std::cell::RefCell;
-use std::collections::HashMap;
 use std::convert::Infallible;
 use std::mem;
 use std::mem::ManuallyDrop;
-use std::rc::Rc;
 
 pub trait Generator<R> {
     type Error;

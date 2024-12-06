@@ -1,5 +1,5 @@
 use fandango_core::graph::FandangoNode;
-use fandango_core::lang::{Nonterminal, Operator};
+use fandango_core::lang::Operator;
 use pest::Span;
 use petgraph::graphmap::DiGraphMap;
 use proc_macro2::{Ident, TokenStream};
@@ -32,10 +32,7 @@ where
     ) -> Result<(), Self::OutputError> {
         let start_node = self
             .nodes()
-            .find(|n| match n {
-                FandangoNode::Nonterminal(nt) if nt.name() == "start" => true,
-                _ => false,
-            })
+            .find(|n| matches!(n, FandangoNode::Nonterminal(nt) if nt.name() == "start"))
             .expect("No start node?");
 
         let mut edges = self.edges(start_node);
@@ -181,7 +178,7 @@ impl<'program, 'source> IntoRustSource<FandangoGenContext<'_, '_, 'program, 'sou
                 let base = quote! { #name<'source> };
                 match self {
                     FandangoNode::Operator(op) => match op {
-                        Operator::Kleene(_) | Operator::Plus(_) | Operator::Repeat(_, _) => {
+                        Operator::Kleene(_) | Operator::Plus(_) | Operator::Repeat(_, _, _) => {
                             quote! { ::std::vec::Vec<#base> }
                         }
                         Operator::Option(_) => match child {
@@ -206,6 +203,7 @@ impl<'program, 'source> IntoRustSource<FandangoGenContext<'_, '_, 'program, 'sou
 
         match self {
             FandangoNode::String(s) => {
+                let s = s.inner();
                 output.extend(quote! {
                     pub struct #name<'source> {
                         span: ::std::option::Option<(::std::rc::Rc<::std::borrow::Cow<'source, str>>, usize, usize)>,
@@ -268,9 +266,7 @@ impl<'program, 'source> IntoRustSource<FandangoGenContext<'_, '_, 'program, 'sou
                 assert_eq!(children.len(), 1);
 
                 let range_check_fail = match op {
-                    Operator::Repeat(_, r) => {
-                        let start = r.start();
-                        let end = r.end();
+                    Operator::Repeat(_, start, end) => {
                         quote! {
                             if children.len() < #start || #end < children.len() {
                                 todo!()

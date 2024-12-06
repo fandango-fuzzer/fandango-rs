@@ -376,7 +376,7 @@ where
                     graph.update_edge(n1, n2, w);
                 }
                 FandangoNode::Production(prod) => {
-                    work.push_back((prod.nonterminal().deref().into(), n2, w));
+                    work.push_back((prod.nonterminal().into(), n2, w));
                 }
                 FandangoNode::Alternative(alt) if alt.concatenations().len() == 1 => {
                     n2.traverse(|n1, n2, w| work.push_back((n1, n2, w)))
@@ -416,7 +416,7 @@ where
 }
 
 /// The node type used to represent the grammar's graph.
-#[derive(Copy, Clone)]
+#[derive(Debug, Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Hash)]
 #[allow(missing_docs)]
 pub enum FandangoNode<'program, 'source> {
     Program(&'program Program<'source>),
@@ -427,7 +427,7 @@ pub enum FandangoNode<'program, 'source> {
     Concatenation(&'program Concatenation<'source>),
     Operator(&'program Operator<'source>),
     Symbol(&'program Symbol<'source>),
-    String(&'program Cow<'source, str>),
+    String(&'program Tagged<'source, Cow<'source, str>>),
 }
 
 impl fmt::Display for FandangoNode<'_, '_> {
@@ -447,60 +447,11 @@ impl fmt::Display for FandangoNode<'_, '_> {
                 Operator::Kleene(_) => f.write_char('*'),
                 Operator::Plus(_) => f.write_char('+'),
                 Operator::Option(_) => f.write_char('?'),
-                Operator::Repeat(_, range) => {
-                    f.write_str(&format!("{{{},{}}}", range.start(), range.end()))
-                }
+                Operator::Repeat(_, start, end) => f.write_str(&format!("{{{},{}}}", start, end)),
                 Operator::Symbol(_) => f.write_str("OP"),
             },
             FandangoNode::Symbol(_) => f.write_str("SYM"),
             FandangoNode::String(s) => fmt::Debug::fmt(s, f),
-        }
-    }
-}
-
-impl fmt::Debug for FandangoNode<'_, '_> {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        match self {
-            FandangoNode::Program(_) => f
-                .debug_struct("FandangoNode::Program")
-                .finish_non_exhaustive(),
-            FandangoNode::Statement(_) => f
-                .debug_struct("FandangoNode::Statement")
-                .finish_non_exhaustive(),
-            FandangoNode::Production(_) => f
-                .debug_struct("FandangoNode::Production")
-                .finish_non_exhaustive(),
-            FandangoNode::Nonterminal(nt) => f
-                .debug_struct("FandangoNode::Nonterminal")
-                .field("name", &nt.name())
-                .finish(),
-            FandangoNode::Alternative(_) => f
-                .debug_struct("FandangoNode::Alternative")
-                .finish_non_exhaustive(),
-            FandangoNode::Concatenation(_) => f
-                .debug_struct("FandangoNode::Concatenation")
-                .finish_non_exhaustive(),
-            FandangoNode::Operator(op) => {
-                let mut debug = f.debug_struct("FandangoNode::Operator");
-                debug.field("variant", &match op {
-                    Operator::Kleene(_) => "Kleene",
-                    Operator::Plus(_) => "Plus",
-                    Operator::Option(_) => "Option",
-                    Operator::Repeat(_, _) => "Repeat",
-                    Operator::Symbol(_) => "Symbol",
-                });
-                if let Operator::Repeat(_, range) = op {
-                    debug.field("count", &format!("{{{},{}}}", range.start(), range.end()));
-                }
-                debug.finish_non_exhaustive()
-            }
-            FandangoNode::Symbol(_) => f
-                .debug_struct("FandangoNode::Symbol")
-                .finish_non_exhaustive(),
-            FandangoNode::String(s) => f
-                .debug_struct("FandangoNode::String")
-                .field("content", s)
-                .finish(),
         }
     }
 }
@@ -520,24 +471,34 @@ impl<'program> Traverse<'program> for FandangoNode<'program, '_> {
             FandangoNode::Concatenation(s) => s.traverse(consumer),
             FandangoNode::Operator(s) => s.traverse(consumer),
             FandangoNode::Symbol(s) => s.traverse(consumer),
-            FandangoNode::Nonterminal(_) | FandangoNode::String(_) => {} // nothing to do
+            FandangoNode::Nonterminal(s) => s.traverse(consumer),
+            FandangoNode::String(_) => {} // nothing to do
         }
     }
 }
 
-macro_rules! impl_node_from {
-    ($node:tt, $actual:tt, $($rest:tt),+) => {
-        impl<'program, 'source> From<&'program $actual<'source, $($rest),+>> for FandangoNode<'program, 'source> {
-            fn from(value: &'program $actual<'source, $($rest),+>) -> Self {
-                Self::$node(value)
-            }
-        }
-    };
+/// Transforms a full grammar tree into a node describing only the head.
+pub trait IntoNode {
+    /// The node type which this tree transforms to.
+    type Node;
 
+    /// Perform the conversion!
+    fn into_node(self) -> Self::Node;
+}
+
+macro_rules! impl_node_from {
     ($node:tt) => {
         impl<'program, 'source> From<&'program $node<'source>> for FandangoNode<'program, 'source> {
             fn from(value: &'program $node<'source>) -> Self {
                 Self::$node(value)
+            }
+        }
+
+        impl<'program, 'source> From<&'program Tagged<'source, $node<'source>>>
+            for FandangoNode<'program, 'source>
+        {
+            fn from(value: &'program Tagged<'source, $node<'source>>) -> Self {
+                Self::$node(value.inner())
             }
         }
     };
@@ -551,93 +512,20 @@ impl_node_from!(Alternative);
 impl_node_from!(Concatenation);
 impl_node_from!(Operator);
 impl_node_from!(Symbol);
-impl_node_from!(String, Cow, str);
 
-/// Transforms a full grammar tree into a node describing only the head.
-pub trait IntoNode {
-    /// The node type which this tree transforms to.
-    type Node;
-
-    /// Perform the conversion!
-    fn into_node(self) -> Self::Node;
-}
-
-impl FandangoNode<'_, '_> {
-    fn discriminant(self) -> usize {
-        match self {
-            FandangoNode::Program(_) => 0,
-            FandangoNode::Statement(_) => 1,
-            FandangoNode::Production(_) => 2,
-            FandangoNode::Nonterminal(_) => 3,
-            FandangoNode::Alternative(_) => 4,
-            FandangoNode::Concatenation(_) => 5,
-            FandangoNode::Operator(_) => 6,
-            FandangoNode::Symbol(_) => 7,
-            FandangoNode::String(_) => 8,
-        }
-    }
-
-    fn ptr(self) -> usize {
-        match self {
-            FandangoNode::Program(s) => s as *const _ as usize,
-            FandangoNode::Statement(s) => s as *const _ as usize,
-            FandangoNode::Production(s) => s as *const _ as usize,
-            FandangoNode::Nonterminal(s) => s as *const _ as usize,
-            FandangoNode::Alternative(s) => s as *const _ as usize,
-            FandangoNode::Concatenation(s) => s as *const _ as usize,
-            FandangoNode::Operator(s) => s as *const _ as usize,
-            FandangoNode::Symbol(s) => s as *const _ as usize,
-            FandangoNode::String(s) => s as *const _ as usize,
-        }
-    }
-}
-
-impl Eq for FandangoNode<'_, '_> {}
-
-impl PartialEq<Self> for FandangoNode<'_, '_> {
-    fn eq(&self, other: &Self) -> bool {
-        self.cmp(other).is_eq()
-    }
-}
-
-impl PartialOrd<Self> for FandangoNode<'_, '_> {
-    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        Some(self.cmp(other))
-    }
-}
-
-impl Ord for FandangoNode<'_, '_> {
-    fn cmp(&self, other: &Self) -> Ordering {
-        self.discriminant()
-            .cmp(&other.discriminant())
-            .then_with(|| {
-                if let (FandangoNode::Nonterminal(n1), FandangoNode::Nonterminal(n2)) =
-                    (self, other)
-                {
-                    n1.cmp(n2)
-                } else {
-                    self.ptr().cmp(&other.ptr())
-                }
-            })
-    }
-}
-
-impl Hash for FandangoNode<'_, '_> {
-    fn hash<H: Hasher>(&self, state: &mut H) {
-        self.discriminant().hash(state);
-        if let FandangoNode::Nonterminal(nt) = self {
-            nt.name().hash(state);
-        } else {
-            self.ptr().hash(state);
-        }
+impl<'program, 'source> From<&'program Tagged<'source, Cow<'source, str>>>
+    for FandangoNode<'program, 'source>
+{
+    fn from(value: &'program Tagged<'source, Cow<'source, str>>) -> Self {
+        Self::String(value)
     }
 }
 
 #[cfg(test)]
 mod test {
     use crate::graph::IntoGraph;
+    use crate::lang::Program;
     use crate::lang::test::SIMPLE_GRAMMAR;
-    use crate::lang::{Program, Tagged};
     use petgraph::dot::{Config, Dot};
     use petgraph::graphmap::DiGraphMap;
     use std::error::Error;

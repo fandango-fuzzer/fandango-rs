@@ -8,7 +8,7 @@ use fandango_core::typing::{Children, Node};
 mod simple {
     use super::*;
     use fandango::Fandango;
-    use fandango_core::graph::{FandangoNode, IntoGraph};
+    use fandango_core::graph::IntoGraph;
     use fandango_core::typing::Structured;
     use petgraph::dot::{Config, Dot};
     use petgraph::graphmap::DiGraphMap;
@@ -20,6 +20,8 @@ mod simple {
     #[test]
     fn parse() -> Result<(), ParseError> {
         println!("{}", _PEST_SOURCE);
+
+        println!("{:#?}", STRUCTURE);
 
         let graph = STRUCTURE.into_graph();
 
@@ -50,7 +52,9 @@ mod simple {
         let expr = start.children().0;
         assert!(graph.contains_node(expr.as_node()));
         if let nonterminal_expr_0::variant_0(expr) = expr.children().0 {
-            // assert!(graph.contains_node(expr.as_node()));
+            let expr_dbg = format!("{:?}", expr.as_node());
+
+            assert!(graph.contains_node(expr.as_node()));
             let (number, plus, expr) = expr.children();
             assert!(graph.contains_node(number.as_node()));
             assert!(graph.contains_node(expr.as_node()));

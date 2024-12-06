@@ -13,6 +13,8 @@ pub(crate) fn tokenize_metadata<'p, 's>(
     arrays: &mut Vec<TokenStream>,
     referenced: &mut Vec<TokenStream>,
 ) -> TokenStream {
+    let name = named.remove(node);
+
     let (ftype, base) = match node {
         FandangoNode::Program(p) => {
             let count = arrays.len();
@@ -218,7 +220,7 @@ pub(crate) fn tokenize_metadata<'p, 's>(
                 Operator::Kleene(c)
                 | Operator::Plus(c)
                 | Operator::Option(c)
-                | Operator::Repeat(c, _)
+                | Operator::Repeat(c, _, _)
                 | Operator::Symbol(c) => (FandangoNode::Symbol(c.inner()), c.span()),
             };
 
@@ -227,7 +229,7 @@ pub(crate) fn tokenize_metadata<'p, 's>(
                     ::fandango::lang::Operator<'static>
                 },
                 match o {
-                    Operator::Repeat(_, r) => {
+                    Operator::Repeat(_, start, end) => {
                         let child = tokenize_metadata(
                             &node,
                             span,
@@ -243,12 +245,11 @@ pub(crate) fn tokenize_metadata<'p, 's>(
                             arrays,
                             referenced,
                         );
-                        let start = r.start();
-                        let end = r.end();
                         quote! {
                             ::fandango::lang::Operator::Repeat(
                                 #child,
-                                #start..=#end
+                                #start,
+                                #end
                             )
                         }
                     }
@@ -298,7 +299,7 @@ pub(crate) fn tokenize_metadata<'p, 's>(
                     quote! { ::fandango::lang::Symbol::Nonterminal },
                 ),
                 Symbol::String(c) => (
-                    FandangoNode::String(c.inner()),
+                    FandangoNode::String(c),
                     c.span(),
                     quote! { ::fandango::lang::Symbol::String },
                 ),
@@ -335,13 +336,16 @@ pub(crate) fn tokenize_metadata<'p, 's>(
             quote! {
                 ::std::borrow::Cow<'static, str>
             },
-            quote! {
-                ::std::borrow::Cow::Borrowed(#s)
+            {
+                let s = s.inner();
+                quote! {
+                    ::std::borrow::Cow::Borrowed(#s)
+                }
             },
         ),
     };
 
-    if let Some(name) = named.remove(node) {
+    if let Some(name) = name {
         referenced.push(quote! {
             impl ::fandango::typing::Structured for #name<'_> {
                 type FandangoType = #ftype;
