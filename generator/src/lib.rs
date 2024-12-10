@@ -176,8 +176,10 @@ pub fn derive_fandango_or_emit_error(
     graph.emit_rust(&mut mapped_names, &mut tokenized).unwrap();
     graph.emit_pest(&mut (), &mut grammar_source).unwrap();
 
-    // some nodes are synthetic; do not produce structured info for these
-    mapped_names.retain(|&node, _| graph.contains_node(node));
+    let node_names = mapped_names
+        .iter()
+        .map(|(_, i)| i.clone())
+        .collect::<Vec<_>>();
 
     let mut arrays = Vec::new();
     let mut referenced = Vec::new();
@@ -220,6 +222,24 @@ pub fn derive_fandango_or_emit_error(
         #(#arrays)*
 
         #(#referenced)*
+
+        #[derive(Clone, Debug)]
+        pub enum Type<'program, 'source> where 'source: 'program {
+            #(#node_names(&'program #node_names<'source>)),*
+        }
+
+        #[derive(Debug)]
+        pub enum TypeMut<'program, 'source> where 'source: 'program {
+            #(#node_names(&'program mut #node_names<'source>)),*
+        }
+
+        impl<'program, 'source> From<TypeMut<'program, 'source>> for Type<'program, 'source> where 'source: 'program {
+            fn from(mutable: TypeMut<'program, 'source>) -> Type<'program, 'source> {
+                match mutable {
+                    #(TypeMut::#node_names(n) => Type::#node_names(n)),*
+                }
+            }
+        }
 
         pub const STRUCTURE: &'static ::fandango::lang::Tagged<
             'static,

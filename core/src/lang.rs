@@ -1,14 +1,16 @@
 //! Language definition for FANDANGO grammars. [`Program::try_from`] is what you want. :)
 
-use crate::graph::{FandangoNode, Traverse};
+use crate::graph::{FandangoNode, GraphTraverse};
 use crate::impl_traverse;
 use crate::lang::py_literal::parse_string;
 use pest::Parser;
 use pest::error::{Error as PestError, ErrorVariant};
 use pest::iterators::Pair;
 use std::borrow::Cow;
+use std::cmp::Ordering;
 use std::fmt::{Debug, Formatter};
-use std::ops::{Deref, DerefMut, RangeInclusive};
+use std::hash::{DefaultHasher, Hash, Hasher};
+use std::ops::{Deref, DerefMut};
 use std::str::FromStr;
 
 pub use pest::Span;
@@ -30,12 +32,13 @@ pub use parser::Rule;
 /// The [`PestError`] specific to FANDANGO.
 pub type ParseError = Box<PestError<Rule>>;
 
-/// A source position tag for a given grammar element.
-#[derive(Clone, Ord, PartialOrd, Eq, PartialEq, Hash)]
+/// A source position tag for a given grammar element, plus some extras for performance.
+#[derive(Clone)]
 pub struct Tagged<'source, T> {
     source: &'source str,
     span: (usize, usize),
     inner: T,
+    hash: u64,
 }
 
 impl<T> Debug for Tagged<'_, T>
@@ -50,12 +53,22 @@ where
     }
 }
 
+pub fn compute_tag_hash(span: &Span<'_>) -> u64 {
+    let mut hasher = DefaultHasher::new();
+    span.as_str().hash(&mut hasher);
+    hasher.finish()
+}
+
 impl<'source, T> Tagged<'source, T> {
-    pub(crate) fn new(inner: T, span: Span<'source>) -> Self {
+    pub fn new(inner: T, span: Span<'source>) -> Self
+    where
+        T: Hash,
+    {
         Self {
             inner,
             source: span.get_input(),
             span: (span.start(), span.end()),
+            hash: compute_tag_hash(&span),
         }
     }
 
@@ -70,12 +83,48 @@ impl<'source, T> Tagged<'source, T> {
 }
 
 impl<T> Tagged<'static, T> {
-    pub const fn known(inner: T, source: &'static str, start: usize, end: usize) -> Self {
+    pub const fn known(
+        inner: T,
+        source: &'static str,
+        start: usize,
+        end: usize,
+        hash: u64,
+    ) -> Self {
         Self {
             source,
             span: (start, end),
             inner,
+            hash,
         }
+    }
+}
+
+impl<T> Hash for Tagged<'_, T> {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        state.write_u64(self.hash)
+    }
+}
+
+impl<T> Eq for Tagged<'_, T> {}
+
+impl<T> PartialEq<Self> for Tagged<'_, T> {
+    fn eq(&self, other: &Self) -> bool {
+        self.span == other.span
+    }
+}
+
+impl<T> PartialOrd<Self> for Tagged<'_, T> {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl<T> Ord for Tagged<'_, T> {
+    fn cmp(&self, other: &Self) -> Ordering {
+        self.span
+            .0
+            .cmp(&other.span.0)
+            .then(self.span.1.cmp(&other.span.1))
     }
 }
 
@@ -95,7 +144,7 @@ impl<T> DerefMut for Tagged<'_, T> {
 
 impl<'source, T> TryFrom<Pair<'source, Rule>> for Tagged<'source, T>
 where
-    T: TryFrom<Pair<'source, Rule>>,
+    T: TryFrom<Pair<'source, Rule>> + Hash,
 {
     type Error = T::Error;
 
@@ -278,7 +327,7 @@ impl<'a> Nonterminal<'a> {
     }
 }
 
-impl<'program, 'source> Traverse<'program> for &'program Nonterminal<'source> {
+impl<'program, 'source> GraphTraverse<'program> for &'program Nonterminal<'source> {
     type Node = FandangoNode<'program, 'source>;
 }
 

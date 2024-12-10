@@ -15,14 +15,14 @@ use std::fmt;
 use std::hash::{Hash, Hasher};
 use std::ops::Deref;
 
-/// Traverse this type's children, potentially recursively.
+/// Traverse this type's children, potentially recursively, for use with grammar graph creation.
 #[allow(unused_variables)]
-pub trait Traverse<'program>: Sized {
+pub trait GraphTraverse<'program>: Sized {
     /// The node type for graph.
-    type Node: NodeTrait + Traverse<'program, Node = Self::Node> + From<Self>;
+    type Node: NodeTrait + GraphTraverse<'program, Node = Self::Node> + From<Self>;
 
     /// Recurse the traversal! The order of calls to `consumer` are not guaranteed, but ultimately
-    /// will invoke [`Traverse::traverse`] for each level.
+    /// will invoke [`GraphTraverse::traverse`] for each level.
     fn recurse<F>(self, mut consumer: F)
     where
         F: FnMut(Self::Node, Self::Node, Span<'program>),
@@ -49,7 +49,7 @@ pub fn traverse_children<'program, 'source, F, T>(
     mut consumer: F,
 ) where
     F: FnMut(T::Node, T::Node, Span<'source>),
-    T: Traverse<'source>,
+    T: GraphTraverse<'source>,
     'source: 'program,
 {
     let node = parent.into();
@@ -249,12 +249,12 @@ macro_rules! variant_traverse {
     };
 }
 
-/// Macro which generates implementations of [`Traverse`] over fields of the provided struct or
+/// Macro which generates implementations of [`GraphTraverse`] over fields of the provided struct or
 /// variants of the provided enum. The lifetime `'source` is already within the lifetime list and
 /// corresponds to the lifetime of the source code.
 ///
 /// The first four fields are, in order:
-/// 1. The type for which [`Traverse`] is to be implemented.
+/// 1. The type for which [`GraphTraverse`] is to be implemented.
 /// 2. The name of the raw type (e.g., if providing the type behind a reference).
 /// 3. The node type of the graph (e.g., [`FandangoNode`]).
 /// 4. The generics/lifetimes required for the implementation (optional).
@@ -296,7 +296,7 @@ macro_rules! variant_traverse {
 #[macro_export]
 macro_rules! impl_traverse {
     ($target:ty, $name:ty, $node:ty, < $($generics:tt $(: $constraints:tt)?),* >, match { $($variants:tt)+ }) => {
-        impl<'program, $($generics $(: $constraints)?),*> $crate::graph::Traverse<'program> for $target {
+        impl<'program, $($generics $(: $constraints)?),*> $crate::graph::GraphTraverse<'program> for $target {
             type Node = $node;
 
             fn traverse<F>(self, consumer: F)
@@ -311,7 +311,7 @@ macro_rules! impl_traverse {
     };
 
     ($target:ty, $name:ty, $node:ty, < $($generics:tt $(: $constraints:tt)?),* >, $($fields:tt),*) => {
-        impl<'program, $($generics $(: $constraints)?),*> $crate::graph::Traverse<'program> for $target {
+        impl<'program, $($generics $(: $constraints)?),*> $crate::graph::GraphTraverse<'program> for $target {
             type Node = $node;
 
             fn traverse<F>(self, consumer: F)
@@ -354,15 +354,15 @@ macro_rules! impl_fandango_traverse {
     };
 }
 
-/// Convert a type which implements [`Traverse`] into a [`DiGraphMap`].
-pub trait IntoGraph<'a>: Traverse<'a> {
+/// Convert a type which implements [`GraphTraverse`] into a [`DiGraphMap`].
+pub trait IntoGraph<'a>: GraphTraverse<'a> {
     /// Perform the conversion.
     fn into_graph(self) -> DiGraphMap<Self::Node, Span<'a>>;
 }
 
 impl<'program, 'source, T> IntoGraph<'program> for T
 where
-    T: Traverse<'program, Node = FandangoNode<'program, 'source>>,
+    T: GraphTraverse<'program, Node = FandangoNode<'program, 'source>>,
     'source: 'program,
 {
     fn into_graph(self) -> DiGraphMap<Self::Node, Span<'program>> {
@@ -456,7 +456,7 @@ impl fmt::Display for FandangoNode<'_, '_> {
     }
 }
 
-impl<'program> Traverse<'program> for FandangoNode<'program, '_> {
+impl<'program> GraphTraverse<'program> for FandangoNode<'program, '_> {
     type Node = Self;
 
     fn traverse<F>(self, consumer: F)
@@ -523,7 +523,7 @@ impl<'program, 'source> From<&'program Tagged<'source, Cow<'source, str>>>
 
 #[cfg(test)]
 mod test {
-    use crate::graph::IntoGraph;
+    use crate::graph::{FandangoNode, IntoGraph};
     use crate::lang::Program;
     use crate::lang::test::SIMPLE_GRAMMAR;
     use petgraph::dot::{Config, Dot};
@@ -552,7 +552,12 @@ mod test {
             &renderable,
             &[Config::NodeNoLabel, Config::EdgeNoLabel],
             &|_, (_, _, weight)| format!("label = {:?}", weight),
-            &|_, (_, node)| format!("label = {:?}", format!("{}", node)),
+            &|_, (_, node)| {
+                format!("label = {:?}", match node {
+                    FandangoNode::String(s) => format!("{}", s.inner()),
+                    _ => format!("{}", node),
+                })
+            },
         );
 
         println!("{rendered}");

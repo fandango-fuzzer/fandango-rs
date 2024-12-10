@@ -17,6 +17,40 @@ pub trait IntoRustSource<C> {
     fn emit_rust(&self, ctx: C, output: &mut TokenStream) -> Result<(), Self::OutputError>;
 }
 
+fn from_boilerplate(name: &Ident) -> TokenStream {
+    quote! {
+        impl<'program, 'source> ::std::convert::From<&'program #name<'source>> for Type<'program, 'source> where 'source: 'program {
+            fn from(node: &'program #name<'source>) -> Type<'program, 'source> {
+                Type::#name(node)
+            }
+        }
+
+        impl<'program, 'source> ::std::convert::From<&'program mut #name<'source>> for Type<'program, 'source> where 'source: 'program {
+            fn from(node: &'program mut #name<'source>) -> Type<'program, 'source> {
+                Type::#name(node)
+            }
+        }
+
+        impl<'program, 'source> ::std::convert::From<&'program mut #name<'source>> for TypeMut<'program, 'source> where 'source: 'program {
+            fn from(node: &'program mut #name<'source>) -> TypeMut<'program, 'source> {
+                TypeMut::#name(node)
+            }
+        }
+
+        impl<'program, 'source> ::std::convert::From<&'program mut ::std::boxed::Box<#name<'source>>> for Type<'program, 'source> where 'source: 'program {
+            fn from(node: &'program mut ::std::boxed::Box<#name<'source>>) -> Type<'program, 'source> {
+                Type::#name(&**node)
+            }
+        }
+
+        impl<'program, 'source> ::std::convert::From<&'program mut ::std::boxed::Box<#name<'source>>> for TypeMut<'program, 'source> where 'source: 'program {
+            fn from(node: &'program mut ::std::boxed::Box<#name<'source>>) -> TypeMut<'program, 'source> {
+                TypeMut::#name(&mut **node)
+            }
+        }
+    }
+}
+
 impl<'graph, 'program, 'source>
     IntoRustSource<&'graph mut HashMap<FandangoNode<'program, 'source>, Ident>>
     for DiGraphMap<FandangoNode<'program, 'source>, Span<'source>>
@@ -74,23 +108,52 @@ where
             _ => quote! { #child_name<'source> },
         };
 
+        let from = from_boilerplate(&name);
+
         output.extend(quote! {
+            #[derive(Clone, Debug)]
             pub struct #name<'source> {
                 span: ::std::option::Option<(::std::rc::Rc<::std::borrow::Cow<'source, str>>, usize, usize)>,
                 child_0: #child_type,
             }
 
             impl<'source> ::fandango::typing::Node for #name<'source> {
+                type Type<'program> = Type<'program, 'source> where 'source: 'program;
+                type TypeMut<'program> = TypeMut<'program, 'source> where 'source: 'program;
+                type ChildrenRef<'program> = (&'program #child_name<'source>, ()) where 'source: 'program;
+                type ChildrenRefMut<'program> = (&'program mut #child_name<'source>, ()) where 'source: 'program;
+
                 fn span(&self) -> ::std::option::Option<::fandango::Span<'_>> { ::fandango::typing::maybe_owned_span(&self.span) }
+                fn children<'program>(&'program self) -> Self::ChildrenRef<'program> {{ (&self.child_0, ()) }}
+                fn children_mut<'program>(&'program mut self) -> Self::ChildrenRefMut<'program> {{ (&mut self.child_0, ()) }}
             }
 
-            impl<'source> ::fandango::typing::Children for #name<'source> {
-                type ChildrenRef<'program> = (&'program #child_name<'source>,) where 'source: 'program;
-                type ChildrenRefMut<'program> = (&'program mut #child_name<'source>,) where 'source: 'program;
+            impl<'program, 'source> ::fandango::visitor::VisitableChildren<'program, TypeMut<'program, 'source>> for #name<'source> where 'source: 'program
+            {
+                fn visit_each<V>(&'program mut self, visitor: V) -> ::fandango::visitor::VisitResult<V, TypeMut<'program, 'source>>
+                where
+                    V: ::fandango::visitor::Visitor<TypeMut<'program, 'source>, Continue = V>
+                {
+                    visitor.visit(&mut self.child_0, 0)
+                }
 
-                fn children(&self) -> Self::ChildrenRef<'_> {{ (&self.child_0,) }}
-                fn children_mut(&mut self) -> Self::ChildrenRefMut<'_> {{ (&mut self.child_0,) }}
+                fn visit_nth<V>(
+                    &'program mut self,
+                    visitor: V,
+                    idx: usize,
+                ) -> ::fandango::visitor::MaybeVisitResult<V, TypeMut<'program, 'source>>
+                where
+                    V: ::fandango::visitor::Visitor<TypeMut<'program, 'source>>
+                {
+                    if idx == 0 {
+                        Ok(visitor.visit(&mut self.child_0, 0))
+                    } else {
+                        Err(visitor)
+                    }
+                }
             }
+
+            #from
 
             impl<'source> ::std::convert::TryFrom<(::std::rc::Rc<::std::borrow::Cow<'source, str>>, ::fandango::iterators::Pair<'source, Rule>)> for #name<'source> {
                 type Error = ParseError;
@@ -142,6 +205,8 @@ impl<'program, 'source> IntoRustSource<FandangoGenContext<'_, '_, 'program, 'sou
                 e.insert(name.clone());
             }
         }
+
+        let from = from_boilerplate(&name);
 
         let mut children = graph
             .edges(*self)
@@ -205,21 +270,42 @@ impl<'program, 'source> IntoRustSource<FandangoGenContext<'_, '_, 'program, 'sou
             FandangoNode::String(s) => {
                 let s = s.inner();
                 output.extend(quote! {
+                    #[derive(Clone, Debug)]
                     pub struct #name<'source> {
                         span: ::std::option::Option<(::std::rc::Rc<::std::borrow::Cow<'source, str>>, usize, usize)>,
                     }
 
                     impl<'source> ::fandango::typing::Node for #name<'source> {
+                        type Type<'program> = Type<'program, 'source> where 'source: 'program;
+                        type TypeMut<'program> = TypeMut<'program, 'source> where 'source: 'program;
+                        type ChildrenRef<'program> = (&'static str, ()) where 'source: 'program;
+                        type ChildrenRefMut<'program> = (&'static str, ()) where 'source: 'program;
+
                         fn span(&self) -> ::std::option::Option<::fandango::Span<'_>> { ::fandango::typing::maybe_owned_span(&self.span) }
+                        fn children<'program>(&'program self) -> Self::ChildrenRef<'program> { (&#s, ()) }
+                        fn children_mut<'program>(&'program mut self) -> Self::ChildrenRefMut<'program> { (&#s, ()) }
                     }
 
-                    impl<'source> ::fandango::typing::Children for #name<'source> {
-                        type ChildrenRef<'program> = (&'static str,) where 'source: 'program;
-                        type ChildrenRefMut<'program> = (&'static str,) where 'source: 'program;
+                    impl<'program, 'source> ::fandango::visitor::VisitableChildren<'program, TypeMut<'program, 'source>> for #name<'source> where 'source: 'program
+                    {
+                        fn visit_each<V>(&'program mut self, visitor: V) -> ::fandango::visitor::VisitResult<V, TypeMut<'program, 'source>>
+                        where
+                            V: ::fandango::visitor::Visitor<TypeMut<'program, 'source>, Continue = V> {
+                            Ok(::std::ops::ControlFlow::Continue(visitor))
+                        }
 
-                        fn children(&self) -> Self::ChildrenRef<'_> {{ (&#s,) }}
-                        fn children_mut(&mut self) -> Self::ChildrenRefMut<'_> {{ (&#s,) }}
+                        fn visit_nth<V>(
+                            &'program mut self,
+                            visitor: V,
+                            idx: usize,
+                        ) -> ::fandango::visitor::MaybeVisitResult<V, TypeMut<'program, 'source>>
+                        where
+                            V: ::fandango::visitor::Visitor<TypeMut<'program, 'source>> {
+                            Err(visitor)
+                        }
                     }
+
+                    #from
 
                     impl<'source> ::std::convert::TryFrom<(::std::rc::Rc<::std::borrow::Cow<'source, str>>, ::fandango::iterators::Pair<'source, Rule>)> for #name<'source> {
                         type Error = ParseError;
@@ -237,10 +323,70 @@ impl<'program, 'source> IntoRustSource<FandangoGenContext<'_, '_, 'program, 'sou
                 let child_variants = (0..children.len())
                     .map(|i| format_ident!("variant_{i}"))
                     .collect::<Vec<_>>();
+                let mut matchers = vec![quote! {()}; child_variants.len()];
+                for i in 0..child_field_types.len() {
+                    for (j, matcher) in matchers.iter_mut().rev().enumerate() {
+                        if i == j {
+                            *matcher = quote! { Some(n), #matcher };
+                        } else {
+                            *matcher = quote! { None, #matcher };
+                        }
+                    }
+                }
                 output.extend(quote! {
+                    #[derive(Clone, Debug)]
                     pub enum #name<'source> {
                         #( #child_variants ( #child_field_types ) ),*
                     }
+
+                    impl<'source> ::fandango::typing::Node for #name<'source> {
+                        type Type<'program> = Type<'program, 'source> where 'source: 'program;
+                        type TypeMut<'program> = TypeMut<'program, 'source> where 'source: 'program;
+                        type ChildrenRef<'program> = &'program Self where 'source: 'program;
+                        type ChildrenRefMut<'program> = &'program mut Self where 'source: 'program;
+
+                        fn span(&self) -> ::std::option::Option<::fandango::Span<'_>> {
+                            match self {
+                                #( Self::#child_variants ( inner ) => inner.span() ),*
+                            }
+                        }
+
+                        fn children<'program>(&'program self) -> Self::ChildrenRef<'program> {
+                            self
+                        }
+                        fn children_mut<'program>(&'program mut self) -> Self::ChildrenRefMut<'program> {
+                            self
+                        }
+                    }
+
+                    impl<'program, 'source> ::fandango::visitor::VisitableChildren<'program, TypeMut<'program, 'source>> for #name<'source> where 'source: 'program
+                    {
+                        fn visit_each<V>(&'program mut self, visitor: V) -> ::fandango::visitor::VisitResult<V, TypeMut<'program, 'source>>
+                        where
+                            V: ::fandango::visitor::Visitor<TypeMut<'program, 'source>, Continue = V> {
+                            match self {
+                                #(#name::#child_variants(n) => visitor.visit(n, 0)),*
+                            }
+                        }
+
+                        fn visit_nth<V>(
+                            &'program mut self,
+                            visitor: V,
+                            idx: usize,
+                        ) -> ::fandango::visitor::MaybeVisitResult<V, TypeMut<'program, 'source>>
+                        where
+                            V: ::fandango::visitor::Visitor<TypeMut<'program, 'source>> {
+                            if idx == 0 {
+                                match self {
+                                    #(#name::#child_variants(n) => Ok(visitor.visit(n, 0))),*
+                                }
+                            } else {
+                                Err(visitor)
+                            }
+                        }
+                    }
+
+                    #from
 
                     impl<'source> ::std::convert::TryFrom<(::std::rc::Rc<::std::borrow::Cow<'source, str>>, ::fandango::iterators::Pair<'source, Rule>)> for #name<'source> {
                         type Error = ParseError;
@@ -280,24 +426,68 @@ impl<'program, 'source> IntoRustSource<FandangoGenContext<'_, '_, 'program, 'sou
                         unimplemented!("Unexpected symbol; should be elided.")
                     }
                 };
+                let child_type = match op {
+                    Operator::Repeat(_, _, _) | Operator::Kleene(_) | Operator::Plus(_) => {
+                        quote! { Vec<#(#child_types<'source>),*> }
+                    }
+                    Operator::Option(_) => {
+                        quote! { Option<#(#child_types<'source>),*> }
+                    }
+                    Operator::Symbol(_) => {
+                        unimplemented!("Unexpected symbol; should be elided.")
+                    }
+                };
 
                 output.extend(quote! {
+                    #[derive(Clone, Debug)]
                     pub struct #name<'source> {
                         span: ::std::option::Option<(::std::rc::Rc<::std::borrow::Cow<'source, str>>, usize, usize)>,
                         child_0: #(#child_field_types)*
                     }
 
                     impl<'source> ::fandango::typing::Node for #name<'source> {
+                        type Type<'program> = Type<'program, 'source> where 'source: 'program;
+                        type TypeMut<'program> = TypeMut<'program, 'source> where 'source: 'program;
+                        type ChildrenRef<'program> = &'program #child_type where 'source: 'program;
+                        type ChildrenRefMut<'program> = &'program mut #child_type where 'source: 'program;
+
                         fn span(&self) -> ::std::option::Option<::fandango::Span<'_>> { ::fandango::typing::maybe_owned_span(&self.span) }
+                        fn children<'program>(&'program self) -> Self::ChildrenRef<'program> { &self.child_0 }
+                        fn children_mut<'program>(&'program mut self) -> Self::ChildrenRefMut<'program> { &mut self.child_0 }
                     }
 
-                    impl<'source> ::fandango::typing::Children for #name<'source> {
-                        type ChildrenRef<'program> = &'program #(#child_field_types),* where 'source: 'program;
-                        type ChildrenRefMut<'program> = &'program mut #(#child_field_types),* where 'source: 'program;
+                    impl<'program, 'source> ::fandango::visitor::VisitableChildren<'program, TypeMut<'program, 'source>> for #name<'source> where 'source: 'program
+                    {
+                        fn visit_each<V>(&'program mut self, mut visitor: V) -> ::fandango::visitor::VisitResult<V, TypeMut<'program, 'source>>
+                        where
+                            V: ::fandango::visitor::Visitor<TypeMut<'program, 'source>, Continue = V>
+                        {
+                            for (i, child) in self.children_mut().iter_mut().enumerate() {
+                                visitor = match visitor.visit(child, i)? {
+                                    ::std::ops::ControlFlow::Continue(visitor) => visitor,
+                                    c => return Ok(c),
+                                }
+                            }
+                            Ok(::std::ops::ControlFlow::Continue(visitor))
+                        }
 
-                        fn children(&self) -> Self::ChildrenRef<'_> { &self.child_0 }
-                        fn children_mut(&mut self) -> Self::ChildrenRefMut<'_> { &mut self.child_0 }
+                        fn visit_nth<V>(
+                            &'program mut self,
+                            visitor: V,
+                            idx: usize,
+                        ) -> ::fandango::visitor::MaybeVisitResult<V, TypeMut<'program, 'source>>
+                        where
+                            V: ::fandango::visitor::Visitor<TypeMut<'program, 'source>>
+                        {
+                            if let Some(node) = self.children_mut().iter_mut().nth(idx) {
+                                Ok(visitor.visit(node, idx))
+                            } else {
+                                Err(visitor)
+                            }
+                        }
                     }
+
+                    #from
 
                     impl<'source> ::std::convert::TryFrom<(::std::rc::Rc<::std::borrow::Cow<'source, str>>, ::fandango::iterators::Pair<'source, Rule>)> for #name<'source> {
                         type Error = ParseError;
@@ -327,23 +517,52 @@ impl<'program, 'source> IntoRustSource<FandangoGenContext<'_, '_, 'program, 'sou
                 let child_names = (0..children.len())
                     .map(|i| format_ident!("child_{i}"))
                     .collect::<Vec<_>>();
+                let indices = (0..child_names.len()).collect::<Vec<_>>();
                 output.extend(quote! {
+                    #[derive(Clone, Debug)]
                     pub struct #name<'source> {
                         span: ::std::option::Option<(::std::rc::Rc<::std::borrow::Cow<'source, str>>, usize, usize)>,
                         #( #child_names: #child_field_types ),*
                     }
 
                     impl<'source> ::fandango::typing::Node for #name<'source> {
-                        fn span(&self) -> ::std::option::Option<::fandango::Span<'_>> { ::fandango::typing::maybe_owned_span(&self.span) }
-                    }
-
-                    impl<'source> ::fandango::typing::Children for #name<'source> {
+                        type Type<'program> = Type<'program, 'source> where 'source: 'program;
+                        type TypeMut<'program> = TypeMut<'program, 'source> where 'source: 'program;
                         type ChildrenRef<'program> = ( #( &'program #child_field_types ),*, ) where 'source: 'program;
                         type ChildrenRefMut<'program> = ( #( &'program mut #child_field_types ),*, ) where 'source: 'program;
 
-                        fn children(&self) -> Self::ChildrenRef<'_> { (#(&self.#child_names),*,) }
-                        fn children_mut(&mut self) -> Self::ChildrenRefMut<'_> { (#(&mut self.#child_names),*,) }
+                        fn span(&self) -> ::std::option::Option<::fandango::Span<'_>> { ::fandango::typing::maybe_owned_span(&self.span) }
+                        fn children<'program>(&'program self) -> Self::ChildrenRef<'program> { (#(&self.#child_names),*,) }
+                        fn children_mut<'program>(&'program mut self) -> Self::ChildrenRefMut<'program> { (#(&mut self.#child_names),*,) }
                     }
+
+                    impl<'program, 'source> ::fandango::visitor::VisitableChildren<'program, TypeMut<'program, 'source>> for #name<'source> where 'source: 'program
+                    {
+                        fn visit_each<V>(&'program mut self, visitor: V) -> ::fandango::visitor::VisitResult<V, TypeMut<'program, 'source>>
+                        where
+                            V: ::fandango::visitor::Visitor<TypeMut<'program, 'source>, Continue = V>,
+                        {
+                            #(
+                            let visitor = match visitor.visit(&mut self.#child_names, #indices)? {
+                                ::std::ops::ControlFlow::Continue(v) => v,
+                                c => return Ok(c),
+                            };
+                            )*
+                            Ok(::std::ops::ControlFlow::Continue(visitor))
+                        }
+
+                        fn visit_nth<V>(&'program mut self, visitor: V, idx: usize) -> ::fandango::visitor::MaybeVisitResult<V, TypeMut<'program, 'source>>
+                        where
+                            V: ::fandango::visitor::Visitor<TypeMut<'program, 'source>>,
+                        {
+                            match idx {
+                                #(#indices => Ok(visitor.visit(&mut self.#child_names, #indices))),*,
+                                _ => Err(visitor)
+                            }
+                        }
+                    }
+
+                    #from
 
                     impl<'source> ::std::convert::TryFrom<(::std::rc::Rc<::std::borrow::Cow<'source, str>>, ::fandango::iterators::Pair<'source, Rule>)> for #name<'source> {
                         type Error = ParseError;

@@ -1,5 +1,5 @@
 use fandango_core::graph::FandangoNode;
-use fandango_core::lang::{Operator, Statement, Symbol};
+use fandango_core::lang::{Operator, Statement, Symbol, Tagged, compute_tag_hash};
 use pest::Span;
 use proc_macro2::{Ident, TokenStream};
 use quote::{format_ident, quote};
@@ -356,6 +356,7 @@ pub(crate) fn tokenize_metadata<'p, 's>(
 
     let start = span.start();
     let end = span.end();
+    let hash = compute_tag_hash(&span);
 
     quote! {
         ::fandango::lang::Tagged::known(
@@ -363,6 +364,7 @@ pub(crate) fn tokenize_metadata<'p, 's>(
             SOURCE,
             #start,
             #end,
+            #hash,
         )
     }
 }
