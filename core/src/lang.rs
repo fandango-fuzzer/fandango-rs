@@ -53,6 +53,8 @@ where
     }
 }
 
+/// Pre-compute the hash for a given [`Tagged`] instance. Only to be used for known hashes during
+/// generation; your mileage may vary.
 pub fn compute_tag_hash(span: &Span<'_>) -> u64 {
     let mut hasher = DefaultHasher::new();
     span.as_str().hash(&mut hasher);
@@ -60,6 +62,7 @@ pub fn compute_tag_hash(span: &Span<'_>) -> u64 {
 }
 
 impl<'source, T> Tagged<'source, T> {
+    /// Create a new [`Tagged`] instance, associating the provided [`Span`] with the node.
     pub fn new(inner: T, span: Span<'source>) -> Self
     where
         T: Hash,
@@ -72,17 +75,21 @@ impl<'source, T> Tagged<'source, T> {
         }
     }
 
+    /// The [`Span`] associated with the inner node.
     pub fn span(&self) -> Span<'source> {
         Span::new(self.source, self.span.0, self.span.1)
             .expect("Should never construct Tagged with invalid span bounds")
     }
 
+    /// Access the inner node.
     pub const fn inner(&self) -> &T {
         &self.inner
     }
 }
 
 impl<T> Tagged<'static, T> {
+    /// Construct a [`Tagged`] for a compile-time known instance. This should only be used by
+    /// generated code.
     pub const fn known(
         inner: T,
         source: &'static str,
@@ -180,12 +187,14 @@ pub struct Program<'a> {
 }
 
 impl<'a> Program<'a> {
+    /// The [`Statement`]s contained within this program.
     pub const fn statements(&self) -> &Cow<'a, [Tagged<'a, Statement<'a>>]> {
         &self.statements
     }
 }
 
 impl Program<'static> {
+    /// Construct a known [`Program`] at compile-time -- for use in generated code only.
     pub const fn known(statements: &'static [Tagged<'static, Statement<'static>>]) -> Self {
         Self {
             statements: Cow::Borrowed(statements),
@@ -270,16 +279,19 @@ pub struct Production<'a> {
 }
 
 impl<'a> Production<'a> {
+    /// Access the [`Nonterminal`] associated with this production.
     pub const fn nonterminal(&self) -> &Tagged<'a, Nonterminal<'a>> {
         &self.nonterminal
     }
 
+    /// Access the [`Alternative`] which defines the associated [`Nonterminal`].
     pub const fn alternative(&self) -> &Tagged<'a, Alternative<'a>> {
         &self.alternative
     }
 }
 
 impl Production<'static> {
+    /// Construct a known [`Production`] at compile-time -- for use in generated code only.
     pub const fn known(
         nonterminal: Tagged<'static, Nonterminal<'static>>,
         alternative: Tagged<'static, Alternative<'static>>,
@@ -322,6 +334,7 @@ impl<'a> Nonterminal<'a> {
         Self { name }
     }
 
+    /// Get the name of this non-terminal (not including the angle brackets).
     pub const fn name(&self) -> &'a str {
         self.name
     }
@@ -348,17 +361,19 @@ impl<'a> TryFrom<Pair<'a, Rule>> for Nonterminal<'a> {
 /// A list of potential instantiations.
 #[derive(Debug, Clone, Ord, PartialOrd, Eq, PartialEq, Hash)]
 pub struct Alternative<'a> {
-    /// The concatenations which represent the possible alternatives.
+    /// The [`Concatenation`]s which represent the possible alternatives.
     concatenations: Cow<'a, [Tagged<'a, Concatenation<'a>>]>,
 }
 
 impl<'a> Alternative<'a> {
+    /// The [`Concatenation`]s, of which exactly one will be instantiated as child 0.
     pub const fn concatenations(&self) -> &Cow<'a, [Tagged<'a, Concatenation<'a>>]> {
         &self.concatenations
     }
 }
 
 impl Alternative<'static> {
+    /// Construct a known [`Alternative`] at compile-time -- for use with generated code only.
     pub const fn known(concatenations: &'static [Tagged<'static, Concatenation<'static>>]) -> Self {
         Self {
             concatenations: Cow::Borrowed(concatenations),
@@ -391,12 +406,14 @@ pub struct Concatenation<'a> {
 }
 
 impl<'a> Concatenation<'a> {
+    /// The [`Operator`]s which are concatenated.
     pub const fn operators(&self) -> &Cow<'a, [Tagged<'a, Operator<'a>>]> {
         &self.operators
     }
 }
 
 impl Concatenation<'static> {
+    /// Construct a known [`Concatenation`] at compile-time -- for use with generated code only.
     pub const fn known(operators: &'static [Tagged<'static, Operator<'static>>]) -> Self {
         Self {
             operators: Cow::Borrowed(operators),

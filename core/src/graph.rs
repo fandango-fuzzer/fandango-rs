@@ -9,11 +9,9 @@ use pest::Span;
 use petgraph::data::Build;
 use petgraph::graphmap::{DiGraphMap, NodeTrait};
 use std::borrow::Cow;
-use std::cmp::Ordering;
 use std::collections::VecDeque;
 use std::fmt;
-use std::hash::{Hash, Hasher};
-use std::ops::Deref;
+use std::hash::Hash;
 
 /// Traverse this type's children, potentially recursively, for use with grammar graph creation.
 #[allow(unused_variables)]

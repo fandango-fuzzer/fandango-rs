@@ -176,10 +176,7 @@ pub fn derive_fandango_or_emit_error(
     graph.emit_rust(&mut mapped_names, &mut tokenized).unwrap();
     graph.emit_pest(&mut (), &mut grammar_source).unwrap();
 
-    let node_names = mapped_names
-        .iter()
-        .map(|(_, i)| i.clone())
-        .collect::<Vec<_>>();
+    let node_names = mapped_names.values().cloned().collect::<Vec<_>>();
 
     let mut arrays = Vec::new();
     let mut referenced = Vec::new();
@@ -216,6 +213,8 @@ pub fn derive_fandango_or_emit_error(
         })
         .collect::<TokenStream>();
 
+    let discriminants = (0usize..node_names.len()).collect::<Vec<_>>();
+
     Ok(quote! {
         #tokenized
 
@@ -224,22 +223,76 @@ pub fn derive_fandango_or_emit_error(
         #(#referenced)*
 
         #[derive(Clone, Debug)]
-        pub enum Type<'program, 'source> where 'source: 'program {
+        pub enum Type<'program, 'source> {
             #(#node_names(&'program #node_names<'source>)),*
         }
 
         #[derive(Debug)]
-        pub enum TypeMut<'program, 'source> where 'source: 'program {
+        pub enum TypeMut<'program, 'source> {
             #(#node_names(&'program mut #node_names<'source>)),*
         }
 
-        impl<'program, 'source> From<TypeMut<'program, 'source>> for Type<'program, 'source> where 'source: 'program {
+        impl<'program, 'source> From<TypeMut<'program, 'source>> for Type<'program, 'source> {
             fn from(mutable: TypeMut<'program, 'source>) -> Type<'program, 'source> {
                 match mutable {
                     #(TypeMut::#node_names(n) => Type::#node_names(n)),*
                 }
             }
         }
+
+        impl<'program, 'source> ::fandango::visitor::VisitableChildren<'program, TypeMut<'program, 'source>> for TypeMut<'program, 'source> {
+            fn visit_each<V>(&'program mut self, visitor: V) -> ::fandango::visitor::VisitResult<'program, V, TypeMut<'program, 'source>>
+            where
+                V: ::fandango::visitor::Visitor<'program, TypeMut<'program, 'source>, Continue = V>
+            {
+                match self {
+                    #(TypeMut::#node_names(n) => n.visit_each(visitor)),*
+                }
+            }
+
+            fn visit_each_reverse<V>(&'program mut self, visitor: V) -> ::fandango::visitor::VisitResult<'program, V, TypeMut<'program, 'source>>
+            where
+                V: ::fandango::visitor::Visitor<'program, TypeMut<'program, 'source>, Continue = V>
+            {
+                match self {
+                    #(TypeMut::#node_names(n) => n.visit_each_reverse(visitor)),*
+                }
+            }
+
+            fn visit_each_reverse_from<V>(&'program mut self, visitor: V, idx: usize) -> ::fandango::visitor::VisitResult<'program, V, TypeMut<'program, 'source>>
+            where
+                V: ::fandango::visitor::Visitor<'program, TypeMut<'program, 'source>, Continue=V>
+            {
+                match self {
+                    #(TypeMut::#node_names(n) => n.visit_each_reverse_from(visitor, idx)),*
+                }
+            }
+
+            fn visit_each_from<V>(&'program mut self, visitor: V, idx: usize) -> ::fandango::visitor::VisitResult<'program, V, TypeMut<'program, 'source>>
+            where
+                V: ::fandango::visitor::Visitor<'program, TypeMut<'program, 'source>, Continue=V>
+            {
+                match self {
+                    #(TypeMut::#node_names(n) => n.visit_each_from(visitor, idx)),*
+                }
+            }
+
+            fn visit_nth<V>(&'program mut self, visitor: V, idx: usize) -> ::fandango::visitor::MaybeVisitResult<'program, V, TypeMut<'program, 'source>>
+            where
+                V: ::fandango::visitor::Visitor<'program, TypeMut<'program, 'source>>
+            {
+                match self {
+                    #(TypeMut::#node_names(n) => n.visit_nth(visitor, idx)),*
+                }
+            }
+        }
+
+        #(
+            impl<'source> ::fandango::typing::Discriminable for #node_names<'source>
+            {
+                const DISCRIMINANT: usize = #discriminants;
+            }
+        )*
 
         pub const STRUCTURE: &'static ::fandango::lang::Tagged<
             'static,

@@ -2,7 +2,6 @@
 
 use crate::graph::FandangoNode;
 use crate::lang::Tagged;
-use crate::visitor::VisitableChildren;
 use pest::Span;
 use std::borrow::Cow;
 use std::ops::Deref;
@@ -17,12 +16,18 @@ pub fn maybe_owned_span<'program>(
         .and_then(|(source, start, end)| Span::new(source, *start, *end))
 }
 
+/// Denotes that this type is structured in a tree shape with an associated [`FandangoNode`]. Only
+/// to be implemented by generated code.
 pub trait Structured {
+    /// The type of [`FandangoNode`] which this node is structured for.
     type FandangoType: 'static;
+    /// The concrete [`FandangoNode`] from the grammar definition, including source tagging.
     const STRUCTURE: &'static Tagged<'static, Self::FandangoType>;
 }
 
+/// A type which has a corresponding [`FandangoNode`] definition.
 pub trait AsNode {
+    /// The definition of this node.
     fn definition(&self) -> FandangoNode<'static, 'static>;
 }
 
@@ -36,11 +41,36 @@ where
     }
 }
 
+/// A discriminant for [`Node`]s which uniquely describes the type of this node. Not related to
+/// [`std::mem::Discriminant`].
+pub trait Discriminable {
+    /// The discriminant value.
+    const DISCRIMINANT: usize;
+
+    /// The discriminant, accessible by reference.
+    fn discriminant(&self) -> usize {
+        Self::DISCRIMINANT
+    }
+}
+
 /// A node representing an entry in a grammar or a derivation tree.
-pub trait Node: Sized + AsNode {
+pub trait Node: Sized + AsNode + Discriminable {
+    /// An enum which describes all possible nodes, and for which the following traits are
+    /// implemented by generation (for `N::Type<'program>`):
+    ///
+    ///  - `From<&'program N>`
+    ///  - `From<&'program Box<N>>`
+    ///  - `From<&'program mut N>`
+    ///  - `From<&'program mut Box<N>>`
+    ///  - `From<N::TypeMut<'program>>`
     type Type<'program>
     where
         Self: 'program;
+    /// An enum which describes all possible mutable nodes, and for which the following traits are
+    /// implemented (for `N::TypeMut<'program>`):
+    ///
+    ///  - `From<&'program mut N>`
+    ///  - `From<&'program mut Box<N>>`
     type TypeMut<'program>
     where
         Self: 'program;
@@ -68,6 +98,13 @@ where
 {
     type FandangoType = T::FandangoType;
     const STRUCTURE: &'static Tagged<'static, Self::FandangoType> = T::STRUCTURE;
+}
+
+impl<T> Discriminable for Box<T>
+where
+    T: Discriminable,
+{
+    const DISCRIMINANT: usize = T::DISCRIMINANT;
 }
 
 impl<T> Node for Box<T>

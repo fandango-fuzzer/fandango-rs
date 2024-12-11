@@ -11,11 +11,11 @@ mod simple {
     use fandango_core::graph::IntoGraph;
     use fandango_core::typing::{AsNode, Structured};
     use fandango_core::visitor::Visitor;
-    use fandango_core::visitor::write::WriteVisitor;
+    use fandango_core::visitor::navigation::FindVisitor;
+    use fandango_core::visitor::write::{CachelessWriteVisitor, CachingWriteVisitor, WriteVisitor};
     use petgraph::dot::{Config, Dot};
     use petgraph::graphmap::DiGraphMap;
     use std::error::Error;
-    use tuple_list::tuple_list;
 
     #[derive(Fandango)]
     #[grammar = "tests/grammars/simple.fan"]
@@ -29,40 +29,89 @@ mod simple {
 
         let mut valid = false;
 
+        let mut dfs = None;
+        let mut bfs = None;
+
         let mut start = Simple::extract(SAMPLE)?;
-        assert!(graph.contains_node(start.definition()));
-        let expr = start.children().0;
-        assert!(graph.contains_node(expr.definition()));
-        if let nonterminal_expr_0::variant_0(expr) = expr.children().0 {
+        {
+            assert!(graph.contains_node(start.definition()));
+            let expr = start.children_mut().0;
             assert!(graph.contains_node(expr.definition()));
-            let (number, plus, expr) = expr.children();
-            assert!(graph.contains_node(number.definition()));
-            assert!(graph.contains_node(expr.definition()));
-            assert_eq!(number.span().unwrap().as_str(), "1");
-            assert_eq!(plus.span().unwrap().as_str(), "+");
-            if let nonterminal_expr_0::variant_1(number) = expr.children().0 {
+            if let nonterminal_expr_0::variant_0(expr) = expr.children_mut().0 {
+                assert!(graph.contains_node(expr.definition()));
+                let (number, plus, expr) = expr.children_mut();
                 assert!(graph.contains_node(number.definition()));
-                assert_eq!(number.span().unwrap().as_str(), "2");
-                valid = true;
+                assert!(graph.contains_node(expr.definition()));
+                assert_eq!(number.span().unwrap().as_str(), "1");
+                assert_eq!(plus.span().unwrap().as_str(), "+");
+
+                dfs = Some(FindVisitor::dfs(plus));
+                bfs = Some(FindVisitor::bfs(plus));
+
+                assert_eq!(
+                    "+".as_bytes(),
+                    WriteVisitor::caching(Vec::new())
+                        .visit(plus, 1)?
+                        .continue_value()
+                        .unwrap()
+                        .output()
+                );
+                assert_eq!(
+                    "+".as_bytes(),
+                    WriteVisitor::cacheless(Vec::new())
+                        .visit(plus, 1)?
+                        .continue_value()
+                        .unwrap()
+                        .output()
+                );
+
+                if let nonterminal_expr_0::variant_1(number) = expr.children_mut().0 {
+                    assert!(graph.contains_node(number.definition()));
+                    assert_eq!(number.span().unwrap().as_str(), "2");
+
+                    valid = true;
+                }
             }
+            assert!(valid, "Parse did not match expected value!");
         }
-        assert!(valid, "Parse did not match expected value!");
+
+        let plus_path = dfs
+            .unwrap()
+            .visit(&mut start, 0)
+            .unwrap()
+            .break_value()
+            .unwrap();
+
+        // assert_eq!(
+        //     plus_path,
+        //     bfs.unwrap()
+        //         .visit(&mut start, 0)
+        //         .unwrap()
+        //         .break_value()
+        //         .unwrap()
+        // );
 
         assert_eq!(
-            SAMPLE.as_bytes(),
-            WriteVisitor::new(Vec::new())
-                .visit(&mut start, 0)?
-                .continue_value()
-                .unwrap()
-                .output()
+            "+2",
+            String::from_utf8(
+                WriteVisitor::caching_from(Vec::new(), plus_path.clone())
+                    .visit(&mut start, 0)?
+                    .continue_value()
+                    .unwrap()
+                    .output()
+            )
+            .unwrap()
         );
         assert_eq!(
-            SAMPLE.as_bytes(),
-            WriteVisitor::cacheless(Vec::new())
-                .visit(&mut start, 0)?
-                .continue_value()
-                .unwrap()
-                .output()
+            "+2",
+            String::from_utf8(
+                WriteVisitor::cacheless_from(Vec::new(), plus_path)
+                    .visit(&mut start, 0)?
+                    .continue_value()
+                    .unwrap()
+                    .output()
+            )
+            .unwrap()
         );
 
         Ok(())
