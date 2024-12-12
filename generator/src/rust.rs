@@ -180,6 +180,18 @@ where
                 }
             }
 
+            impl<'source, S> ::fandango::generation::DefaultGenerated<S> for #name<'source>
+            where
+                S: TypeSampler<'source>
+            {
+                fn generate_default(sampler: &mut S) -> Self {
+                    Self {
+                        child_0: ::fandango::generation::DefaultGenerated::generate_default(sampler),
+                        span: None,
+                    }
+                }
+            }
+
             #from
 
             impl<'source> ::std::convert::TryFrom<(::std::rc::Rc<::std::borrow::Cow<'source, str>>, ::fandango::iterators::Pair<'source, Rule>)> for #name<'source> {
@@ -353,6 +365,14 @@ impl<'program, 'source> IntoRustSource<FandangoGenContext<'_, '_, 'program, 'sou
                         }
                     }
 
+                    impl<'source, S> ::fandango::generation::DefaultGenerated<S> for #name<'source> {
+                        fn generate_default(sampler: &mut S) -> Self {
+                            Self {
+                                span: None,
+                            }
+                        }
+                    }
+
                     #from
 
                     impl<'source> ::std::convert::TryFrom<(::std::rc::Rc<::std::borrow::Cow<'source, str>>, ::fandango::iterators::Pair<'source, Rule>)> for #name<'source> {
@@ -371,16 +391,8 @@ impl<'program, 'source> IntoRustSource<FandangoGenContext<'_, '_, 'program, 'sou
                 let child_variants = (0..children.len())
                     .map(|i| format_ident!("variant_{i}"))
                     .collect::<Vec<_>>();
-                let mut matchers = vec![quote! {()}; child_variants.len()];
-                for i in 0..child_field_types.len() {
-                    for (j, matcher) in matchers.iter_mut().rev().enumerate() {
-                        if i == j {
-                            *matcher = quote! { Some(n), #matcher };
-                        } else {
-                            *matcher = quote! { None, #matcher };
-                        }
-                    }
-                }
+                let indices = (0..children.len()).collect::<Vec<_>>();
+                let count = children.len();
                 output.extend(quote! {
                     #[derive(Clone, Debug)]
                     pub enum #name<'source> {
@@ -455,6 +467,18 @@ impl<'program, 'source> IntoRustSource<FandangoGenContext<'_, '_, 'program, 'sou
                         }
                     }
 
+                    impl<'source, S> ::fandango::generation::DefaultGenerated<S> for #name<'source>
+                    where
+                        S: TypeSampler<'source>
+                    {
+                        fn generate_default(sampler: &mut S) -> Self {
+                            match <S as ::fandango::generation::Sampler<Self>>::sample_alternative(sampler, #count) {
+                                #(#indices => Self::#child_variants(::fandango::generation::DefaultGenerated::generate_default(sampler))),*,
+                                _ => unreachable!()
+                            }
+                        }
+                    }
+
                     #from
 
                     impl<'source> ::std::convert::TryFrom<(::std::rc::Rc<::std::borrow::Cow<'source, str>>, ::fandango::iterators::Pair<'source, Rule>)> for #name<'source> {
@@ -501,6 +525,31 @@ impl<'program, 'source> IntoRustSource<FandangoGenContext<'_, '_, 'program, 'sou
                     }
                     Operator::Option(_) => {
                         quote! { Option<#(#child_types<'source>),*> }
+                    }
+                    Operator::Symbol(_) => {
+                        unimplemented!("Unexpected symbol; should be elided.")
+                    }
+                };
+                let sampler = match op {
+                    Operator::Kleene(_) => {
+                        quote! {
+                            (0..=<S as ::fandango::generation::Sampler<Self>>::sample_kleene(sampler)).map(|_| ::fandango::generation::DefaultGenerated::generate_default(sampler)).collect()
+                        }
+                    }
+                    Operator::Plus(_) => {
+                        quote! {
+                            (0..=<S as ::fandango::generation::Sampler<Self>>::sample_plus(sampler)).map(|_| ::fandango::generation::DefaultGenerated::generate_default(sampler)).collect()
+                        }
+                    }
+                    Operator::Option(_) => {
+                        quote! {
+                            <S as ::fandango::generation::Sampler<Self>>::sample_optional(sampler).then(|_| ::fandango::generation::DefaultGenerated::generate_default(sampler))
+                        }
+                    }
+                    Operator::Repeat(_, start, end) => {
+                        quote! {
+                            (0..=<S as ::fandango::generation::Sampler<Self>>::sample_repetition(sampler, #start, #end)).map(|_| ::fandango::generation::DefaultGenerated::generate_default(sampler)).collect()
+                        }
                     }
                     Operator::Symbol(_) => {
                         unimplemented!("Unexpected symbol; should be elided.")
@@ -591,6 +640,18 @@ impl<'program, 'source> IntoRustSource<FandangoGenContext<'_, '_, 'program, 'sou
                                 Ok(visitor.visit(node, idx))
                             } else {
                                 Err(visitor)
+                            }
+                        }
+                    }
+
+                    impl<'source, S> ::fandango::generation::DefaultGenerated<S> for #name<'source>
+                    where
+                        S: TypeSampler<'source>
+                    {
+                        fn generate_default(sampler: &mut S) -> Self {
+                            Self {
+                                child_0: #sampler,
+                                span: None,
                             }
                         }
                     }
@@ -719,6 +780,18 @@ impl<'program, 'source> IntoRustSource<FandangoGenContext<'_, '_, 'program, 'sou
                             match idx {
                                 #(#indices => Ok(visitor.visit(&mut self.#child_names, #indices))),*,
                                 _ => Err(visitor)
+                            }
+                        }
+                    }
+
+                    impl<'source, S> ::fandango::generation::DefaultGenerated<S> for #name<'source>
+                    where
+                        S: TypeSampler<'source>
+                    {
+                        fn generate_default(sampler: &mut S) -> Self {
+                            Self {
+                                #( #child_names: ::fandango::generation::DefaultGenerated::generate_default(sampler) ),*,
+                                span: None,
                             }
                         }
                     }

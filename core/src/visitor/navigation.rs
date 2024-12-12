@@ -3,7 +3,6 @@
 use crate::typing::Node;
 use crate::visitor::{VisitResult, VisitableChildren, Visitor};
 use either::Either;
-use std::cell::{RefCell, RefMut};
 use std::collections::VecDeque;
 use std::convert::Infallible;
 use std::ops::ControlFlow;
@@ -116,16 +115,25 @@ where
     }
 }
 
-impl FindVisitor<false> {
-    fn recurse<'program, T>(
-        mut self,
-        stack: &mut Vec<(usize, usize)>,
-        work: VecDeque<(usize, usize, T)>,
-    ) -> Result<ControlFlow<Vec<usize>, (Self, VecDeque<(usize, usize, T)>)>, Infallible>
+impl<T> Visitor<T> for FindVisitor<false>
+where
+    T: VisitableChildren<T>,
+{
+    type Continue = Self;
+    type Break = Vec<usize>;
+    type Error = Infallible;
+
+    fn visit<'program, N>(self, node: &'program mut N, idx: usize) -> VisitResult<Self, T>
     where
-        T: VisitableChildren<T>,
+        N: Node<TypeMut<'program> = T>,
+        T: From<&'program mut N>,
     {
-        let mut next_work = VecDeque::new();
+        let mut stack = Vec::new();
+
+        let mut work = VecDeque::new();
+        work.push_back((usize::MAX, idx, T::from(node)));
+
+        let mut visitor = self;
 
         struct ChildCollector<'a, T> {
             reference: Either<(usize, usize), usize>,
@@ -163,64 +171,30 @@ impl FindVisitor<false> {
             }
         }
 
-        for (parent, idx, mut next) in work {
+        while let Some((parent, idx, next)) = work.pop_front() {
             let next_parent = stack.len();
             stack.push((parent, idx));
 
             let collector = ChildCollector {
-                reference: self.reference,
-                discriminant: self.discriminant,
+                reference: visitor.reference,
+                discriminant: visitor.discriminant,
                 parent: next_parent,
-                work: &mut next_work,
+                work: &mut work,
             };
 
             match next.visit_each(collector)? {
                 ControlFlow::Continue(_) => {}
                 ControlFlow::Break(c) => {
                     let mut parent = next_parent;
-                    self.path.push(c);
+                    visitor.path.push(c);
                     while parent != 0 {
                         let (next_parent, idx) = stack[parent];
-                        self.path.push(idx);
+                        visitor.path.push(idx);
                         parent = next_parent;
                     }
-                    self.path.push(stack[0].1);
-                    return Ok(ControlFlow::Break(self.path));
+                    visitor.path.push(stack[0].1);
+                    return Ok(ControlFlow::Break(visitor.path));
                 }
-            }
-        }
-
-        Ok(ControlFlow::Continue((self, next_work)))
-    }
-}
-
-impl<T> Visitor<T> for FindVisitor<false>
-where
-    T: VisitableChildren<T>,
-{
-    type Continue = Self;
-    type Break = Vec<usize>;
-    type Error = Infallible;
-
-    fn visit<'program, N>(self, node: &'program mut N, idx: usize) -> VisitResult<Self, T>
-    where
-        N: Node<TypeMut<'program> = T>,
-        T: From<&'program mut N>,
-    {
-        let mut stack = Vec::new();
-
-        let mut work = VecDeque::new();
-        work.push_back((usize::MAX, idx, T::from(node)));
-
-        let mut visitor = self;
-
-        while !work.is_empty() {
-            match visitor.recurse(&mut stack, work)? {
-                ControlFlow::Continue((v, w)) => {
-                    visitor = v;
-                    work = w;
-                }
-                ControlFlow::Break(path) => return Ok(ControlFlow::Break(path)),
             }
         }
 

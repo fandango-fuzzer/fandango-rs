@@ -10,9 +10,11 @@ fandango-derive = { path = "derive" }
 
 pest.workspace = true
 pest_derive.workspace = true
+tuple_list.workspace = true
 
 [dev-dependencies]
-petgraph.workspace = true
+criterion.workspace = true
+rand.workspace = true
 
 [lints]
 workspace = true
@@ -27,6 +29,7 @@ edition = "2024"
 authors = ["Addison Crump <addison.crump@cispa.de>"]
 
 [workspace.dependencies]
+criterion = { version = "0.5.1", features = ["html_reports"] }
 either = "1.13"
 pest = "2.7"
 pest_derive = "2.7"
@@ -34,11 +37,17 @@ pest_generator = "2.7"
 petgraph = "0.6.5"
 proc-macro2 = "1.0"
 quote = "1.0"
-rand_core = "0.6.4"
+rand = "0.8.5"
 syn = "2.0"
+tuple_list = "0.1.3"
 
 [workspace.lints.rust]
 bindings_with_variant_name = "allow"
 type_alias_bounds = "allow"
 
 missing_docs = "warn"
+
+[[bench]]
+name = "generation"
+path = "benches/generate.rs"
+harness = false

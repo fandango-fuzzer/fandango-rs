@@ -165,8 +165,6 @@ impl Parse for FandangoDerivation {
 pub fn derive_fandango_or_emit_error(
     source: FandangoDerivation,
 ) -> Result<TokenStream, TokenStream> {
-    let mut grammar_source = String::new();
-
     let parsed = Program::try_from(&source.merged).map_err(|e| source.to_compile_error(e))?;
 
     let graph = (&parsed).into_graph();
@@ -174,6 +172,8 @@ pub fn derive_fandango_or_emit_error(
 
     let mut mapped_names = HashMap::new();
     graph.emit_rust(&mut mapped_names, &mut tokenized).unwrap();
+
+    let mut grammar_source = String::new();
     graph.emit_pest(&mut (), &mut grammar_source).unwrap();
 
     let node_names = mapped_names.values().cloned().collect::<Vec<_>>();
@@ -221,6 +221,16 @@ pub fn derive_fandango_or_emit_error(
         #(#arrays)*
 
         #(#referenced)*
+
+        trait TypeSampler<'source>
+        where
+            #(Self: ::fandango::generation::Sampler<#node_names<'source>>),*
+        {}
+
+        impl<'source, S> TypeSampler<'source> for S
+        where
+            #(S: ::fandango::generation::Sampler<#node_names<'source>>),*
+        {}
 
         #[derive(Clone, Debug)]
         pub enum Type<'program, 'source> {

@@ -2,19 +2,18 @@
 
 use fandango::Parser;
 use fandango::parse_pairs_as;
-use fandango_core::graph::GraphTraverse;
 use fandango_core::typing::Node;
 
 mod simple {
     use super::*;
     use fandango::Fandango;
+    use fandango_core::generation::DefaultGenerated;
     use fandango_core::graph::IntoGraph;
-    use fandango_core::typing::{AsNode, Structured};
+    use fandango_core::typing::AsNode;
     use fandango_core::visitor::Visitor;
     use fandango_core::visitor::navigation::FindVisitor;
-    use fandango_core::visitor::write::{CachelessWriteVisitor, CachingWriteVisitor, WriteVisitor};
-    use petgraph::dot::{Config, Dot};
-    use petgraph::graphmap::DiGraphMap;
+    use fandango_core::visitor::write::WriteVisitor;
+    use rand::thread_rng;
     use std::error::Error;
 
     #[derive(Fandango)]
@@ -116,6 +115,23 @@ mod simple {
 
         Ok(())
     }
+
+    #[test]
+    fn generate() -> Result<(), Box<dyn Error>> {
+        let mut rng = thread_rng();
+        let mut start = nonterminal_start::generate_default(&mut rng);
+
+        let serialized = String::from_utf8(
+            WriteVisitor::caching(Vec::new())
+                .visit(&mut start, 0)?
+                .continue_value()
+                .unwrap()
+                .output(),
+        )?;
+
+        println!("{}", serialized);
+        Ok(())
+    }
 }
 
 mod pest_renamed {
@@ -140,6 +156,37 @@ mod pest_renamed {
 
         assert_eq!(string, SAMPLE);
 
+        Ok(())
+    }
+}
+
+mod xml {
+    use fandango::typing::Node;
+    use fandango_core::generation::DefaultGenerated;
+    use fandango_core::visitor::Visitor;
+    use fandango_core::visitor::write::WriteVisitor;
+    use fandango_derive::Fandango;
+    use rand::thread_rng;
+    use std::error::Error;
+
+    #[derive(Fandango)]
+    #[grammar = "tests/grammars/xml.fan"]
+    pub struct Xml;
+
+    #[test]
+    fn generate() -> Result<(), Box<dyn Error>> {
+        let mut rng = thread_rng();
+        let mut start = nonterminal_start::generate_default(&mut rng);
+
+        let serialized = String::from_utf8(
+            WriteVisitor::caching(Vec::new())
+                .visit(&mut start, 0)?
+                .continue_value()
+                .unwrap()
+                .output(),
+        )?;
+
+        println!("{}", serialized);
         Ok(())
     }
 }
