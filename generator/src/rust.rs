@@ -134,43 +134,43 @@ where
                 fn children_mut<'program>(&'program mut self) -> Self::ChildrenRefMut<'program> {{ (&mut self.child_0, ()) }}
             }
 
-            impl<'program, 'source> ::fandango::visitor::VisitableChildren<'program, TypeMut<'program, 'source>> for #name<'source> where 'source: 'program
+            impl<'program, 'source> ::fandango::visitor::VisitableChildren<TypeMut<'program, 'source>> for &'program mut #name<'source> where 'source: 'program
             {
-                fn visit_each<V>(&'program mut self, visitor: V) -> ::fandango::visitor::VisitResult<'program, V, TypeMut<'program, 'source>>
+                fn visit_each<V>(self, visitor: V) -> ::fandango::visitor::VisitResult<V, TypeMut<'program, 'source>>
                 where
-                    V: ::fandango::visitor::Visitor<'program, TypeMut<'program, 'source>, Continue = V>
+                    V: ::fandango::visitor::Visitor<TypeMut<'program, 'source>, Continue = V>
                 {
                     visitor.visit(&mut self.child_0, 0)
                 }
 
-                fn visit_each_reverse<V>(&'program mut self, visitor: V) -> ::fandango::visitor::VisitResult<'program, V, TypeMut<'program, 'source>>
+                fn visit_each_reverse<V>(self, visitor: V) -> ::fandango::visitor::VisitResult<V, TypeMut<'program, 'source>>
                 where
-                    V: ::fandango::visitor::Visitor<'program, TypeMut<'program, 'source>, Continue = V>
+                    V: ::fandango::visitor::Visitor<TypeMut<'program, 'source>, Continue = V>
                 {
                     self.visit_each(visitor)
                 }
 
-                fn visit_each_reverse_from<V>(&'program mut self, visitor: V, idx: usize) -> ::fandango::visitor::VisitResult<'program, V, TypeMut<'program, 'source>>
+                fn visit_each_reverse_from<V>(self, visitor: V, idx: usize) -> ::fandango::visitor::VisitResult<V, TypeMut<'program, 'source>>
                 where
-                    V: ::fandango::visitor::Visitor<'program, TypeMut<'program, 'source>, Continue=V>
+                    V: ::fandango::visitor::Visitor<TypeMut<'program, 'source>, Continue=V>
                 {
                     self.visit_nth(visitor, idx).unwrap_or_else(|c| Ok(::std::ops::ControlFlow::Continue(c)))
                 }
 
-                fn visit_each_from<V>(&'program mut self, visitor: V, idx: usize) -> ::fandango::visitor::VisitResult<'program, V, TypeMut<'program, 'source>>
+                fn visit_each_from<V>(self, visitor: V, idx: usize) -> ::fandango::visitor::VisitResult<V, TypeMut<'program, 'source>>
                 where
-                    V: ::fandango::visitor::Visitor<'program, TypeMut<'program, 'source>, Continue=V>
+                    V: ::fandango::visitor::Visitor<TypeMut<'program, 'source>, Continue=V>
                 {
                     self.visit_nth(visitor, idx).unwrap_or_else(|c| Ok(::std::ops::ControlFlow::Continue(c)))
                 }
 
                 fn visit_nth<V>(
-                    &'program mut self,
+                    self,
                     visitor: V,
                     idx: usize,
-                ) -> ::fandango::visitor::MaybeVisitResult<'program, V, TypeMut<'program, 'source>>
+                ) -> ::fandango::visitor::MaybeVisitResult<V, TypeMut<'program, 'source>>
                 where
-                    V: ::fandango::visitor::Visitor<'program, TypeMut<'program, 'source>>
+                    V: ::fandango::visitor::Visitor<TypeMut<'program, 'source>>
                 {
                     if idx == 0 {
                         Ok(visitor.visit(&mut self.child_0, 0))
@@ -313,42 +313,42 @@ impl<'program, 'source> IntoRustSource<FandangoGenContext<'_, '_, 'program, 'sou
                         fn children_mut<'program>(&'program mut self) -> Self::ChildrenRefMut<'program> { (&#s,) }
                     }
 
-                    impl<'program, 'source> ::fandango::visitor::VisitableChildren<'program, TypeMut<'program, 'source>> for #name<'source> where 'source: 'program
+                    impl<'program, 'source> ::fandango::visitor::VisitableChildren<TypeMut<'program, 'source>> for &'program mut #name<'source> where 'source: 'program
                     {
-                        fn visit_each<V>(&'program mut self, visitor: V) -> ::fandango::visitor::VisitResult<'program, V, TypeMut<'program, 'source>>
+                        fn visit_each<V>(self, visitor: V) -> ::fandango::visitor::VisitResult<V, TypeMut<'program, 'source>>
                         where
-                            V: ::fandango::visitor::Visitor<'program, TypeMut<'program, 'source>, Continue = V> {
+                            V: ::fandango::visitor::Visitor<TypeMut<'program, 'source>, Continue = V> {
                             Ok(::std::ops::ControlFlow::Continue(visitor))
                         }
 
-                        fn visit_each_reverse<V>(&'program mut self, visitor: V) -> ::fandango::visitor::VisitResult<'program, V, TypeMut<'program, 'source>>
+                        fn visit_each_reverse<V>(self, visitor: V) -> ::fandango::visitor::VisitResult<V, TypeMut<'program, 'source>>
                         where
-                            V: ::fandango::visitor::Visitor<'program, TypeMut<'program, 'source>, Continue = V>
+                            V: ::fandango::visitor::Visitor<TypeMut<'program, 'source>, Continue = V>
                         {
                             self.visit_each(visitor)
                         }
 
-                        fn visit_each_reverse_from<V>(&'program mut self, visitor: V, idx: usize) -> ::fandango::visitor::VisitResult<'program, V, TypeMut<'program, 'source>>
+                        fn visit_each_reverse_from<V>(self, visitor: V, idx: usize) -> ::fandango::visitor::VisitResult<V, TypeMut<'program, 'source>>
                         where
-                            V: ::fandango::visitor::Visitor<'program, TypeMut<'program, 'source>, Continue = V>
+                            V: ::fandango::visitor::Visitor<TypeMut<'program, 'source>, Continue = V>
                         {
                             self.visit_nth(visitor, idx).unwrap_or_else(|c| Ok(::std::ops::ControlFlow::Continue(c)))
                         }
 
-                        fn visit_each_from<V>(&'program mut self, visitor: V, idx: usize) -> ::fandango::visitor::VisitResult<'program, V, TypeMut<'program, 'source>>
+                        fn visit_each_from<V>(self, visitor: V, idx: usize) -> ::fandango::visitor::VisitResult<V, TypeMut<'program, 'source>>
                         where
-                            V: ::fandango::visitor::Visitor<'program, TypeMut<'program, 'source>, Continue = V>
+                            V: ::fandango::visitor::Visitor<TypeMut<'program, 'source>, Continue = V>
                         {
                             self.visit_nth(visitor, idx).unwrap_or_else(|c| Ok(::std::ops::ControlFlow::Continue(c)))
                         }
 
                         fn visit_nth<V>(
-                            &'program mut self,
+                            self,
                             visitor: V,
                             idx: usize,
-                        ) -> ::fandango::visitor::MaybeVisitResult<'program, V, TypeMut<'program, 'source>>
+                        ) -> ::fandango::visitor::MaybeVisitResult<V, TypeMut<'program, 'source>>
                         where
-                            V: ::fandango::visitor::Visitor<'program, TypeMut<'program, 'source>> {
+                            V: ::fandango::visitor::Visitor<TypeMut<'program, 'source>> {
                             Err(visitor)
                         }
                     }
@@ -407,44 +407,44 @@ impl<'program, 'source> IntoRustSource<FandangoGenContext<'_, '_, 'program, 'sou
                         }
                     }
 
-                    impl<'program, 'source> ::fandango::visitor::VisitableChildren<'program, TypeMut<'program, 'source>> for #name<'source> where 'source: 'program
+                    impl<'program, 'source> ::fandango::visitor::VisitableChildren<TypeMut<'program, 'source>> for &'program mut #name<'source> where 'source: 'program
                     {
-                        fn visit_each<V>(&'program mut self, visitor: V) -> ::fandango::visitor::VisitResult<'program, V, TypeMut<'program, 'source>>
+                        fn visit_each<V>(self, visitor: V) -> ::fandango::visitor::VisitResult<V, TypeMut<'program, 'source>>
                         where
-                            V: ::fandango::visitor::Visitor<'program, TypeMut<'program, 'source>, Continue = V> {
+                            V: ::fandango::visitor::Visitor<TypeMut<'program, 'source>, Continue = V> {
                             match self {
                                 #(#name::#child_variants(n) => visitor.visit(n, 0)),*
                             }
                         }
 
-                        fn visit_each_reverse<V>(&'program mut self, visitor: V) -> ::fandango::visitor::VisitResult<'program, V, TypeMut<'program, 'source>>
+                        fn visit_each_reverse<V>(self, visitor: V) -> ::fandango::visitor::VisitResult<V, TypeMut<'program, 'source>>
                         where
-                            V: ::fandango::visitor::Visitor<'program, TypeMut<'program, 'source>, Continue = V>
+                            V: ::fandango::visitor::Visitor<TypeMut<'program, 'source>, Continue = V>
                         {
                             self.visit_each(visitor)
                         }
 
-                        fn visit_each_reverse_from<V>(&'program mut self, visitor: V, idx: usize) -> ::fandango::visitor::VisitResult<'program, V, TypeMut<'program, 'source>>
+                        fn visit_each_reverse_from<V>(self, visitor: V, idx: usize) -> ::fandango::visitor::VisitResult<V, TypeMut<'program, 'source>>
                         where
-                            V: ::fandango::visitor::Visitor<'program, TypeMut<'program, 'source>, Continue = V>
+                            V: ::fandango::visitor::Visitor<TypeMut<'program, 'source>, Continue = V>
                         {
                             self.visit_nth(visitor, idx).unwrap_or_else(|c| Ok(::std::ops::ControlFlow::Continue(c)))
                         }
 
-                        fn visit_each_from<V>(&'program mut self, visitor: V, idx: usize) -> ::fandango::visitor::VisitResult<'program, V, TypeMut<'program, 'source>>
+                        fn visit_each_from<V>(self, visitor: V, idx: usize) -> ::fandango::visitor::VisitResult<V, TypeMut<'program, 'source>>
                         where
-                            V: ::fandango::visitor::Visitor<'program, TypeMut<'program, 'source>, Continue = V>
+                            V: ::fandango::visitor::Visitor<TypeMut<'program, 'source>, Continue = V>
                         {
                             self.visit_nth(visitor, idx).unwrap_or_else(|c| Ok(::std::ops::ControlFlow::Continue(c)))
                         }
 
                         fn visit_nth<V>(
-                            &'program mut self,
+                            self,
                             visitor: V,
                             idx: usize,
-                        ) -> ::fandango::visitor::MaybeVisitResult<'program, V, TypeMut<'program, 'source>>
+                        ) -> ::fandango::visitor::MaybeVisitResult<V, TypeMut<'program, 'source>>
                         where
-                            V: ::fandango::visitor::Visitor<'program, TypeMut<'program, 'source>> {
+                            V: ::fandango::visitor::Visitor<TypeMut<'program, 'source>> {
                             if idx == 0 {
                                 match self {
                                     #(#name::#child_variants(n) => Ok(visitor.visit(n, 0))),*
@@ -525,11 +525,11 @@ impl<'program, 'source> IntoRustSource<FandangoGenContext<'_, '_, 'program, 'sou
                         fn children_mut<'program>(&'program mut self) -> Self::ChildrenRefMut<'program> { &mut self.child_0 }
                     }
 
-                    impl<'program, 'source> ::fandango::visitor::VisitableChildren<'program, TypeMut<'program, 'source>> for #name<'source> where 'source: 'program
+                    impl<'program, 'source> ::fandango::visitor::VisitableChildren<TypeMut<'program, 'source>> for &'program mut #name<'source> where 'source: 'program
                     {
-                        fn visit_each<V>(&'program mut self, mut visitor: V) -> ::fandango::visitor::VisitResult<'program, V, TypeMut<'program, 'source>>
+                        fn visit_each<V>(self, mut visitor: V) -> ::fandango::visitor::VisitResult<V, TypeMut<'program, 'source>>
                         where
-                            V: ::fandango::visitor::Visitor<'program, TypeMut<'program, 'source>, Continue = V>
+                            V: ::fandango::visitor::Visitor<TypeMut<'program, 'source>, Continue = V>
                         {
                             for (i, child) in self.children_mut().iter_mut().enumerate() {
                                 visitor = match visitor.visit(child, i)? {
@@ -540,9 +540,9 @@ impl<'program, 'source> IntoRustSource<FandangoGenContext<'_, '_, 'program, 'sou
                             Ok(::std::ops::ControlFlow::Continue(visitor))
                         }
 
-                        fn visit_each_reverse<V>(&'program mut self, mut visitor: V) -> ::fandango::visitor::VisitResult<'program, V, TypeMut<'program, 'source>>
+                        fn visit_each_reverse<V>(self, mut visitor: V) -> ::fandango::visitor::VisitResult<V, TypeMut<'program, 'source>>
                         where
-                            V: ::fandango::visitor::Visitor<'program, TypeMut<'program, 'source>, Continue = V>
+                            V: ::fandango::visitor::Visitor<TypeMut<'program, 'source>, Continue = V>
                         {
                             for (i, child) in self.children_mut().iter_mut().enumerate().rev() {
                                 visitor = match visitor.visit(child, i)? {
@@ -553,9 +553,9 @@ impl<'program, 'source> IntoRustSource<FandangoGenContext<'_, '_, 'program, 'sou
                             Ok(::std::ops::ControlFlow::Continue(visitor))
                         }
 
-                        fn visit_each_reverse_from<V>(&'program mut self, mut visitor: V, idx: usize) -> ::fandango::visitor::VisitResult<'program, V, TypeMut<'program, 'source>>
+                        fn visit_each_reverse_from<V>(self, mut visitor: V, idx: usize) -> ::fandango::visitor::VisitResult<V, TypeMut<'program, 'source>>
                         where
-                            V: ::fandango::visitor::Visitor<'program, TypeMut<'program, 'source>, Continue=V>
+                            V: ::fandango::visitor::Visitor<TypeMut<'program, 'source>, Continue=V>
                         {
                             for (i, child) in self.children_mut().iter_mut().skip(idx).enumerate().rev() {
                                 visitor = match visitor.visit(child, i)? {
@@ -566,9 +566,9 @@ impl<'program, 'source> IntoRustSource<FandangoGenContext<'_, '_, 'program, 'sou
                             Ok(::std::ops::ControlFlow::Continue(visitor))
                         }
 
-                        fn visit_each_from<V>(&'program mut self, mut visitor: V, idx: usize) -> ::fandango::visitor::VisitResult<'program, V, TypeMut<'program, 'source>>
+                        fn visit_each_from<V>(self, mut visitor: V, idx: usize) -> ::fandango::visitor::VisitResult<V, TypeMut<'program, 'source>>
                         where
-                            V: ::fandango::visitor::Visitor<'program, TypeMut<'program, 'source>, Continue=V>
+                            V: ::fandango::visitor::Visitor<TypeMut<'program, 'source>, Continue=V>
                         {
                             for (i, child) in self.children_mut().iter_mut().skip(idx).enumerate() {
                                 visitor = match visitor.visit(child, i)? {
@@ -580,12 +580,12 @@ impl<'program, 'source> IntoRustSource<FandangoGenContext<'_, '_, 'program, 'sou
                         }
 
                         fn visit_nth<V>(
-                            &'program mut self,
+                            self,
                             visitor: V,
                             idx: usize,
-                        ) -> ::fandango::visitor::MaybeVisitResult<'program, V, TypeMut<'program, 'source>>
+                        ) -> ::fandango::visitor::MaybeVisitResult<V, TypeMut<'program, 'source>>
                         where
-                            V: ::fandango::visitor::Visitor<'program, TypeMut<'program, 'source>>
+                            V: ::fandango::visitor::Visitor<TypeMut<'program, 'source>>
                         {
                             if let Some(node) = self.children_mut().iter_mut().nth(idx) {
                                 Ok(visitor.visit(node, idx))
@@ -650,11 +650,11 @@ impl<'program, 'source> IntoRustSource<FandangoGenContext<'_, '_, 'program, 'sou
                         fn children_mut<'program>(&'program mut self) -> Self::ChildrenRefMut<'program> { (#(&mut self.#child_names),*,) }
                     }
 
-                    impl<'program, 'source> ::fandango::visitor::VisitableChildren<'program, TypeMut<'program, 'source>> for #name<'source> where 'source: 'program
+                    impl<'program, 'source> ::fandango::visitor::VisitableChildren<TypeMut<'program, 'source>> for &'program mut #name<'source> where 'source: 'program
                     {
-                        fn visit_each<V>(&'program mut self, visitor: V) -> ::fandango::visitor::VisitResult<'program, V, TypeMut<'program, 'source>>
+                        fn visit_each<V>(self, visitor: V) -> ::fandango::visitor::VisitResult<V, TypeMut<'program, 'source>>
                         where
-                            V: ::fandango::visitor::Visitor<'program, TypeMut<'program, 'source>, Continue = V>,
+                            V: ::fandango::visitor::Visitor<TypeMut<'program, 'source>, Continue = V>,
                         {
                             #(
                             let visitor = match visitor.visit(&mut self.#child_names, #indices)? {
@@ -665,9 +665,9 @@ impl<'program, 'source> IntoRustSource<FandangoGenContext<'_, '_, 'program, 'sou
                             Ok(::std::ops::ControlFlow::Continue(visitor))
                         }
 
-                        fn visit_each_reverse<V>(&'program mut self, visitor: V) -> ::fandango::visitor::VisitResult<'program, V, TypeMut<'program, 'source>>
+                        fn visit_each_reverse<V>(self, visitor: V) -> ::fandango::visitor::VisitResult<V, TypeMut<'program, 'source>>
                         where
-                            V: ::fandango::visitor::Visitor<'program, TypeMut<'program, 'source>, Continue = V>
+                            V: ::fandango::visitor::Visitor<TypeMut<'program, 'source>, Continue = V>
                         {
                             #(
                             let visitor = match visitor.visit(&mut self.#child_names_rev, #indices_rev)? {
@@ -678,9 +678,9 @@ impl<'program, 'source> IntoRustSource<FandangoGenContext<'_, '_, 'program, 'sou
                             Ok(::std::ops::ControlFlow::Continue(visitor))
                         }
 
-                        fn visit_each_reverse_from<V>(&'program mut self, visitor: V, idx: usize) -> ::fandango::visitor::VisitResult<'program, V, TypeMut<'program, 'source>>
+                        fn visit_each_reverse_from<V>(self, visitor: V, idx: usize) -> ::fandango::visitor::VisitResult<V, TypeMut<'program, 'source>>
                         where
-                            V: ::fandango::visitor::Visitor<'program, TypeMut<'program, 'source>, Continue=V>
+                            V: ::fandango::visitor::Visitor<TypeMut<'program, 'source>, Continue=V>
                         {
                             #(
                             let visitor = if #indices_rev <= idx {
@@ -695,9 +695,9 @@ impl<'program, 'source> IntoRustSource<FandangoGenContext<'_, '_, 'program, 'sou
                             Ok(::std::ops::ControlFlow::Continue(visitor))
                         }
 
-                        fn visit_each_from<V>(&'program mut self, visitor: V, idx: usize) -> ::fandango::visitor::VisitResult<'program, V, TypeMut<'program, 'source>>
+                        fn visit_each_from<V>(self, visitor: V, idx: usize) -> ::fandango::visitor::VisitResult<V, TypeMut<'program, 'source>>
                         where
-                            V: ::fandango::visitor::Visitor<'program, TypeMut<'program, 'source>, Continue=V>
+                            V: ::fandango::visitor::Visitor<TypeMut<'program, 'source>, Continue=V>
                         {
                             #(
                             let visitor = if idx <= #indices {
@@ -712,9 +712,9 @@ impl<'program, 'source> IntoRustSource<FandangoGenContext<'_, '_, 'program, 'sou
                             Ok(::std::ops::ControlFlow::Continue(visitor))
                         }
 
-                        fn visit_nth<V>(&'program mut self, visitor: V, idx: usize) -> ::fandango::visitor::MaybeVisitResult<'program, V, TypeMut<'program, 'source>>
+                        fn visit_nth<V>(self, visitor: V, idx: usize) -> ::fandango::visitor::MaybeVisitResult<V, TypeMut<'program, 'source>>
                         where
-                            V: ::fandango::visitor::Visitor<'program, TypeMut<'program, 'source>>,
+                            V: ::fandango::visitor::Visitor<TypeMut<'program, 'source>>,
                         {
                             match idx {
                                 #(#indices => Ok(visitor.visit(&mut self.#child_names, #indices))),*,

@@ -82,14 +82,14 @@ mod simple {
             .break_value()
             .unwrap();
 
-        // assert_eq!(
-        //     plus_path,
-        //     bfs.unwrap()
-        //         .visit(&mut start, 0)
-        //         .unwrap()
-        //         .break_value()
-        //         .unwrap()
-        // );
+        assert_eq!(
+            plus_path,
+            bfs.unwrap()
+                .visit(&mut start, 0)
+                .unwrap()
+                .break_value()
+                .unwrap()
+        );
 
         assert_eq!(
             "+2",

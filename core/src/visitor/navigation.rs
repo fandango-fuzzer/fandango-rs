@@ -3,6 +3,7 @@
 use crate::typing::Node;
 use crate::visitor::{VisitResult, VisitableChildren, Visitor};
 use either::Either;
+use std::cell::{RefCell, RefMut};
 use std::collections::VecDeque;
 use std::convert::Infallible;
 use std::ops::ControlFlow;
@@ -68,14 +69,17 @@ impl FindVisitor<false> {
     }
 }
 
-impl<'program, T> Visitor<'program, T> for FindVisitor<true> {
+impl<T> Visitor<T> for FindVisitor<true>
+where
+    T: VisitableChildren<T>,
+{
     type Continue = Self;
     type Break = Vec<usize>;
     type Error = Infallible;
 
-    fn visit<N>(mut self, node: &'program mut N, idx: usize) -> VisitResult<'program, Self, T>
+    fn visit<'program, N>(mut self, node: &'program mut N, idx: usize) -> VisitResult<Self, T>
     where
-        N: VisitableChildren<'program, T> + Node,
+        N: Node<TypeMut<'program> = T>,
         T: From<&'program mut N>,
     {
         if let Some(i) = self.from.pop() {
@@ -98,9 +102,9 @@ impl<'program, T> Visitor<'program, T> for FindVisitor<true> {
         }
         match {
             if let Some(&from) = self.from.last() {
-                node.visit_each_from(self, from)
+                T::from(node).visit_each_from(self, from)
             } else {
-                node.visit_each(self)
+                T::from(node).visit_each(self)
             }
         }? {
             ControlFlow::Break(mut path) => {
@@ -112,23 +116,16 @@ impl<'program, T> Visitor<'program, T> for FindVisitor<true> {
     }
 }
 
-impl<'program, T> Visitor<'program, T> for FindVisitor<false>
-where
-    for<'node> T: VisitableChildren<'node, T>,
-{
-    type Continue = Self;
-    type Break = Vec<usize>;
-    type Error = Infallible;
-
-    fn visit<N>(mut self, node: &'program mut N, idx: usize) -> VisitResult<'program, Self, T>
+impl FindVisitor<false> {
+    fn recurse<'program, T>(
+        mut self,
+        stack: &mut Vec<(usize, usize)>,
+        work: VecDeque<(usize, usize, T)>,
+    ) -> Result<ControlFlow<Vec<usize>, (Self, VecDeque<(usize, usize, T)>)>, Infallible>
     where
-        N: VisitableChildren<'program, T> + Node,
-        T: From<&'program mut N>,
+        T: VisitableChildren<T>,
     {
-        let mut stack = Vec::new();
-
-        let mut work = VecDeque::new();
-        work.push_back((usize::MAX, idx, T::from(node)));
+        let mut next_work = VecDeque::new();
 
         struct ChildCollector<'a, T> {
             reference: Either<(usize, usize), usize>,
@@ -137,14 +134,14 @@ where
             work: &'a mut VecDeque<(usize, usize, T)>,
         }
 
-        impl<'program, T> Visitor<'program, T> for ChildCollector<'_, T> {
+        impl<'a, T> Visitor<T> for ChildCollector<'a, T> {
             type Continue = Self;
             type Break = usize;
             type Error = Infallible;
 
-            fn visit<N>(self, node: &'program mut N, idx: usize) -> VisitResult<'program, Self, T>
+            fn visit<'program, N>(self, node: &'program mut N, idx: usize) -> VisitResult<Self, T>
             where
-                N: VisitableChildren<'program, T> + Node,
+                N: Node,
                 T: From<&'program mut N>,
             {
                 let span = node.span().map(|s| (s.start(), s.end()));
@@ -166,7 +163,7 @@ where
             }
         }
 
-        while let Some((parent, idx, mut next)) = work.pop_front() {
+        for (parent, idx, mut next) in work {
             let next_parent = stack.len();
             stack.push((parent, idx));
 
@@ -174,7 +171,7 @@ where
                 reference: self.reference,
                 discriminant: self.discriminant,
                 parent: next_parent,
-                work: &mut work,
+                work: &mut next_work,
             };
 
             match next.visit_each(collector)? {
@@ -193,6 +190,40 @@ where
             }
         }
 
-        Ok(ControlFlow::Continue(self))
+        Ok(ControlFlow::Continue((self, next_work)))
+    }
+}
+
+impl<T> Visitor<T> for FindVisitor<false>
+where
+    T: VisitableChildren<T>,
+{
+    type Continue = Self;
+    type Break = Vec<usize>;
+    type Error = Infallible;
+
+    fn visit<'program, N>(self, node: &'program mut N, idx: usize) -> VisitResult<Self, T>
+    where
+        N: Node<TypeMut<'program> = T>,
+        T: From<&'program mut N>,
+    {
+        let mut stack = Vec::new();
+
+        let mut work = VecDeque::new();
+        work.push_back((usize::MAX, idx, T::from(node)));
+
+        let mut visitor = self;
+
+        while !work.is_empty() {
+            match visitor.recurse(&mut stack, work)? {
+                ControlFlow::Continue((v, w)) => {
+                    visitor = v;
+                    work = w;
+                }
+                ControlFlow::Break(path) => return Ok(ControlFlow::Break(path)),
+            }
+        }
+
+        Ok(ControlFlow::Continue(visitor))
     }
 }

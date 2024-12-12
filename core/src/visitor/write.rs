@@ -65,17 +65,18 @@ impl<W, const CACHE: bool> WriteVisitor<W, CACHE> {
     }
 }
 
-impl<'program, W, T, const CACHE: bool> Visitor<'program, T> for WriteVisitor<W, CACHE>
+impl<W, T, const CACHE: bool> Visitor<T> for WriteVisitor<W, CACHE>
 where
+    T: VisitableChildren<T>,
     W: io::Write,
 {
     type Continue = Self;
     type Break = Infallible;
     type Error = io::Error;
 
-    fn visit<N>(mut self, node: &'program mut N, idx: usize) -> VisitResult<'program, Self, T>
+    fn visit<'program, N>(mut self, node: &'program mut N, idx: usize) -> VisitResult<Self, T>
     where
-        N: VisitableChildren<'program, T> + Node,
+        N: Node<TypeMut<'program> = T>,
         T: From<&'program mut N>,
     {
         if let Some(i) = self.from.pop() {
@@ -94,9 +95,9 @@ where
             }
             _ => {
                 if let Some(&from) = self.from.last() {
-                    node.visit_each_from(self, from)
+                    T::from(node).visit_each_from(self, from)
                 } else {
-                    node.visit_each(self)
+                    T::from(node).visit_each(self)
                 }
             }
         }
