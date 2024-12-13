@@ -50,6 +50,7 @@ mod simple {
     use rand::thread_rng;
     use tuple_list::tuple_list;
 
+    #[allow(dead_code)]
     #[derive(Fandango)]
     #[grammar = "tests/grammars/simple.fan"]
     pub struct Simple;
@@ -95,6 +96,7 @@ mod xml {
     use fandango_derive::Fandango;
     use rand::thread_rng;
 
+    #[allow(dead_code)]
     #[derive(Fandango)]
     #[grammar = "tests/grammars/xml.fan"]
     pub struct Xml;
