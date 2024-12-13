@@ -9,8 +9,6 @@ mod simple {
     use fandango::Fandango;
     use fandango_core::generation::Generated;
     use fandango_core::generation::util::Flattener;
-    use fandango_core::graph::IntoGraph;
-    use fandango_core::typing::AsNode;
     use fandango_core::visitor::Visitor;
     use fandango_core::visitor::navigation::FindVisitor;
     use fandango_core::visitor::write::WriteVisitor;
@@ -207,7 +205,6 @@ mod pest_renamed {
 }
 
 mod xml {
-    use fandango::typing::Node;
     use fandango_core::generation::DefaultGenerated;
     use fandango_core::visitor::Visitor;
     use fandango_core::visitor::write::WriteVisitor;
@@ -215,6 +212,7 @@ mod xml {
     use rand::thread_rng;
     use std::error::Error;
 
+    #[allow(dead_code)]
     #[derive(Fandango)]
     #[grammar = "tests/grammars/xml.fan"]
     pub struct Xml;
