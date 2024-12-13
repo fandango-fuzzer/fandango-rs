@@ -1,9 +1,9 @@
-use criterion::{Criterion, black_box, criterion_group, criterion_main};
+use criterion::{criterion_group, criterion_main};
 
 mod simple {
     use criterion::Criterion;
     use fandango::typing::Node;
-    use fandango_core::generation::DefaultGenerated;
+    use fandango_core::generation::{DefaultGenerated, Generated};
     use fandango_derive::Fandango;
     use rand::thread_rng;
     #[derive(Fandango)]
@@ -13,7 +13,7 @@ mod simple {
     pub fn criterion_benchmark(c: &mut Criterion) {
         let mut rng = thread_rng();
         c.bench_function("generate simple", |b| {
-            b.iter(|| nonterminal_start::generate_default(&mut rng))
+            b.iter(|| nonterminal_start::generate(&mut rng, &mut ()))
         });
     }
 }
@@ -21,7 +21,7 @@ mod simple {
 mod xml {
     use criterion::Criterion;
     use fandango::typing::Node;
-    use fandango_core::generation::DefaultGenerated;
+    use fandango_core::generation::{DefaultGenerated, Generated};
     use fandango_derive::Fandango;
     use rand::thread_rng;
     #[derive(Fandango)]
@@ -31,7 +31,7 @@ mod xml {
     pub fn criterion_benchmark(c: &mut Criterion) {
         let mut rng = thread_rng();
         c.bench_function("generate xml", |b| {
-            b.iter(|| nonterminal_start::generate_default(&mut rng))
+            b.iter(|| nonterminal_start::generate(&mut rng, &mut ()))
         });
     }
 }

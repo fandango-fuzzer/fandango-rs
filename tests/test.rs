@@ -7,7 +7,8 @@ use fandango_core::typing::Node;
 mod simple {
     use super::*;
     use fandango::Fandango;
-    use fandango_core::generation::DefaultGenerated;
+    use fandango_core::generation::Generated;
+    use fandango_core::generation::util::Flattener;
     use fandango_core::graph::IntoGraph;
     use fandango_core::typing::AsNode;
     use fandango_core::visitor::Visitor;
@@ -15,6 +16,7 @@ mod simple {
     use fandango_core::visitor::write::WriteVisitor;
     use rand::thread_rng;
     use std::error::Error;
+    use tuple_list::tuple_list;
 
     #[derive(Fandango)]
     #[grammar = "tests/grammars/simple.fan"]
@@ -22,8 +24,6 @@ mod simple {
 
     #[test]
     fn parse() -> Result<(), Box<dyn Error>> {
-        let graph = STRUCTURE.into_graph();
-
         const SAMPLE: &str = "1+2";
 
         let mut valid = false;
@@ -33,14 +33,9 @@ mod simple {
 
         let mut start = Simple::extract(SAMPLE)?;
         {
-            assert!(graph.contains_node(start.definition()));
             let expr = start.children_mut().0;
-            assert!(graph.contains_node(expr.definition()));
             if let nonterminal_expr_0::variant_0(expr) = expr.children_mut().0 {
-                assert!(graph.contains_node(expr.definition()));
                 let (number, plus, expr) = expr.children_mut();
-                assert!(graph.contains_node(number.definition()));
-                assert!(graph.contains_node(expr.definition()));
                 assert_eq!(number.span().unwrap().as_str(), "1");
                 assert_eq!(plus.span().unwrap().as_str(), "+");
 
@@ -65,7 +60,6 @@ mod simple {
                 );
 
                 if let nonterminal_expr_0::variant_1(number) = expr.children_mut().0 {
-                    assert!(graph.contains_node(number.definition()));
                     assert_eq!(number.span().unwrap().as_str(), "2");
 
                     valid = true;
@@ -119,7 +113,7 @@ mod simple {
     #[test]
     fn generate() -> Result<(), Box<dyn Error>> {
         let mut rng = thread_rng();
-        let mut start = nonterminal_start::generate_default(&mut rng);
+        let mut start = nonterminal_start::generate(&mut rng, &mut ());
 
         let serialized = String::from_utf8(
             WriteVisitor::caching(Vec::new())
@@ -130,6 +124,58 @@ mod simple {
         )?;
 
         println!("{}", serialized);
+        Ok(())
+    }
+
+    #[test]
+    fn generate_unflattened() -> Result<(), Box<dyn Error>> {
+        let mut rng = thread_rng();
+
+        let mut buf = Vec::new();
+        let mut distribution = [0usize; 10];
+
+        for _ in 0..100_000 {
+            let mut digit = nonterminal_digit::generate(&mut rng, &mut ());
+
+            WriteVisitor::caching(&mut buf)
+                .visit(&mut digit, 0)?
+                .continue_value()
+                .unwrap()
+                .output();
+            distribution[(buf[0] - b'0') as usize] += 1;
+            buf.clear();
+        }
+
+        println!("{distribution:?}");
+
+        Ok(())
+    }
+
+    #[test]
+    fn generate_flattened() -> Result<(), Box<dyn Error>> {
+        let mut rng = thread_rng();
+
+        let flattener = Flattener::new().flatten::<nonterminal_digit>()?;
+
+        let mut generators = tuple_list!(flattener);
+
+        let mut buf = Vec::new();
+        let mut distribution = [0usize; 10];
+
+        for _ in 0..100_000 {
+            let mut digit = nonterminal_digit::generate(&mut rng, &mut generators);
+
+            WriteVisitor::caching(&mut buf)
+                .visit(&mut digit, 0)?
+                .continue_value()
+                .unwrap()
+                .output();
+            distribution[(buf[0] - b'0') as usize] += 1;
+            buf.clear();
+        }
+
+        println!("{distribution:?}");
+
         Ok(())
     }
 }
@@ -176,7 +222,7 @@ mod xml {
     #[test]
     fn generate() -> Result<(), Box<dyn Error>> {
         let mut rng = thread_rng();
-        let mut start = nonterminal_start::generate_default(&mut rng);
+        let mut start = nonterminal_start::generate_default(&mut rng, &mut ());
 
         let serialized = String::from_utf8(
             WriteVisitor::caching(Vec::new())

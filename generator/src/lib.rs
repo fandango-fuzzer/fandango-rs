@@ -232,6 +232,18 @@ pub fn derive_fandango_or_emit_error(
             #(S: ::fandango::generation::Sampler<#node_names<'source>>),*
         {}
 
+        trait TypeGenerator<'source, S>
+        where
+            #(Self: ::fandango::generation::GeneratorTuple<#node_names<'source>, S>),*,
+            #(Self: ::fandango::generation::GeneratorTuple<::std::boxed::Box<#node_names<'source>>, S>),*
+        {}
+
+        impl<'source, S, G> TypeGenerator<'source, S> for G
+        where
+            #(G: ::fandango::generation::GeneratorTuple<#node_names<'source>, S>),*,
+            #(G: ::fandango::generation::GeneratorTuple<::std::boxed::Box<#node_names<'source>>, S>),*
+        {}
+
         #[derive(Clone, Debug)]
         pub enum Type<'program, 'source> {
             #(#node_names(&'program #node_names<'source>)),*

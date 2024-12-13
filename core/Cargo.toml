@@ -10,6 +10,7 @@ pest.workspace = true
 pest_derive.workspace = true
 petgraph.workspace = true
 rand.workspace = true
+tuple_list.workspace = true
 
 [lints]
 workspace = true

@@ -180,13 +180,14 @@ where
                 }
             }
 
-            impl<'source, S> ::fandango::generation::DefaultGenerated<S> for #name<'source>
+            impl<'source, S, G> ::fandango::generation::DefaultGenerated<S, G> for #name<'source>
             where
-                S: TypeSampler<'source>
+                S: TypeSampler<'source>,
+                G: TypeGenerator<'source, S>,
             {
-                fn generate_default(sampler: &mut S) -> Self {
+                fn generate_default(sampler: &mut S, with: &mut G) -> Self {
                     Self {
-                        child_0: ::fandango::generation::DefaultGenerated::generate_default(sampler),
+                        child_0: ::fandango::generation::Generated::generate(sampler, with),
                         span: None,
                     }
                 }
@@ -365,8 +366,8 @@ impl<'program, 'source> IntoRustSource<FandangoGenContext<'_, '_, 'program, 'sou
                         }
                     }
 
-                    impl<'source, S> ::fandango::generation::DefaultGenerated<S> for #name<'source> {
-                        fn generate_default(sampler: &mut S) -> Self {
+                    impl<'source, S, G> ::fandango::generation::DefaultGenerated<S, G> for #name<'source> {
+                        fn generate_default(sampler: &mut S, with: &mut G) -> Self {
                             Self {
                                 span: None,
                             }
@@ -467,13 +468,14 @@ impl<'program, 'source> IntoRustSource<FandangoGenContext<'_, '_, 'program, 'sou
                         }
                     }
 
-                    impl<'source, S> ::fandango::generation::DefaultGenerated<S> for #name<'source>
+                    impl<'source, S, G> ::fandango::generation::DefaultGenerated<S, G> for #name<'source>
                     where
-                        S: TypeSampler<'source>
+                        S: TypeSampler<'source>,
+                        G: TypeGenerator<'source, S>,
                     {
-                        fn generate_default(sampler: &mut S) -> Self {
+                        fn generate_default(sampler: &mut S, with: &mut G) -> Self {
                             match <S as ::fandango::generation::Sampler<Self>>::sample_alternative(sampler, #count) {
-                                #(#indices => Self::#child_variants(::fandango::generation::DefaultGenerated::generate_default(sampler))),*,
+                                #(#indices => Self::#child_variants(::fandango::generation::Generated::generate(sampler, with))),*,
                                 _ => unreachable!()
                             }
                         }
@@ -533,22 +535,22 @@ impl<'program, 'source> IntoRustSource<FandangoGenContext<'_, '_, 'program, 'sou
                 let sampler = match op {
                     Operator::Kleene(_) => {
                         quote! {
-                            (0..=<S as ::fandango::generation::Sampler<Self>>::sample_kleene(sampler)).map(|_| ::fandango::generation::DefaultGenerated::generate_default(sampler)).collect()
+                            (0..=<S as ::fandango::generation::Sampler<Self>>::sample_kleene(sampler)).map(|_| ::fandango::generation::Generated::generate(sampler, with)).collect()
                         }
                     }
                     Operator::Plus(_) => {
                         quote! {
-                            (0..=<S as ::fandango::generation::Sampler<Self>>::sample_plus(sampler)).map(|_| ::fandango::generation::DefaultGenerated::generate_default(sampler)).collect()
+                            (0..=<S as ::fandango::generation::Sampler<Self>>::sample_plus(sampler)).map(|_| ::fandango::generation::Generated::generate(sampler, with)).collect()
                         }
                     }
                     Operator::Option(_) => {
                         quote! {
-                            <S as ::fandango::generation::Sampler<Self>>::sample_optional(sampler).then(|_| ::fandango::generation::DefaultGenerated::generate_default(sampler))
+                            <S as ::fandango::generation::Sampler<Self>>::sample_optional(sampler).then(|_| ::fandango::generation::Generated::generate(sampler, with))
                         }
                     }
                     Operator::Repeat(_, start, end) => {
                         quote! {
-                            (0..=<S as ::fandango::generation::Sampler<Self>>::sample_repetition(sampler, #start, #end)).map(|_| ::fandango::generation::DefaultGenerated::generate_default(sampler)).collect()
+                            (0..=<S as ::fandango::generation::Sampler<Self>>::sample_repetition(sampler, #start, #end)).map(|_| ::fandango::generation::Generated::generate(sampler, with)).collect()
                         }
                     }
                     Operator::Symbol(_) => {
@@ -644,11 +646,12 @@ impl<'program, 'source> IntoRustSource<FandangoGenContext<'_, '_, 'program, 'sou
                         }
                     }
 
-                    impl<'source, S> ::fandango::generation::DefaultGenerated<S> for #name<'source>
+                    impl<'source, S, G> ::fandango::generation::DefaultGenerated<S, G> for #name<'source>
                     where
-                        S: TypeSampler<'source>
+                        S: TypeSampler<'source>,
+                        G: TypeGenerator<'source, S>,
                     {
-                        fn generate_default(sampler: &mut S) -> Self {
+                        fn generate_default(sampler: &mut S, with: &mut G) -> Self {
                             Self {
                                 child_0: #sampler,
                                 span: None,
@@ -784,13 +787,14 @@ impl<'program, 'source> IntoRustSource<FandangoGenContext<'_, '_, 'program, 'sou
                         }
                     }
 
-                    impl<'source, S> ::fandango::generation::DefaultGenerated<S> for #name<'source>
+                    impl<'source, S, G> ::fandango::generation::DefaultGenerated<S, G> for #name<'source>
                     where
-                        S: TypeSampler<'source>
+                        S: TypeSampler<'source>,
+                        G: TypeGenerator<'source, S>,
                     {
-                        fn generate_default(sampler: &mut S) -> Self {
+                        fn generate_default(sampler: &mut S, with: &mut G) -> Self {
                             Self {
-                                #( #child_names: ::fandango::generation::DefaultGenerated::generate_default(sampler) ),*,
+                                #( #child_names: ::fandango::generation::Generated::generate(sampler, with) ),*,
                                 span: None,
                             }
                         }

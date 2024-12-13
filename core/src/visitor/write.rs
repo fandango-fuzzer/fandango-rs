@@ -88,7 +88,7 @@ where
                 return Ok(ControlFlow::Continue(self));
             }
         }
-        match node.definition() {
+        match N::definition() {
             FandangoNode::String(s) => {
                 self.output.write_all(s.as_bytes())?;
                 Ok(ControlFlow::Continue(self))

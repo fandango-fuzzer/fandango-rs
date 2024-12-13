@@ -142,7 +142,7 @@ where
             work: &'a mut VecDeque<(usize, usize, T)>,
         }
 
-        impl<'a, T> Visitor<T> for ChildCollector<'a, T> {
+        impl<T> Visitor<T> for ChildCollector<'_, T> {
             type Continue = Self;
             type Break = usize;
             type Error = Infallible;

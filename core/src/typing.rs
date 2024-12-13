@@ -1,7 +1,7 @@
 //! Type information used in generated FANDANGO grammars.
 
 use crate::graph::FandangoNode;
-use crate::lang::Tagged;
+use crate::lang::{Program, Tagged};
 use pest::Span;
 use std::borrow::Cow;
 use std::ops::Deref;
@@ -23,12 +23,16 @@ pub trait Structured {
     type FandangoType: 'static;
     /// The concrete [`FandangoNode`] from the grammar definition, including source tagging.
     const STRUCTURE: &'static Tagged<'static, Self::FandangoType>;
+    /// The root node of this structure.
+    const ROOT: &'static Tagged<'static, Program<'static>>;
 }
 
 /// A type which has a corresponding [`FandangoNode`] definition.
 pub trait AsNode {
+    /// The root node for the grammar.
+    fn root() -> FandangoNode<'static, 'static>;
     /// The definition of this node.
-    fn definition(&self) -> FandangoNode<'static, 'static>;
+    fn definition() -> FandangoNode<'static, 'static>;
 }
 
 impl<N> AsNode for N
@@ -36,7 +40,11 @@ where
     N: Structured,
     FandangoNode<'static, 'static>: From<&'static Tagged<'static, N::FandangoType>>,
 {
-    fn definition(&self) -> FandangoNode<'static, 'static> {
+    fn root() -> FandangoNode<'static, 'static> {
+        FandangoNode::Program(Self::ROOT.inner())
+    }
+
+    fn definition() -> FandangoNode<'static, 'static> {
         FandangoNode::from(Self::STRUCTURE)
     }
 }
@@ -98,6 +106,7 @@ where
 {
     type FandangoType = T::FandangoType;
     const STRUCTURE: &'static Tagged<'static, Self::FandangoType> = T::STRUCTURE;
+    const ROOT: &'static Tagged<'static, Program<'static>> = T::ROOT;
 }
 
 impl<T> Discriminable for Box<T>
