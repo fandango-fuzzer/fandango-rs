@@ -1,7 +1,7 @@
 //! `#[derive]` functionality for FANDANGO, to be used as a re-export from the main `fandango`
 //! crate.
 
-use fandango_generator::{FandangoDerivation, derive_fandango_or_emit_error};
+use fandango_generator::{derive_fandango_or_emit_error, FandangoDerivation};
 use proc_macro::TokenStream;
 use syn::parse_macro_input;
 

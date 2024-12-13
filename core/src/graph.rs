@@ -522,8 +522,8 @@ impl<'program, 'source> From<&'program Tagged<'source, Cow<'source, str>>>
 #[cfg(test)]
 mod test {
     use crate::graph::{FandangoNode, IntoGraph};
-    use crate::lang::Program;
     use crate::lang::test::SIMPLE_GRAMMAR;
+    use crate::lang::Program;
     use petgraph::dot::{Config, Dot};
     use petgraph::graphmap::DiGraphMap;
     use std::error::Error;
@@ -551,10 +551,13 @@ mod test {
             &[Config::NodeNoLabel, Config::EdgeNoLabel],
             &|_, (_, _, weight)| format!("label = {:?}", weight),
             &|_, (_, node)| {
-                format!("label = {:?}", match node {
-                    FandangoNode::String(s) => format!("{}", s.inner()),
-                    _ => format!("{}", node),
-                })
+                format!(
+                    "label = {:?}",
+                    match node {
+                        FandangoNode::String(s) => format!("{}", s.inner()),
+                        _ => format!("{}", node),
+                    }
+                )
             },
         );
 

@@ -82,10 +82,13 @@ fn flatten(
             }
         }
         FandangoNode::Concatenation(_) | FandangoNode::Operator(_) | FandangoNode::String(_) => {
-            collected.insert(node, Flattened {
-                children: BTreeMap::new(),
-                total: 1,
-            });
+            collected.insert(
+                node,
+                Flattened {
+                    children: BTreeMap::new(),
+                    total: 1,
+                },
+            );
             Ok(1)
         }
         _ => unreachable!("Encountered a node which should never be a descendant in a graph"),

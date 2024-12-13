@@ -4,8 +4,8 @@ use pest::Span;
 use petgraph::graphmap::DiGraphMap;
 use proc_macro2::{Ident, TokenStream};
 use quote::{format_ident, quote};
-use std::collections::HashMap;
 use std::collections::hash_map::Entry;
+use std::collections::HashMap;
 use std::convert::Infallible;
 
 /// Produces a Rust source tree using the provided context.

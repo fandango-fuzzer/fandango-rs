@@ -1,17 +1,17 @@
 //! Build tests for FANDANGO, to ensure that we are generating code as expected.
 
-use fandango::Parser;
 use fandango::parse_pairs_as;
+use fandango::Parser;
 use fandango_core::typing::Node;
 
 mod simple {
     use super::*;
     use fandango::Fandango;
-    use fandango_core::generation::Generated;
     use fandango_core::generation::util::Flattener;
-    use fandango_core::visitor::Visitor;
+    use fandango_core::generation::Generated;
     use fandango_core::visitor::navigation::FindVisitor;
     use fandango_core::visitor::write::WriteVisitor;
+    use fandango_core::visitor::Visitor;
     use rand::thread_rng;
     use std::error::Error;
     use tuple_list::tuple_list;
@@ -206,8 +206,8 @@ mod pest_renamed {
 
 mod xml {
     use fandango_core::generation::DefaultGenerated;
-    use fandango_core::visitor::Visitor;
     use fandango_core::visitor::write::WriteVisitor;
+    use fandango_core::visitor::Visitor;
     use fandango_derive::Fandango;
     use rand::thread_rng;
     use std::error::Error;

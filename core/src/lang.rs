@@ -3,9 +3,9 @@
 use crate::graph::{FandangoNode, GraphTraverse};
 use crate::impl_traverse;
 use crate::lang::py_literal::parse_string;
-use pest::Parser;
 use pest::error::{Error as PestError, ErrorVariant};
 use pest::iterators::Pair;
+use pest::Parser;
 use std::borrow::Cow;
 use std::cmp::Ordering;
 use std::fmt::{Debug, Formatter};
@@ -613,11 +613,11 @@ mod py_literal {
 pub(crate) mod test {
     use crate::lang::parser::Fandango;
     use crate::lang::{
-        Alternative, Concatenation, Nonterminal, Operator, Production, Program, Rule, Statement,
-        Symbol, parse_string,
+        parse_string, Alternative, Concatenation, Nonterminal, Operator, Production, Program, Rule,
+        Statement, Symbol,
     };
-    use pest::Parser;
     use pest::iterators::Pair;
+    use pest::Parser;
     use std::borrow::Cow;
     use std::boxed::Box;
     use std::error::Error;
@@ -780,10 +780,13 @@ pub(crate) mod test {
             program.statements.into_owned().try_into().unwrap();
 
         let prod = untag_or_die!(start, Statement::Production(prod));
-        let (nt, alt) = untag_or_die!(prod, Production {
-            nonterminal,
-            alternative
-        });
+        let (nt, alt) = untag_or_die!(
+            prod,
+            Production {
+                nonterminal,
+                alternative
+            }
+        );
 
         let name = untag_or_die!(nt, Nonterminal { name });
         assert_eq!(name, "start");
@@ -802,10 +805,13 @@ pub(crate) mod test {
         assert_eq!(name, "expr");
 
         let prod = untag_or_die!(expr, Statement::Production(prod));
-        let (nt, alt) = untag_or_die!(prod, Production {
-            nonterminal,
-            alternative
-        });
+        let (nt, alt) = untag_or_die!(
+            prod,
+            Production {
+                nonterminal,
+                alternative
+            }
+        );
 
         let name = untag_or_die!(nt, Nonterminal { name });
         assert_eq!(name, "expr");
@@ -844,10 +850,13 @@ pub(crate) mod test {
         assert_eq!(name, "number");
 
         let prod = untag_or_die!(number, Statement::Production(prod));
-        let (nt, alt) = untag_or_die!(prod, Production {
-            nonterminal,
-            alternative
-        });
+        let (nt, alt) = untag_or_die!(
+            prod,
+            Production {
+                nonterminal,
+                alternative
+            }
+        );
 
         let name = untag_or_die!(nt, Nonterminal { name });
         assert_eq!(name, "number");
@@ -881,10 +890,13 @@ pub(crate) mod test {
         assert_eq!(name, "digit");
 
         let prod = untag_or_die!(non_zero, Statement::Production(prod));
-        let (nt, alt) = untag_or_die!(prod, Production {
-            nonterminal,
-            alternative
-        });
+        let (nt, alt) = untag_or_die!(
+            prod,
+            Production {
+                nonterminal,
+                alternative
+            }
+        );
 
         let name = untag_or_die!(nt, Nonterminal { name });
         assert_eq!(name, "non_zero");
@@ -902,10 +914,13 @@ pub(crate) mod test {
         }
 
         let prod = untag_or_die!(digit, Statement::Production(prod));
-        let (nt, alt) = untag_or_die!(prod, Production {
-            nonterminal,
-            alternative
-        });
+        let (nt, alt) = untag_or_die!(
+            prod,
+            Production {
+                nonterminal,
+                alternative
+            }
+        );
 
         let name = untag_or_die!(nt, Nonterminal { name });
         assert_eq!(name, "digit");

@@ -1,6 +1,6 @@
 #![allow(missing_docs)]
 
-use criterion::{Criterion, black_box, criterion_group, criterion_main};
+use criterion::{black_box, criterion_group, criterion_main, Criterion};
 use fandango_core::graph::IntoGraph;
 use fandango_core::lang::Program;
 
@@ -40,12 +40,12 @@ fn graph_xml(c: &mut Criterion) {
 }
 
 mod simple {
-    use criterion::{Criterion, black_box};
-    use fandango_core::generation::Generated;
+    use criterion::{black_box, Criterion};
     use fandango_core::generation::util::Flattener;
+    use fandango_core::generation::Generated;
     use fandango_core::typing::Node;
-    use fandango_core::visitor::Visitor;
     use fandango_core::visitor::write::WriteVisitor;
+    use fandango_core::visitor::Visitor;
     use fandango_derive::Fandango;
     use rand::thread_rng;
     use tuple_list::tuple_list;
@@ -88,10 +88,10 @@ mod simple {
 }
 
 mod xml {
-    use criterion::{Criterion, black_box};
+    use criterion::{black_box, Criterion};
     use fandango_core::generation::Generated;
-    use fandango_core::visitor::Visitor;
     use fandango_core::visitor::write::WriteVisitor;
+    use fandango_core::visitor::Visitor;
     use fandango_derive::Fandango;
     use rand::thread_rng;
 
