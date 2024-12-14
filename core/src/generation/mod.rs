@@ -2,7 +2,7 @@
 
 pub mod util;
 
-use crate::typing::Discriminable;
+use crate::typing::{Discriminable, Node};
 use rand::Rng;
 
 /// Sampler definition, allowing for tuning of the random generation. See [`util::Flattener`]'s
@@ -88,6 +88,12 @@ where
     }
 }
 
+/// Generates a node in place, for use with [`super::visitor::Visitor`]s.
+pub trait InPlaceGenerated<S, G> {
+    /// Generates and replaces the contained node in-place, returning the new node.
+    fn generate_in_place(self, sampler: &mut S, with: &mut G) -> Self;
+}
+
 /// Primary generator trait, for defining generators. You almost certainly only want to implement
 /// this; see [`util::Flattener`] for inspiration.
 pub trait Generator<N, W, S> {
@@ -111,7 +117,6 @@ impl<Head, Tail, N, S> GeneratorTuple<N, S> for (Head, Tail)
 where
     Head: Generator<N, Tail, S>,
     Tail: GeneratorTuple<N, S>,
-    N: Discriminable,
 {
     fn generate(&mut self, sampler: &mut S) -> Option<N> {
         self.0

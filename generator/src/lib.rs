@@ -262,6 +262,29 @@ pub fn derive_fandango_or_emit_error(
             }
         }
 
+        impl<'program, 'source, V> ::fandango::visitor::VisitWith<V> for TypeMut<'program, 'source> where V: ::fandango::visitor::Visitor<TypeMut<'program, 'source>> {
+            fn visit_with(self, visitor: V, idx: usize) -> ::fandango::visitor::VisitResult<V, TypeMut<'program, 'source>> {
+                match self {
+                    #(TypeMut::#node_names(n) => visitor.visit(n, idx)),*
+                }
+            }
+        }
+
+        impl<'program, 'source, S, G> ::fandango::generation::InPlaceGenerated<S, G> for TypeMut<'program, 'source>
+        where
+            #(#node_names<'source>: ::fandango::generation::Generated<S, G>),*,
+            #(Box<#node_names<'source>>: ::fandango::generation::Generated<S, G>),*,
+        {
+            fn generate_in_place(self, sampler: &mut S, with: &mut G) -> Self {
+                match self {
+                    #(TypeMut::#node_names(n) => {
+                        *n = ::fandango::generation::Generated::generate(sampler, with);
+                        Self::from(n)
+                    }),*
+                }
+            }
+        }
+
         impl<'program, 'source> ::fandango::visitor::VisitableChildren<TypeMut<'program, 'source>> for TypeMut<'program, 'source> {
             fn visit_each<V>(self, visitor: V) -> ::fandango::visitor::VisitResult<V, TypeMut<'program, 'source>>
             where

@@ -2,7 +2,9 @@
 
 use crate::graph::FandangoNode;
 use crate::typing::Node;
+use crate::visitor::navigation::StartingFrom;
 use crate::visitor::{VisitResult, VisitableChildren, Visitor};
+use std::collections::VecDeque;
 use std::convert::Infallible;
 use std::io;
 use std::ops::ControlFlow;
@@ -10,7 +12,7 @@ use std::ops::ControlFlow;
 /// A visitor which emits the string representation of the tree, optionally using the existing
 /// string representation in memory.
 pub struct WriteVisitor<W, const CACHE: bool> {
-    from: Vec<usize>,
+    from: VecDeque<usize>,
     output: W,
 }
 
@@ -19,18 +21,12 @@ pub type CachingWriteVisitor<W> = WriteVisitor<W, true>;
 /// A [`WriteVisitor`] which doesn't use the existing strings.
 pub type CachelessWriteVisitor<W> = WriteVisitor<W, false>;
 
-impl<W, const CACHE: bool> From<(Vec<usize>, W)> for WriteVisitor<W, CACHE> {
-    fn from((from, output): (Vec<usize>, W)) -> Self {
-        Self::new_from(output, from)
-    }
-}
-
 impl<W, const CACHE: bool> WriteVisitor<W, CACHE> {
     fn new(output: W) -> Self {
-        Self::new_from(output, Vec::new())
+        Self::new_from(output, VecDeque::new())
     }
 
-    fn new_from(output: W, from: Vec<usize>) -> Self {
+    fn new_from(output: W, from: VecDeque<usize>) -> Self {
         Self { output, from }
     }
 }
@@ -42,10 +38,11 @@ impl<W> WriteVisitor<W, true> {
     }
 
     /// Create a caching [`WriteVisitor`] starting at a specific point in the tree.
-    pub fn caching_from(output: W, from: Vec<usize>) -> Self {
+    pub fn caching_from(output: W, from: VecDeque<usize>) -> Self {
         Self::new_from(output, from)
     }
 }
+
 impl<W> WriteVisitor<W, false> {
     /// Create a non-caching [`WriteVisitor`].
     pub fn cacheless(output: W) -> Self {
@@ -53,8 +50,22 @@ impl<W> WriteVisitor<W, false> {
     }
 
     /// Create a non-caching [`WriteVisitor`] starting at a specific point in the tree.
-    pub fn cacheless_from(output: W, from: Vec<usize>) -> Self {
+    pub fn cacheless_from(output: W, from: VecDeque<usize>) -> Self {
         Self::new_from(output, from)
+    }
+}
+
+impl<W, const CACHE: bool> StartingFrom for WriteVisitor<W, CACHE>
+where
+    W: io::Write,
+{
+    type WithPath = Self;
+
+    fn starting_from(self, from: VecDeque<usize>) -> Self::WithPath {
+        Self::WithPath {
+            from,
+            output: self.output,
+        }
     }
 }
 
@@ -74,14 +85,11 @@ where
     type Break = Infallible;
     type Error = io::Error;
 
-    fn visit<'program, N>(mut self, node: &'program mut N, idx: usize) -> VisitResult<Self, T>
+    fn visit<'program, N>(mut self, node: &'program mut N, _: usize) -> VisitResult<Self, T>
     where
         N: Node<TypeMut<'program> = T>,
         T: From<&'program mut N>,
     {
-        if let Some(i) = self.from.pop() {
-            assert_eq!(i, idx);
-        }
         if CACHE && self.from.is_empty() {
             if let Some(span) = node.span() {
                 self.output.write_all(span.as_str().as_bytes())?;
@@ -94,11 +102,8 @@ where
                 Ok(ControlFlow::Continue(self))
             }
             _ => {
-                if let Some(&from) = self.from.last() {
-                    T::from(node).visit_each_from(self, from)
-                } else {
-                    T::from(node).visit_each(self)
-                }
+                let from = self.from.pop_front().unwrap_or(0);
+                T::from(node).visit_each_from(self, from)
             }
         }
     }

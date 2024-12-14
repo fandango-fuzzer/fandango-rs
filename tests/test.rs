@@ -9,10 +9,14 @@ mod simple {
     use fandango::Fandango;
     use fandango_core::generation::util::Flattener;
     use fandango_core::generation::Generated;
-    use fandango_core::visitor::navigation::FindVisitor;
+    use fandango_core::visitor::mutator::Mutator;
+    use fandango_core::visitor::navigation::{
+        Advance, CountNodes, CountNodesWith, FindVisitor, GoTo, NodeCountVisitor, StartingFrom,
+    };
     use fandango_core::visitor::write::WriteVisitor;
     use fandango_core::visitor::Visitor;
-    use rand::thread_rng;
+    use fandango_core::visitor_chain;
+    use rand::{thread_rng, Rng};
     use std::error::Error;
     use tuple_list::tuple_list;
 
@@ -66,8 +70,11 @@ mod simple {
             assert!(valid, "Parse did not match expected value!");
         }
 
+        let dfs = dfs.unwrap();
+        let bfs = bfs.unwrap();
+
         let plus_path = dfs
-            .unwrap()
+            .clone()
             .visit(&mut start, 0)
             .unwrap()
             .break_value()
@@ -75,35 +82,72 @@ mod simple {
 
         assert_eq!(
             plus_path,
-            bfs.unwrap()
-                .visit(&mut start, 0)
-                .unwrap()
-                .break_value()
-                .unwrap()
+            bfs.visit(&mut start, 0).unwrap().break_value().unwrap()
         );
 
         assert_eq!(
             "+2",
             String::from_utf8(
-                WriteVisitor::caching_from(Vec::new(), plus_path.clone())
-                    .visit(&mut start, 0)?
-                    .continue_value()
-                    .unwrap()
-                    .output()
+                visitor_chain!(
+                    &mut start,
+                    0,
+                    dfs.clone(),
+                    WriteVisitor::caching(Vec::new())
+                )
+                .continue_value()
+                .unwrap()
+                .output()
             )
             .unwrap()
         );
         assert_eq!(
             "+2",
             String::from_utf8(
-                WriteVisitor::cacheless_from(Vec::new(), plus_path)
-                    .visit(&mut start, 0)?
+                visitor_chain!(&mut start, 0, dfs, WriteVisitor::caching(Vec::new()))
                     .continue_value()
                     .unwrap()
                     .output()
             )
             .unwrap()
         );
+
+        Ok(())
+    }
+
+    #[test]
+    fn mutate() -> Result<(), Box<dyn Error>> {
+        let mut rng = thread_rng();
+        let mut start = nonterminal_start::generate(&mut rng, &mut ());
+
+        let mut generators = ();
+
+        let mut mutations = 0;
+
+        let mut count = start.count_nodes();
+        for _ in 0..1000 {
+            let old_start = start.clone();
+            let selection = rng.gen_range(0..count);
+            let mut path = Advance::forward(selection)
+                .visit(&mut start, 0)?
+                .break_value()
+                .unwrap();
+            let idx = path.pop_front().unwrap();
+            assert_eq!(0, idx);
+            let old_count = start.go_to(idx, path.clone())?.count_nodes();
+            let mutator = Mutator::new(&mut rng, &mut generators);
+            let new = mutator
+                .starting_from(path)
+                .visit(&mut start, idx)?
+                .break_value()
+                .unwrap();
+            let new_count = new.count_nodes();
+            count = count - old_count + new_count;
+            if old_start != start {
+                mutations += 1;
+            }
+        }
+
+        assert_ne!(0, mutations);
 
         Ok(())
     }

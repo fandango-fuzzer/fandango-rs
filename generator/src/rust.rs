@@ -117,7 +117,7 @@ where
         let from = from_boilerplate(&name);
 
         output.extend(quote! {
-            #[derive(Clone, Debug)]
+            #[derive(Clone, Debug, Eq, PartialEq)]
             pub struct #name<'source> {
                 span: ::std::option::Option<(::std::rc::Rc<::std::borrow::Cow<'source, str>>, usize, usize)>,
                 child_0: #child_type,
@@ -130,6 +130,7 @@ where
                 type ChildrenRefMut<'program> = (&'program mut #child_name<'source>, ()) where 'source: 'program;
 
                 fn span(&self) -> ::std::option::Option<::fandango::Span<'_>> { ::fandango::typing::maybe_owned_span(&self.span) }
+                fn clear_span(&mut self) { self.span = None; }
                 fn children<'program>(&'program self) -> Self::ChildrenRef<'program> {{ (&self.child_0, ()) }}
                 fn children_mut<'program>(&'program mut self) -> Self::ChildrenRefMut<'program> {{ (&mut self.child_0, ()) }}
             }
@@ -310,7 +311,7 @@ impl<'program, 'source> IntoRustSource<FandangoGenContext<'_, '_, 'program, 'sou
             FandangoNode::String(s) => {
                 let s = s.inner();
                 output.extend(quote! {
-                    #[derive(Clone, Debug)]
+                    #[derive(Clone, Debug, Eq, PartialEq)]
                     pub struct #name<'source> {
                         span: ::std::option::Option<(::std::rc::Rc<::std::borrow::Cow<'source, str>>, usize, usize)>,
                     }
@@ -322,6 +323,7 @@ impl<'program, 'source> IntoRustSource<FandangoGenContext<'_, '_, 'program, 'sou
                         type ChildrenRefMut<'program> = (&'static str,) where 'source: 'program;
 
                         fn span(&self) -> ::std::option::Option<::fandango::Span<'_>> { ::fandango::typing::maybe_owned_span(&self.span) }
+                        fn clear_span(&mut self) { self.span = None; }
                         fn children<'program>(&'program self) -> Self::ChildrenRef<'program> { (&#s,) }
                         fn children_mut<'program>(&'program mut self) -> Self::ChildrenRefMut<'program> { (&#s,) }
                     }
@@ -395,7 +397,7 @@ impl<'program, 'source> IntoRustSource<FandangoGenContext<'_, '_, 'program, 'sou
                 let indices = (0..children.len()).collect::<Vec<_>>();
                 let count = children.len();
                 output.extend(quote! {
-                    #[derive(Clone, Debug)]
+                    #[derive(Clone, Debug, Eq, PartialEq)]
                     pub enum #name<'source> {
                         #( #child_variants ( #child_field_types ) ),*
                     }
@@ -409,6 +411,12 @@ impl<'program, 'source> IntoRustSource<FandangoGenContext<'_, '_, 'program, 'sou
                         fn span(&self) -> ::std::option::Option<::fandango::Span<'_>> {
                             match self {
                                 #( Self::#child_variants ( inner ) => inner.span() ),*
+                            }
+                        }
+
+                        fn clear_span(&mut self) {
+                            match self {
+                                #( Self::#child_variants ( inner ) => inner.clear_span() ),*
                             }
                         }
 
@@ -559,7 +567,7 @@ impl<'program, 'source> IntoRustSource<FandangoGenContext<'_, '_, 'program, 'sou
                 };
 
                 output.extend(quote! {
-                    #[derive(Clone, Debug)]
+                    #[derive(Clone, Debug, Eq, PartialEq)]
                     pub struct #name<'source> {
                         span: ::std::option::Option<(::std::rc::Rc<::std::borrow::Cow<'source, str>>, usize, usize)>,
                         child_0: #(#child_field_types)*
@@ -572,6 +580,7 @@ impl<'program, 'source> IntoRustSource<FandangoGenContext<'_, '_, 'program, 'sou
                         type ChildrenRefMut<'program> = &'program mut #child_type where 'source: 'program;
 
                         fn span(&self) -> ::std::option::Option<::fandango::Span<'_>> { ::fandango::typing::maybe_owned_span(&self.span) }
+                        fn clear_span(&mut self) { self.span = None; }
                         fn children<'program>(&'program self) -> Self::ChildrenRef<'program> { &self.child_0 }
                         fn children_mut<'program>(&'program mut self) -> Self::ChildrenRefMut<'program> { &mut self.child_0 }
                     }
@@ -697,7 +706,7 @@ impl<'program, 'source> IntoRustSource<FandangoGenContext<'_, '_, 'program, 'sou
                 indices_rev.reverse();
 
                 output.extend(quote! {
-                    #[derive(Clone, Debug)]
+                    #[derive(Clone, Debug, Eq, PartialEq)]
                     pub struct #name<'source> {
                         span: ::std::option::Option<(::std::rc::Rc<::std::borrow::Cow<'source, str>>, usize, usize)>,
                         #( #child_names: #child_field_types ),*
@@ -710,6 +719,7 @@ impl<'program, 'source> IntoRustSource<FandangoGenContext<'_, '_, 'program, 'sou
                         type ChildrenRefMut<'program> = ( #( &'program mut #child_field_types ),*, ) where 'source: 'program;
 
                         fn span(&self) -> ::std::option::Option<::fandango::Span<'_>> { ::fandango::typing::maybe_owned_span(&self.span) }
+                        fn clear_span(&mut self) { self.span = None; }
                         fn children<'program>(&'program self) -> Self::ChildrenRef<'program> { (#(&self.#child_names),*,) }
                         fn children_mut<'program>(&'program mut self) -> Self::ChildrenRefMut<'program> { (#(&mut self.#child_names),*,) }
                     }

@@ -71,3 +71,14 @@ impl<E, T> From<E> for VisitErrorTrace<E, T> {
         }
     }
 }
+
+#[derive(Debug)]
+pub struct InvalidPath;
+
+impl Display for InvalidPath {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        f.write_str("Invalid path provided while traversing")
+    }
+}
+
+impl Error for InvalidPath {}
