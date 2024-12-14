@@ -60,13 +60,16 @@ mod simple {
             })
             .collect::<BTreeMap<_, _>>();
 
+        let count = rngs.len();
+        let rngs = rngs.into_iter().step_by(count / 5).collect::<Vec<_>>();
+
         for (count, mut rng) in rngs {
             group.throughput(Throughput::Elements(count as u64));
 
             group.bench_with_input(BenchmarkId::new("generate", count), &rng, |b, rng| {
                 b.iter_batched_ref(
                     || rng.clone(),
-                    |rng| crate::simple::nonterminal_start::generate(rng, &mut ()),
+                    |rng| crate::simple::nonterminal_start::generate(black_box(rng), &mut ()),
                     BatchSize::SmallInput,
                 );
             });
@@ -97,7 +100,7 @@ mod simple {
                         let selection = rng.gen_range(0..count);
                         let _: Result<(), Box<dyn Error>> = (|| {
                             visitor_chain!(
-                                start,
+                                black_box(start),
                                 0,
                                 Advance::forward(selection),
                                 Mutator::new(&mut rng, &mut ())
@@ -129,13 +132,16 @@ mod simple {
             })
             .collect::<BTreeMap<_, _>>();
 
+        let count = rngs.len();
+        let rngs = rngs.into_iter().step_by(count / 5).collect::<Vec<_>>();
+
         for (count, rng) in rngs {
             group.throughput(Throughput::Elements(count as u64));
 
             group.bench_with_input(BenchmarkId::new("generate", count), &rng, |b, rng| {
                 b.iter_batched_ref(
                     || rng.clone(),
-                    |rng| nonterminal_start::generate(rng, &mut generators),
+                    |rng| nonterminal_start::generate(black_box(rng), &mut generators),
                     BatchSize::SmallInput,
                 );
             });
@@ -194,13 +200,16 @@ mod xml {
             })
             .collect::<BTreeMap<_, _>>();
 
+        let count = rngs.len();
+        let rngs = rngs.into_iter().step_by(count / 5).collect::<Vec<_>>();
+
         for (count, mut rng) in rngs {
             group.throughput(Throughput::Elements(count as u64));
 
             group.bench_with_input(BenchmarkId::new("generate", count), &rng, |b, rng| {
                 b.iter_batched_ref(
                     || rng.clone(),
-                    |rng| crate::simple::nonterminal_start::generate(rng, &mut ()),
+                    |rng| crate::simple::nonterminal_start::generate(black_box(rng), &mut ()),
                     BatchSize::SmallInput,
                 );
             });
@@ -212,7 +221,7 @@ mod xml {
                     || start.clone(),
                     |start| {
                         WriteVisitor::cacheless(Vec::new())
-                            .visit(start, 0)
+                            .visit(black_box(start), 0)
                             .unwrap()
                             .continue_value()
                             .unwrap()
@@ -231,7 +240,7 @@ mod xml {
                         let selection = rng.gen_range(0..count);
                         let _: Result<(), Box<dyn Error>> = (|| {
                             visitor_chain!(
-                                start,
+                                black_box(start),
                                 0,
                                 Advance::forward(selection),
                                 Mutator::new(&mut rng, &mut ())
