@@ -8,7 +8,7 @@ use crate::typing::Node;
 use either::Either;
 use std::error::Error;
 use std::fmt::{Debug, Display, Formatter};
-use std::ops::{ControlFlow, Deref};
+use std::ops::ControlFlow;
 
 type NodeTrace<T> = Vec<(T, usize, Option<((usize, usize), (usize, usize))>)>;
 
@@ -28,9 +28,167 @@ pub trait Visitor<T> {
         T: From<&'program mut N>;
 }
 
+/// Visits an opaque node with the provided visitor.
 pub trait VisitWith<'a, V>: Sized {
+    /// This type is an intermediary which represents what type *actually* gets visited by the
+    /// visitor. This is necessary because implementors of [`VisitWith`] look something like this:
+    ///
+    /// ```
+    /// # #![allow(non_camel_case_types)]
+    /// # struct start<'source>(std::marker::PhantomData<&'source ()>);
+    /// #
+    /// pub enum TypeMut<'program, 'source> {
+    ///     start(&'program mut start<'source>),
+    ///     // other variants...
+    /// }
+    /// ```
+    ///
+    /// If we use the visitor directly, this will consume the `'program` lifetime -- and thus
+    /// prevent further modification until we create a new node of this type. By specifying what is
+    /// indeed visited, we can first reborrow the type and then perform the visit:
+    ///
+    /// ```
+    /// # #![allow(non_camel_case_types)]
+    /// # use std::ops::ControlFlow;
+    /// # use std::marker::PhantomData;
+    /// # use std::convert::Infallible;
+    /// # use fandango_core::graph::FandangoNode;
+    /// # use fandango_core::typing::{AsNode, Discriminable, Node};
+    /// # use fandango_core::visitor::{MaybeVisitResult, VisitResult, VisitWith, VisitableChildren, Visitor};
+    /// #
+    /// # pub struct start<'source>(PhantomData<&'source ()>);
+    /// # impl Discriminable for start<'_> {
+    /// #     const DISCRIMINANT: usize = 0;
+    /// # }
+    /// #
+    /// # impl AsNode for start<'_> {
+    /// #     fn root() -> FandangoNode<'static, 'static> {
+    /// #         unimplemented!()
+    /// #     }
+    /// #
+    /// #     fn definition() -> FandangoNode<'static, 'static> {
+    /// #         unimplemented!()
+    /// #     }
+    /// # }
+    /// #
+    /// # impl<'source> Node for start<'source> {
+    /// #     type Type<'program> = () where Self: 'program;
+    /// #     type TypeMut<'program> = TypeMut<'program, 'source> where Self: 'program;
+    /// #     type ChildrenRef<'program> = () where Self: 'program;
+    /// #     type ChildrenRefMut<'program> = () where Self: 'program;
+    /// #
+    /// #     fn span(&self) -> Option<pest::Span<'_>> {
+    /// #         unimplemented!()
+    /// #     }
+    /// #
+    /// #     fn clear_span(&mut self) {
+    /// #         unimplemented!()
+    /// #     }
+    /// #
+    /// #     fn children(&self) -> Self::ChildrenRef<'_> {
+    /// #         unimplemented!()
+    /// #     }
+    /// #
+    /// #     fn children_mut(&mut self) -> Self::ChildrenRefMut<'_> {
+    /// #         unimplemented!()
+    /// #     }
+    /// # }
+    /// pub enum TypeMut<'program, 'source> {
+    ///     start(&'program mut start<'source>),
+    ///     // other children...
+    /// }
+    ///
+    /// impl<'program, 'source> TypeMut<'program, 'source> {
+    ///     fn reborrow<'a>(&'a mut self) -> TypeMut<'a, 'source> where 'source: 'a {
+    ///         match self {
+    ///             TypeMut::start(n) => TypeMut::start(&mut *n),
+    ///             // other children...
+    ///         }
+    ///     }
+    /// }
+    /// #
+    /// # impl<'program, 'source> VisitableChildren<TypeMut<'program, 'source>> for TypeMut<'program, 'source> {
+    /// #     fn visit_each<V>(self, visitor: V) -> VisitResult<V, TypeMut<'program, 'source>> where V: Visitor<TypeMut<'program, 'source>, Continue=V> {
+    /// #         Ok(ControlFlow::Continue(visitor))
+    /// #     }
+    /// #
+    /// #     fn visit_each_reverse<V>(self, visitor: V) -> VisitResult<V, TypeMut<'program, 'source>> where V: Visitor<TypeMut<'program, 'source>, Continue=V> {
+    /// #         unimplemented!()
+    /// #     }
+    /// #
+    /// #     fn visit_each_from<V>(self, visitor: V, idx: usize) -> VisitResult<V, TypeMut<'program, 'source>> where V: Visitor<TypeMut<'program, 'source>, Continue=V> {
+    /// #         unimplemented!()
+    /// #     }
+    /// #
+    /// #     fn visit_each_reverse_from<V>(self, visitor: V, idx: usize) -> VisitResult<V, TypeMut<'program, 'source>> where V: Visitor<TypeMut<'program, 'source>, Continue=V> {
+    /// #         unimplemented!()
+    /// #     }
+    /// #
+    /// #     fn visit_nth<V>(self, visitor: V, idx: usize) -> MaybeVisitResult<V, TypeMut<'program, 'source>> where V: Visitor<TypeMut<'program, 'source>> {
+    /// #         unimplemented!()
+    /// #     }
+    /// # }
+    /// #
+    /// # impl<'program, 'source> From<&'program mut start<'source>> for TypeMut<'program, 'source> {
+    /// #     fn from(value: &'program mut start<'source>) -> Self {
+    /// #         Self::start(value)
+    /// #     }
+    /// # }
+    /// #
+    /// impl<'a, 'program, 'source, V> VisitWith<'a, V> for TypeMut<'program, 'source>
+    /// where
+    ///     'program: 'a,
+    ///     'source: 'program,
+    /// {
+    ///     type Visited = TypeMut<'a, 'source>;
+    ///
+    ///     fn visit_with(&'a mut self, visitor: V, idx: usize) -> VisitResult<V, Self::Visited>
+    ///     where
+    ///         V: Visitor<TypeMut<'a, 'source>> {
+    ///         match self.reborrow() {
+    ///             TypeMut::start(n) => visitor.visit(n, idx),
+    ///             // other children...
+    ///         }
+    ///     }
+    /// }
+    ///
+    /// struct ToyVisitor;
+    ///
+    /// impl<T> Visitor<T> for ToyVisitor
+    /// where
+    ///     T: VisitableChildren<T>,
+    /// {
+    ///     type Continue = Self;
+    ///     type Break = Infallible;
+    ///     type Error = Infallible;
+    ///
+    ///     fn visit<'program, N>(self, node: &'program mut N, _: usize) -> VisitResult<Self, T>
+    ///     where
+    ///         N: Node<TypeMut<'program> = T>,
+    ///         T: From<&'program mut N>
+    ///     {
+    ///         T::from(node).visit_each(self)
+    ///     }
+    /// }
+    ///
+    /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
+    /// // using later...
+    /// # let node = start(PhantomData);
+    /// let mut node: start<'static> = node; // node from generated source
+    /// let mut t = TypeMut::from(&mut node);
+    /// // we can now perform the visitation multiple times
+    /// t.visit_with(ToyVisitor, 0)?;
+    /// t.visit_with(ToyVisitor, 0)?;
+    /// t.visit_with(ToyVisitor, 0)?;
+    /// t.visit_with(ToyVisitor, 0)?;
+    /// # Ok(())
+    /// # }
+    /// ```
+    ///
+    /// This thereby informs the compiler that the visitor will not consume the node's reference.
     type Visited;
 
+    /// Perform the visit on the opaque node.
     fn visit_with(&'a mut self, visitor: V, idx: usize) -> VisitResult<V, Self::Visited>
     where
         V: Visitor<Self::Visited>;
@@ -143,8 +301,10 @@ where
     }
 }
 
+/// Denotes that an error was encountered during the chaining of visitors with [`crate::visitor_chain`].
 #[derive(Debug)]
 pub enum ChainError<C> {
+    /// While chaining, [`ControlFlow::Continue`] was encountered instead of [`ControlFlow::Break`].
     UnexpectedContinue(C),
 }
 
@@ -160,6 +320,18 @@ impl<C> Display for ChainError<C> {
 
 impl<C> Error for ChainError<C> where C: Debug {}
 
+/// Perform chaining of visitors. Useful for when your visitors perform their own traversal, and may
+/// need exclusive mutable access to parent nodes of the target. If you just need mutable access to
+/// a particular subtree, use [`navigation::GoTo::go_to`] or [`navigation::GoToWith::go_to`].
+///
+/// The following invariants must hold:
+///  - For all but the last visitor, the `Break` type must be [`VecDeque`]`<usize>`.
+///    - The `Break` type represents the full path taken to the intended target node, *including the
+///      index of the first node*.
+///    - The first node's index *MUST* be exactly the index provided originally.
+///  - All visitors but the first must implement [`navigation::StartingFrom`].
+///    - The visitor accepts the path *not including the index of the first node* (this is instead
+///      provided as an argument to [`Visitor::visit`]).
 #[macro_export]
 macro_rules! visitor_chain {
     ($node:expr, $idx:ident, $visitor:expr) => {{

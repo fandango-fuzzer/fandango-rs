@@ -8,9 +8,18 @@ use std::collections::VecDeque;
 use std::convert::Infallible;
 use std::ops::ControlFlow;
 
+/// Trait which enables chaining of visitors by returning paths between them (e.g. with
+/// [`crate::visitor_chain`]). One would choose this over simply traversing a given node if the
+/// intended visitor needs to be able to traverse the full subtree, not just the provided node.
+/// The path here is expected to be provided without the first node index.
+///
+/// If you're intending to just visit a specific node's subtree, use [`GoTo::go_to`] or
+/// [`GoToWith::go_to`] instead.
 pub trait StartingFrom {
+    /// The visitor, but with the provided path (in case of a builder pattern).
     type WithPath;
 
+    /// Provide the intended starting path.
     fn starting_from(self, from: VecDeque<usize>) -> Self::WithPath;
 }
 
@@ -214,6 +223,8 @@ where
     }
 }
 
+/// Advance in the tree in pre-order traversal, forwards or backwards, and return the `n`th node. If
+/// the tree has fewer nodes than `n`, the number of nodes which were traversed.
 #[derive(Debug, Clone)]
 pub struct Advance<const FORWARD: bool> {
     count: usize,
@@ -241,12 +252,20 @@ impl<const FORWARD: bool> StartingFrom for Advance<FORWARD> {
 }
 
 impl Advance<true> {
+    /// Advance forwards within the tree.
     pub fn forward(target: usize) -> Self {
         Self::new(target)
     }
 }
 
-impl<T> Visitor<T> for Advance<true>
+impl Advance<false> {
+    /// Advance backwards within the tree.
+    pub fn backwards(target: usize) -> Self {
+        Self::new(target)
+    }
+}
+
+impl<T, const FORWARD: bool> Visitor<T> for Advance<FORWARD>
 where
     T: VisitableChildren<T>,
 {
@@ -254,7 +273,7 @@ where
     type Break = T;
     type Error = Infallible;
 
-    fn visit<'program, N>(mut self, node: &'program mut N, idx: usize) -> VisitResult<Self, T>
+    fn visit<'program, N>(mut self, node: &'program mut N, _: usize) -> VisitResult<Self, T>
     where
         N: Node<TypeMut<'program> = T>,
         T: From<&'program mut N>,
@@ -264,19 +283,27 @@ where
         }
         self.count += 1;
         let starting_at = self.from.pop_front().unwrap_or(0);
-        match T::from(node).visit_each_from(self, starting_at)? {
+        let traversal = if FORWARD {
+            T::from(node).visit_each_from(self, starting_at)?
+        } else {
+            T::from(node).visit_each_reverse_from(self, starting_at)?
+        };
+        match traversal {
             ControlFlow::Continue(visitor) => Ok(ControlFlow::Continue(visitor)),
             b => Ok(b),
         }
     }
 }
 
+/// A visitor which goes to a provided path and fetches the node.
 #[derive(Debug, Default)]
 pub struct GoToVisitor {
     to: VecDeque<usize>,
 }
 
 impl GoToVisitor {
+    /// Create the visitor with the intended destination (not including the start node; see
+    /// [`StartingFrom`] and [`crate::visitor_chain`] for details.
     pub fn new(to: VecDeque<usize>) -> Self {
         Self { to }
     }
@@ -290,7 +317,7 @@ where
     type Break = T;
     type Error = InvalidPath;
 
-    fn visit<'program, N>(mut self, node: &'program mut N, idx: usize) -> VisitResult<Self, T>
+    fn visit<'program, N>(mut self, node: &'program mut N, _: usize) -> VisitResult<Self, T>
     where
         N: Node<TypeMut<'program> = T>,
         T: From<&'program mut N>,
@@ -305,19 +332,22 @@ where
     }
 }
 
+/// Helper trait to use [`GoToVisitor`] as a method on the derivation tree from the provided node.
 pub trait GoTo<'a> {
-    type Returned;
-
-    fn go_to(
-        &'a mut self,
-        idx: usize,
-        path: VecDeque<usize>,
-    ) -> Result<Self::Returned, InvalidPath>;
-}
-
-pub trait GoToWith<'a>: Sized {
+    /// The type which is returned (see [`VisitWith`] for why this is necessary).
     type Value;
 
+    /// Perform the traversal!
+    fn go_to(&'a mut self, idx: usize, path: VecDeque<usize>) -> Result<Self::Value, InvalidPath>;
+}
+
+/// Helper trait to use [`GoToVisitor`] as a method on the derivation tree from the provided opaque
+/// node.
+pub trait GoToWith<'a>: Sized {
+    /// The type which is returned (see [`VisitWith`] for why this is necessary).
+    type Value;
+
+    /// Perform the traversal!
     fn go_to(&'a mut self, idx: usize, path: VecDeque<usize>) -> Result<Self::Value, InvalidPath>;
 }
 
@@ -327,7 +357,7 @@ where
     GoToVisitor: Visitor<N::TypeMut<'a>, Break = N::TypeMut<'a>, Error = InvalidPath>,
     N::TypeMut<'a>: From<&'a mut N>,
 {
-    type Returned = N::TypeMut<'a>;
+    type Value = N::TypeMut<'a>;
 
     fn go_to(
         &'a mut self,
@@ -356,6 +386,7 @@ where
     }
 }
 
+/// Count the number of nodes in the derivation tree underneath a given node.
 #[derive(Debug, Default)]
 pub struct NodeCountVisitor {
     count: usize,
@@ -363,6 +394,7 @@ pub struct NodeCountVisitor {
 }
 
 impl NodeCountVisitor {
+    /// Create a new counter.
     pub fn new() -> Self {
         Self {
             count: 0,
@@ -370,6 +402,7 @@ impl NodeCountVisitor {
         }
     }
 
+    /// Consume the visitor and acquire the final count.
     pub fn count(self) -> usize {
         self.count
     }
@@ -406,11 +439,17 @@ where
     }
 }
 
+/// Helper trait to use [`NodeCountVisitor`] as a method on the derivation tree from the provided
+/// node.
 pub trait CountNodes<'a> {
+    /// Perform the count!
     fn count_nodes(&'a mut self) -> usize;
 }
 
+/// Helper trait to use [`NodeCountVisitor`] as a method on the derivation tree from the provided
+/// opaque node.
 pub trait CountNodesWith<'a> {
+    /// Perform the count!
     fn count_nodes(&'a mut self) -> usize;
 }
 

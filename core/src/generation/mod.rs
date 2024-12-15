@@ -2,7 +2,6 @@
 
 pub mod util;
 
-use crate::typing::{Discriminable, Node};
 use rand::Rng;
 
 /// Sampler definition, allowing for tuning of the random generation. See [`util::Flattener`]'s

@@ -27,14 +27,11 @@ mod simple {
     use fandango_core::generation::util::Flattener;
     use fandango_core::generation::{Generated, InPlaceGenerated};
     use fandango_core::typing::Node;
-    use fandango_core::visitor::navigation::{
-        Advance, CountNodes, CountNodesWith, GoTo, StartingFrom,
-    };
+    use fandango_core::visitor::navigation::{Advance, CountNodes};
     use fandango_core::visitor::write::WriteVisitor;
     use fandango_core::visitor::Visitor;
-    use fandango_core::visitor_chain;
     use fandango_derive::Fandango;
-    use rand::{thread_rng, Rng, SeedableRng};
+    use rand::{Rng, SeedableRng};
     use std::collections::BTreeMap;
     use std::error::Error;
     use tuple_list::tuple_list;
@@ -90,7 +87,7 @@ mod simple {
                 );
             });
 
-            let mut count = start.count_nodes();
+            let count = start.count_nodes();
 
             group.bench_with_input(BenchmarkId::new("mutate", count), &start, |b, start| {
                 b.iter_batched_ref(
@@ -171,9 +168,8 @@ mod xml {
     use fandango_core::visitor::navigation::{Advance, CountNodes};
     use fandango_core::visitor::write::WriteVisitor;
     use fandango_core::visitor::Visitor;
-    use fandango_core::visitor_chain;
     use fandango_derive::Fandango;
-    use rand::{thread_rng, Rng, SeedableRng};
+    use rand::{Rng, SeedableRng};
     use std::collections::BTreeMap;
     use std::error::Error;
 
@@ -228,7 +224,7 @@ mod xml {
                 );
             });
 
-            let mut count = start.count_nodes();
+            let count = start.count_nodes();
 
             group.bench_with_input(BenchmarkId::new("mutate", count), &start, |b, start| {
                 b.iter_batched_ref(

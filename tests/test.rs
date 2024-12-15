@@ -9,9 +9,7 @@ mod simple {
     use fandango::Fandango;
     use fandango_core::generation::util::Flattener;
     use fandango_core::generation::{Generated, InPlaceGenerated};
-    use fandango_core::visitor::navigation::{
-        Advance, CountNodes, CountNodesWith, FindVisitor, GoTo, NodeCountVisitor, StartingFrom,
-    };
+    use fandango_core::visitor::navigation::{Advance, CountNodes, CountNodesWith, FindVisitor};
     use fandango_core::visitor::write::WriteVisitor;
     use fandango_core::visitor::Visitor;
     use fandango_core::visitor_chain;

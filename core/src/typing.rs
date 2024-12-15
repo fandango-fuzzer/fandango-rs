@@ -65,7 +65,6 @@ pub trait Discriminable {
 pub trait Node: Sized + AsNode + Discriminable {
     /// An enum which describes all possible nodes, and for which the following traits are
     /// implemented by generation (for `N::Type<'program>`):
-    ///
     ///  - `From<&'program N>`
     ///  - `From<&'program Box<N>>`
     ///  - `From<&'program mut N>`
@@ -76,9 +75,10 @@ pub trait Node: Sized + AsNode + Discriminable {
         Self: 'program;
     /// An enum which describes all possible mutable nodes, and for which the following traits are
     /// implemented (for `N::TypeMut<'program>`):
-    ///
     ///  - `From<&'program mut N>`
     ///  - `From<&'program mut Box<N>>`
+    ///  - [`crate::visitor::VisitWith`]
+    ///  - [`crate::generation::InPlaceGenerated`]
     type TypeMut<'program>
     where
         Self: 'program;
