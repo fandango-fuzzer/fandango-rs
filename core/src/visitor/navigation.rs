@@ -251,7 +251,7 @@ where
     T: VisitableChildren<T>,
 {
     type Continue = Self;
-    type Break = VecDeque<usize>;
+    type Break = T;
     type Error = Infallible;
 
     fn visit<'program, N>(mut self, node: &'program mut N, idx: usize) -> VisitResult<Self, T>
@@ -260,18 +260,13 @@ where
         T: From<&'program mut N>,
     {
         if self.count == self.target {
-            let mut queue = VecDeque::new();
-            queue.push_front(idx);
-            return Ok(ControlFlow::Break(queue));
+            return Ok(ControlFlow::Break(T::from(node)));
         }
         self.count += 1;
         let starting_at = self.from.pop_front().unwrap_or(0);
         match T::from(node).visit_each_from(self, starting_at)? {
             ControlFlow::Continue(visitor) => Ok(ControlFlow::Continue(visitor)),
-            ControlFlow::Break(mut queue) => {
-                queue.push_front(idx);
-                Ok(ControlFlow::Break(queue))
-            }
+            b => Ok(b),
         }
     }
 }
@@ -320,8 +315,10 @@ pub trait GoTo<'a> {
     ) -> Result<Self::Returned, InvalidPath>;
 }
 
-pub trait GoToWith: Sized {
-    fn go_to(self, idx: usize, path: VecDeque<usize>) -> Result<Self, InvalidPath>;
+pub trait GoToWith<'a>: Sized {
+    type Value;
+
+    fn go_to(&'a mut self, idx: usize, path: VecDeque<usize>) -> Result<Self::Value, InvalidPath>;
 }
 
 impl<'a, N> GoTo<'a> for N
@@ -344,11 +341,14 @@ where
     }
 }
 
-impl<T> GoToWith for T
+impl<'a, T> GoToWith<'a> for T
 where
-    T: VisitableChildren<T> + VisitWith<GoToVisitor>,
+    T: VisitWith<'a, GoToVisitor>,
+    T::Visited: VisitableChildren<T::Visited>,
 {
-    fn go_to(self, idx: usize, path: VecDeque<usize>) -> Result<T, InvalidPath> {
+    type Value = T::Visited;
+
+    fn go_to(&'a mut self, idx: usize, path: VecDeque<usize>) -> Result<T::Visited, InvalidPath> {
         Ok(self
             .visit_with(GoToVisitor::new(path), idx)?
             .break_value()
@@ -410,8 +410,8 @@ pub trait CountNodes<'a> {
     fn count_nodes(&'a mut self) -> usize;
 }
 
-pub trait CountNodesWith {
-    fn count_nodes(self) -> usize;
+pub trait CountNodesWith<'a> {
+    fn count_nodes(&'a mut self) -> usize;
 }
 
 impl<'a, N> CountNodes<'a> for N
@@ -430,11 +430,12 @@ where
     }
 }
 
-impl<T> CountNodesWith for T
+impl<'a, T> CountNodesWith<'a> for T
 where
-    T: VisitableChildren<T> + VisitWith<NodeCountVisitor>,
+    T: VisitWith<'a, NodeCountVisitor>,
+    T::Visited: VisitableChildren<T::Visited>,
 {
-    fn count_nodes(self) -> usize {
+    fn count_nodes(&'a mut self) -> usize {
         self.visit_with(NodeCountVisitor::new(), 0)
             .unwrap()
             .continue_value()

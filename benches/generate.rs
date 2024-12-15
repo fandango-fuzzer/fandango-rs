@@ -25,9 +25,8 @@ fn graph_simple(c: &mut Criterion) {
 mod simple {
     use criterion::{black_box, BatchSize, BenchmarkId, Criterion, Throughput};
     use fandango_core::generation::util::Flattener;
-    use fandango_core::generation::Generated;
+    use fandango_core::generation::{Generated, InPlaceGenerated};
     use fandango_core::typing::Node;
-    use fandango_core::visitor::mutator::Mutator;
     use fandango_core::visitor::navigation::{
         Advance, CountNodes, CountNodesWith, GoTo, StartingFrom,
     };
@@ -99,12 +98,11 @@ mod simple {
                     |start| {
                         let selection = rng.gen_range(0..count);
                         let _: Result<(), Box<dyn Error>> = (|| {
-                            visitor_chain!(
-                                black_box(start),
-                                0,
-                                Advance::forward(selection),
-                                Mutator::new(&mut rng, &mut ())
-                            );
+                            let mut target = Advance::forward(selection)
+                                .visit(start, 0)?
+                                .break_value()
+                                .unwrap();
+                            target.generate_in_place(&mut rng, &mut ());
                             Ok(())
                         })();
                     },
@@ -169,8 +167,7 @@ fn graph_xml(c: &mut Criterion) {
 
 mod xml {
     use criterion::{black_box, BatchSize, BenchmarkId, Criterion, Throughput};
-    use fandango_core::generation::Generated;
-    use fandango_core::visitor::mutator::Mutator;
+    use fandango_core::generation::{Generated, InPlaceGenerated};
     use fandango_core::visitor::navigation::{Advance, CountNodes};
     use fandango_core::visitor::write::WriteVisitor;
     use fandango_core::visitor::Visitor;
@@ -239,12 +236,11 @@ mod xml {
                     |start| {
                         let selection = rng.gen_range(0..count);
                         let _: Result<(), Box<dyn Error>> = (|| {
-                            visitor_chain!(
-                                black_box(start),
-                                0,
-                                Advance::forward(selection),
-                                Mutator::new(&mut rng, &mut ())
-                            );
+                            let mut target = Advance::forward(selection)
+                                .visit(start, 0)?
+                                .break_value()
+                                .unwrap();
+                            target.generate_in_place(&mut rng, &mut ());
                             Ok(())
                         })();
                     },

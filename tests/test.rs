@@ -8,8 +8,7 @@ mod simple {
     use super::*;
     use fandango::Fandango;
     use fandango_core::generation::util::Flattener;
-    use fandango_core::generation::Generated;
-    use fandango_core::visitor::mutator::Mutator;
+    use fandango_core::generation::{Generated, InPlaceGenerated};
     use fandango_core::visitor::navigation::{
         Advance, CountNodes, CountNodesWith, FindVisitor, GoTo, NodeCountVisitor, StartingFrom,
     };
@@ -127,20 +126,13 @@ mod simple {
         for _ in 0..1000 {
             let old_start = start.clone();
             let selection = rng.gen_range(0..count);
-            let mut path = Advance::forward(selection)
+            let mut target = Advance::forward(selection)
                 .visit(&mut start, 0)?
                 .break_value()
                 .unwrap();
-            let idx = path.pop_front().unwrap();
-            assert_eq!(0, idx);
-            let old_count = start.go_to(idx, path.clone())?.count_nodes();
-            let mutator = Mutator::new(&mut rng, &mut generators);
-            let new = mutator
-                .starting_from(path)
-                .visit(&mut start, idx)?
-                .break_value()
-                .unwrap();
-            let new_count = new.count_nodes();
+            let old_count = target.count_nodes();
+            target.generate_in_place(&mut rng, &mut generators);
+            let new_count = target.count_nodes();
             count = count - old_count + new_count;
             if old_start != start {
                 mutations += 1;

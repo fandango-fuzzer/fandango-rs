@@ -1,7 +1,6 @@
 //! Visitors for type trees emitted by FANDANGO's `#[derive]` implementation.
 
 pub mod error;
-pub mod mutator;
 pub mod navigation;
 pub mod write;
 
@@ -13,7 +12,7 @@ use std::ops::{ControlFlow, Deref};
 
 type NodeTrace<T> = Vec<(T, usize, Option<((usize, usize), (usize, usize))>)>;
 
-/// Visitor pattern over generated nodes.
+/// Visitor pattern over nodes.
 pub trait Visitor<T> {
     /// The type which is returned when the visitation may continue.
     type Continue;
@@ -29,11 +28,12 @@ pub trait Visitor<T> {
         T: From<&'program mut N>;
 }
 
-pub trait VisitWith<V>: Sized
-where
-    V: Visitor<Self>,
-{
-    fn visit_with(self, visitor: V, idx: usize) -> VisitResult<V, Self>;
+pub trait VisitWith<'a, V>: Sized {
+    type Visited;
+
+    fn visit_with(&'a mut self, visitor: V, idx: usize) -> VisitResult<V, Self::Visited>
+    where
+        V: Visitor<Self::Visited>;
 }
 
 /// The result type returned by visitors.

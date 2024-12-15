@@ -254,6 +254,14 @@ pub fn derive_fandango_or_emit_error(
             #(#node_names(&'program mut #node_names<'source>)),*
         }
 
+        impl<'program, 'source> TypeMut<'program, 'source> {
+            fn reborrow<'a>(&'a mut self) -> TypeMut<'a, 'source> where 'source: 'a {
+                match self {
+                    #(TypeMut::#node_names(n) => TypeMut::#node_names(&mut *n)),*
+                }
+            }
+        }
+
         impl<'program, 'source> From<TypeMut<'program, 'source>> for Type<'program, 'source> {
             fn from(mutable: TypeMut<'program, 'source>) -> Type<'program, 'source> {
                 match mutable {
@@ -262,24 +270,33 @@ pub fn derive_fandango_or_emit_error(
             }
         }
 
-        impl<'program, 'source, V> ::fandango::visitor::VisitWith<V> for TypeMut<'program, 'source> where V: ::fandango::visitor::Visitor<TypeMut<'program, 'source>> {
-            fn visit_with(self, visitor: V, idx: usize) -> ::fandango::visitor::VisitResult<V, TypeMut<'program, 'source>> {
-                match self {
+        impl<'a, 'program, 'source, V> ::fandango::visitor::VisitWith<'a, V> for TypeMut<'program, 'source>
+        where
+            'program: 'a,
+            'source: 'program,
+        {
+            type Visited = TypeMut<'a, 'source>;
+
+            fn visit_with(&'a mut self, visitor: V, idx: usize) -> ::fandango::visitor::VisitResult<V, Self::Visited>
+            where
+                V: ::fandango::visitor::Visitor<TypeMut<'a, 'source>>, {
+                match self.reborrow() {
                     #(TypeMut::#node_names(n) => visitor.visit(n, idx)),*
                 }
             }
         }
 
-        impl<'program, 'source, S, G> ::fandango::generation::InPlaceGenerated<S, G> for TypeMut<'program, 'source>
+        impl<'a, 'program, 'source, S, G> ::fandango::generation::InPlaceGenerated<'a, S, G> for TypeMut<'program, 'source>
         where
             #(#node_names<'source>: ::fandango::generation::Generated<S, G>),*,
             #(Box<#node_names<'source>>: ::fandango::generation::Generated<S, G>),*,
+            'program: 'a,
+            'source: 'program,
         {
-            fn generate_in_place(self, sampler: &mut S, with: &mut G) -> Self {
-                match self {
+            fn generate_in_place(&'a mut self, sampler: &mut S, with: &mut G) {
+                match self.reborrow() {
                     #(TypeMut::#node_names(n) => {
                         *n = ::fandango::generation::Generated::generate(sampler, with);
-                        Self::from(n)
                     }),*
                 }
             }

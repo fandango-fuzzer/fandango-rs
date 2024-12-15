@@ -89,9 +89,9 @@ where
 }
 
 /// Generates a node in place, for use with [`super::visitor::Visitor`]s.
-pub trait InPlaceGenerated<S, G> {
+pub trait InPlaceGenerated<'a, S, G> {
     /// Generates and replaces the contained node in-place, returning the new node.
-    fn generate_in_place(self, sampler: &mut S, with: &mut G) -> Self;
+    fn generate_in_place(&'a mut self, sampler: &mut S, with: &mut G);
 }
 
 /// Primary generator trait, for defining generators. You almost certainly only want to implement
