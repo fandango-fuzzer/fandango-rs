@@ -56,7 +56,7 @@ mod simple {
             })
             .collect::<BTreeMap<_, _>>();
 
-        let count = rngs.len();
+        let count = rngs.len() - 1;
         let rngs = rngs.into_iter().step_by(count / 5).collect::<Vec<_>>();
 
         for (count, mut rng) in rngs {
@@ -127,7 +127,7 @@ mod simple {
             })
             .collect::<BTreeMap<_, _>>();
 
-        let count = rngs.len();
+        let count = rngs.len() - 1;
         let rngs = rngs.into_iter().step_by(count / 5).collect::<Vec<_>>();
 
         for (count, rng) in rngs {
@@ -193,7 +193,7 @@ mod xml {
             })
             .collect::<BTreeMap<_, _>>();
 
-        let count = rngs.len();
+        let count = rngs.len() - 1;
         let rngs = rngs.into_iter().step_by(count / 5).collect::<Vec<_>>();
 
         for (count, mut rng) in rngs {
