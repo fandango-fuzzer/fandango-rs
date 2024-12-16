@@ -65,7 +65,7 @@ mod simple {
             group.bench_with_input(BenchmarkId::new("generate", count), &rng, |b, rng| {
                 b.iter_batched_ref(
                     || rng.clone(),
-                    |rng| crate::simple::nonterminal_start::generate(black_box(rng), &mut ()),
+                    |rng| nonterminal_start::generate(black_box(rng), &mut ()),
                     BatchSize::SmallInput,
                 );
             });
@@ -202,7 +202,7 @@ mod xml {
             group.bench_with_input(BenchmarkId::new("generate", count), &rng, |b, rng| {
                 b.iter_batched_ref(
                     || rng.clone(),
-                    |rng| crate::simple::nonterminal_start::generate(black_box(rng), &mut ()),
+                    |rng| nonterminal_start::generate(black_box(rng), &mut ()),
                     BatchSize::SmallInput,
                 );
             });

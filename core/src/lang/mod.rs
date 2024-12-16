@@ -1,5 +1,7 @@
 //! Language definition for FANDANGO grammars. [`Program::try_from`] is what you want. :)
 
+// pub mod constraints;
+
 use crate::graph::{FandangoNode, GraphTraverse};
 use crate::impl_traverse;
 use crate::lang::py_literal::parse_string;
@@ -26,6 +28,7 @@ mod parser {
     pub struct Fandango;
 }
 
+// use crate::lang::constraints::Constraint;
 use parser::Fandango;
 pub use parser::Rule;
 
@@ -263,7 +266,6 @@ impl<'a> TryFrom<Pair<'a, Rule>> for Statement<'a> {
         Ok(match inner.as_rule() {
             Rule::production => Statement::Production(Pair::try_into(inner)?),
             Rule::constraint => todo!("Constraints are not yet implemented"),
-            Rule::python => todo!("Python parsing is not yet implemented"),
             _ => unreachable!("This case is not represented within the grammar."),
         })
     }

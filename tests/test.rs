@@ -121,7 +121,7 @@ mod simple {
         let mut mutations = 0;
 
         let mut count = start.count_nodes();
-        for _ in 0..1000 {
+        for _ in 0..100_000 {
             let old_start = start.clone();
             let selection = rng.gen_range(0..count);
             let mut target = Advance::forward(selection)
