@@ -1,6 +1,6 @@
 //! Language definition for FANDANGO grammars. [`Program::try_from`] is what you want. :)
 
-// pub mod constraints;
+pub mod constraints;
 
 use crate::graph::{FandangoNode, GraphTraverse};
 use crate::impl_traverse;
@@ -12,7 +12,6 @@ use std::borrow::Cow;
 use std::cmp::Ordering;
 use std::fmt::{Debug, Formatter};
 use std::hash::{DefaultHasher, Hash, Hasher};
-use std::ops::{Deref, DerefMut};
 use std::str::FromStr;
 
 pub use pest::Span;
@@ -28,7 +27,7 @@ mod parser {
     pub struct Fandango;
 }
 
-// use crate::lang::constraints::Constraint;
+use crate::lang::constraints::Constraint;
 use parser::Fandango;
 pub use parser::Rule;
 
@@ -138,20 +137,6 @@ impl<T> Ord for Tagged<'_, T> {
     }
 }
 
-impl<T> Deref for Tagged<'_, T> {
-    type Target = T;
-
-    fn deref(&self) -> &Self::Target {
-        &self.inner
-    }
-}
-
-impl<T> DerefMut for Tagged<'_, T> {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.inner
-    }
-}
-
 impl<'source, T> TryFrom<Pair<'source, Rule>> for Tagged<'source, T>
 where
     T: TryFrom<Pair<'source, Rule>> + Hash,
@@ -211,8 +196,8 @@ impl<'a> TryFrom<&'a str> for Program<'a> {
     type Error = ParseError;
 
     fn try_from(value: &'a str) -> Result<Self, Self::Error> {
-        let (grammar,) =
-            parse_pairs_as!(Fandango::parse(Rule::fandango, value)?, (Rule::fandango,));
+        let mut parsed = Fandango::parse(Rule::fandango, value)?;
+        let (grammar,) = parse_pairs_as!(parsed, (Rule::fandango,));
         let (program, _) = parse_pairs_as!(grammar.into_inner(), (Rule::program, Rule::EOI));
 
         Program::try_from(program)
@@ -248,12 +233,12 @@ pub enum Statement<'a> {
     /// A production representing a rule within the grammar.
     Production(Tagged<'a, Production<'a>>),
     /// A constraint applied within the grammar.
-    Constraint,
+    Constraint(Tagged<'a, Constraint<'a>>),
     /// Python code present in the grammar for the definition of e.g. generators and constraints.
     Python,
 }
 
-impl_fandango_traverse!(Statement, match { Production(prod), Constraint, Python });
+impl_fandango_traverse!(Statement, match { Production(prod), Constraint(constraint), Python });
 
 impl<'a> TryFrom<Pair<'a, Rule>> for Statement<'a> {
     type Error = ParseError;
@@ -265,7 +250,8 @@ impl<'a> TryFrom<Pair<'a, Rule>> for Statement<'a> {
 
         Ok(match inner.as_rule() {
             Rule::production => Statement::Production(Pair::try_into(inner)?),
-            Rule::constraint => todo!("Constraints are not yet implemented"),
+            Rule::constraint => Statement::Constraint(Pair::try_into(inner)?),
+            // Rule::python => todo!("Python parsing is not yet implemented"),
             _ => unreachable!("This case is not represented within the grammar."),
         })
     }
@@ -620,6 +606,7 @@ pub(crate) mod test {
     };
     use pest::iterators::Pair;
     use pest::Parser;
+    use rand::{thread_rng, Rng};
     use std::borrow::Cow;
     use std::boxed::Box;
     use std::error::Error;
@@ -628,8 +615,8 @@ pub(crate) mod test {
         let (symbol,) = parse_pairs_as!(operator.into_inner(), (Rule::symbol,));
         let (string,) = parse_pairs_as!(symbol.into_inner(), (Rule::string,));
         let actual = parse_string(string).expect("Expected valid string");
-        assert_eq!(matches!(&*actual, Cow::Borrowed(_)), BORROW);
-        assert_eq!(&*actual, expected);
+        assert_eq!(matches!(actual.inner(), Cow::Borrowed(_)), BORROW);
+        assert_eq!(actual.inner(), expected);
     }
 
     fn check_nonterminal_symbol(symbol: Pair<'_, Rule>, expected: &str) {
@@ -659,7 +646,9 @@ pub(crate) mod test {
         checker(alternative);
     }
 
-    pub const SIMPLE_GRAMMAR: &str = include_str!("../../tests/grammars/simple.fan");
+    pub const SIMPLE_GRAMMAR: &str = include_str!("../../../tests/grammars/simple.fan");
+    pub const XML_CONSTRAINED_GRAMMAR: &str =
+        include_str!("../../../tests/grammars/xml_constrained.fan");
 
     #[test]
     fn test_grammar() -> Result<(), Box<dyn Error>> {
@@ -948,6 +937,13 @@ pub(crate) mod test {
         let nt = untag_or_die!(sym, Symbol::Nonterminal(sym));
         let name = untag_or_die!(nt, Nonterminal { name });
         assert_eq!(name, "non_zero");
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_fullparse_constraints() -> Result<(), Box<dyn Error>> {
+        let program = Program::try_from(XML_CONSTRAINED_GRAMMAR)?;
 
         Ok(())
     }

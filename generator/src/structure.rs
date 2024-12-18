@@ -83,7 +83,8 @@ pub(crate) fn tokenize_metadata<'p, 's>(
                         )
                     }
                 }
-                Statement::Constraint | Statement::Python => unreachable!(),
+                Statement::Constraint(_) => {}
+                Statement::Python => unreachable!(),
             },
         ),
         FandangoNode::Production(p) => {

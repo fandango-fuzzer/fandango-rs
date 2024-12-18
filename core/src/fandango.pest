@@ -2,7 +2,7 @@ fandango = { SOI ~ program ~ EOI }
 
 program = { NEWLINE* ~ (statement ~ NEWLINE*)* }
 
-statement = { production }
+statement = { production | constraint }
 
 // expression is not yet supported
 production = {
@@ -44,6 +44,126 @@ repeat = {
 | ( symbol ~ "{" ~ integer ~ "," ~ integer ~ "}" )
 }
 
-constraint = { "" }
+constraint = {
+   implies ~ ";"
+|  "fitness" ~ expr ~ ";"
+}
+
+implies = {
+  quantifier ~ "->" ~ implies
+| quantifier
+}
+
+quantifier = {
+  forall_specification
+| exists_specification
+| formula_disjunction
+}
+
+forall_specification = {
+  "forall" ~ quantifier_specification
+}
+
+exists_specification = {
+  "exists" ~ quantifier_specification
+}
+
+quantifier_specification = {
+  nonterminal ~ "in" ~ selector ~ ":" ~ quantifier
+}
+
+formula_disjunction = {
+  formula_conjunction ~ ( "or" ~ formula_conjunction )*
+}
+
+formula_conjunction = {
+  formula_atom ~ ( "and" ~ formula_atom )*
+}
+
+formula_atom = {
+  formula_comparison
+| "(" ~ implies ~ ")"
+| expr
+}
+
+formula_comparison = {
+  expr ~ constraint_operator ~ expr
+}
+
+constraint_operator = {
+  "<>" | "!=" | "<" | "<=" | "==" | ">=" | ">"
+}
+
+// pythonic expressions are not supported
+expr = {
+  selector_maybe_length
+// | constraint_ite
+| inversion
+}
+
+selector_maybe_length = {
+  "|" ~ selector_length ~ "|"
+| selector
+}
+
+selector_length = {
+  selector
+}
+
+selector = {
+  child_selection
+| path_selection
+| selection
+}
+
+child_selection = { selection ~ "." ~ selector }
+path_selection = { selection ~ ".." ~ selector }
+
+selection = {
+  base_selection ~ "[" ~ rs_slices ~ "]"
+| base_selection ~ "{" ~ rs_pairs ~ "}"
+| base_selection
+}
+
+base_selection = {
+  nonterminal
+| "(" ~ selector ~ ")"
+}
+
+rs_pairs = {
+  rs_pair ~ ( "," ~ rs_pair )* ~ ","?
+}
+
+rs_pair = {
+  "*" ~ nonterminal ~ ( ":" ~ rs_slice )?
+}
+
+rs_slices = {
+  rs_slice ~ ( "," ~ rs_slice )* ~ ","?
+}
+
+rs_slice = {
+  rs_slice_range_step
+| rs_slice_range
+| integer
+}
+
+rs_slice_range_step = {
+  integer? ~ ":" ~ integer? ~ ":" ~ integer?
+}
+
+rs_slice_range = {
+  integer? ~ ":" ~ integer?
+}
+
+// simplified inversion: just allowing selectors
+inversion = {
+  selector
+| stringified
+}
+
+stringified = {
+  "str" ~ "(" ~ selector ~ ")"
+}
 
 WHITESPACE = _{ PATTERN_WHITE_SPACE }

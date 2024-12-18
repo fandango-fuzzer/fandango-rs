@@ -25,8 +25,7 @@ impl Display for Unflattenable {
 impl Error for Unflattenable {}
 
 /// Flattens nested alternatives (including via non-terminals) and makes their derivations of equal
-/// weight. Considers [`FandangoNode::Concatenation`], [`FandangoNode::Operator`], and
-/// [`FandangoNode::String`] as points at which to consider as a "single" derivation.
+/// weight. Considers [`FandangoNode::String`]s as points to consider as a "single" derivation.
 ///
 /// For example, consider the following grammar snippet:
 /// ```text,ignore
@@ -81,7 +80,7 @@ fn flatten(
                 Err(Unflattenable)
             }
         }
-        FandangoNode::Concatenation(_) | FandangoNode::Operator(_) | FandangoNode::String(_) => {
+        FandangoNode::String(_) => {
             collected.insert(
                 node,
                 Flattened {
@@ -91,6 +90,7 @@ fn flatten(
             );
             Ok(1)
         }
+        FandangoNode::Concatenation(_) | FandangoNode::Operator(_) => Err(Unflattenable),
         _ => unreachable!("Encountered a node which should never be a descendant in a graph"),
     }
 }
