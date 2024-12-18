@@ -295,6 +295,7 @@ the grammar defined above:
 
 ```mermaid
 stateDiagram-v2
+    direction LR
     digit --> |3
     |3: |
     |3 --> zero1: 0
@@ -316,6 +317,7 @@ imagine that we _elide_ the `non_zero` and its child alternative with the one ab
 
 ```mermaid
 stateDiagram-v2
+    direction LR
     digit --> |2
     |2: |
     |2 --> zero1
@@ -328,7 +330,209 @@ stateDiagram-v2
     three: ...
 ```
 
-Now, we are equally likely to produce each terminal.
+Now, we are equally likely to produce each terminal as a result of _flattening_ the `non_zero` nonterminal and its
+alternative. Note that there is now effectively exactly one alternative.
+
+To accomplish this in practice, we produce a modified selector by controlling the sampling of alternations to enforce
+that the likelihood of producing each terminal is equal. We do so by recursively computing the number of _eventual_
+terminals for each node:
+
+```mermaid
+stateDiagram-v2
+    direction LR
+    digit --> |3
+    digit: digit
+    digit: 10
+    |3: |
+    |3: 10
+    |3 --> zero1: 0
+    zero1: "0"
+    zero1: 1
+    |3 --> non_zero: 1
+    non_zero --> |2
+    non_zero: non_zero
+    non_zero: 9
+    |2: |
+    |2: 9
+    |2 --> one
+    one: "1"
+    one: 1
+    |2 --> two
+    two: "2"
+    two: 1
+    |2 --> three
+    three: ...
+```
+
+Then, when we encounter the `digit` alternation, the flattener invokes the remaining generators with a sampler which has
+already determined the choice (within `[0,9]`) of which terminal node will be selected. Suppose that we select the 7th;
+at the first alternative, we see that the first choice (just `0`) contains 1 eventual terminal, which is less than 7, so
+we subtract 1 from our choice; we then see that the second choice contains 9 eventual terminals, which is greater than
+6, so we descend this alternative. At the next choice, we apply the same process to pick the 6th terminal[^1]. The
+remaining generators are then allowed to generate the remaining nodes as they see fit, or fallback to default
+generation.
+
+To use this in practice, you might see the following code:
+
+<!-- @formatter:off -->
+```rust
+let flattener = Flattener::new().flatten::<digit>(); // select digit to be flattened
+let mut generators = tuple_list!(flattener, ...); // add to the list of generators
+let mut sampler = thread_rng();
+let start = start::generate(&mut sampler, &mut generators);
+```
+<!-- @formatter:on -->
+
+[^1]: Internally, this selection process is optimised to use a binary search instead.
+
+### Visitation
+
+---
+
+Before getting too into the weeds, it's worth noting that Rust enforces strict exclusive mutability guarantees with
+something referred to as _the borrow checker_. For a full overview of what this entails, see the corresponding chapter
+in [the Rust book](https://doc.rust-lang.org/book/ch04-00-understanding-ownership.html). For the purposes of this
+section, the main thing you need to understand is that there are three states of a given variable:
+
+1. Owned, which means that this code region or structure (the "owner") controls the destruction of a variable (i.e.,
+   when it is "dropped").
+2. Immutably borrowed, which means that this code region or structure provided the _reference_ has the ability to
+   perform reading operations on the provided variable.
+3. Mutably borrowed, which means that the code region or structure provided the reference has the ability to perform
+   read and write operations on the provided variable.
+
+When a value is borrowed in any form, it cannot be dropped (as this would invalidate the reference currently held
+elsewhere). Similarly, if the value is borrowed in any form, it cannot then again be mutably accessed (as this would
+potentially invalidate the reference's internal contents which may be held elsewhere). If the value is immutably
+borrowed, then it may only be immutably borrowed again.
+
+These properties are checked by the borrow checker at compile time, and care must be taken to manage the _lifetime_ of
+references to ensure that the compiler can verify at all times that a variable is not dropped while references still
+exist.
+
+---
+
+Visitors are critical machinery for performing operations over the derivation trees, such as when serialising the input
+to string or performing mutations. To make this idiomatic for Rust, we need to ensure several qualities:
+
+1. Visitor trait definitions must be generic so that code may be reused without needing to be generated for every
+   grammar.
+2. Lifetimes of grammar nodes must be preserved such that the borrow checker can ensure that mutable access is
+   exclusive (recall: nodes actually represent entire subtrees in our type system!).
+3. Common operations over nodes must be defined generically such that, even if we don't know the node's type, we can
+   still perform the intended visitor operations on desired nodes.
+
+#### Part 1: Opaque node types
+
+To accomplish these qualities, we first introduce the concept of _opaque node types_. An opaque node is a wrapper around
+a (potentially mutable) reference to a given node which allows for common operations on nodes even when the specific
+type of the node is not known (for example, with generation described above). In practice, we generate two types for
+opaque nodes, `Type` and `TypeMut`, which are defined as enums over immutable and mutable references of all node types
+which are generated. Each node type then implements a trait, `Node`, which specifies these types via associated types:
+
+```rust
+pub trait Node {
+    type Type<'program>
+    where
+        Self: 'program;
+    type TypeMut<'program>
+    where
+        Self: 'program;
+    // snipped
+}
+```
+
+Note that `'program` here describes a _lifetime_ (i.e., a compiler hint for the period over which a value exists);
+internally to the generated definitions of `Type` and `TypeMut`, this refers to the lifetimes attached to the node
+references which they contain.
+
+#### Part 2: The visitor
+
+Below is the definition of the visitor trait:
+
+```rust
+pub trait Visitor<T> {
+    type Continue;
+    type Break;
+    type Error;
+
+    fn visit<'program, N>(self, node: &'program mut N, idx: usize) -> VisitResult<Self, T>
+    where
+        N: Node<TypeMut<'program>=T>,
+        T: From<&'program mut N>;
+}
+
+pub type VisitResult<V, T>
+where
+    V: Visitor<T>,
+= Result<ControlFlow<V::Break, V::Continue>, V::Error>;
+```
+
+This is a lot to break down, so let's do it one part at a time. The trait `Visitor` is generic over `T`, a generic type
+which represents `TypeMut` -- in other words, the opaque node type. This defines three associated types: `Continue`,
+`Break`, and `Error`, which respectively represent what is returned when visitation should continue, visitation should
+complete and the corresponding value be immediately returned, and the error type which is emitted when an error is
+encountered while visiting. These values are returned in a `VisitResult`, which encodes the description in the previous
+sentence.
+
+The `visit` function itself is generic over a lifetime `'program` and a node type `N`, which specifies that any visitor
+implementation must accept any mutable reference of lifetime `'program` to any type `N` such that `N` is a `Node`, where
+its corresponding `TypeMut` definition is `T` for the lifetime `'program`, and that `T` (the opaque node type) is
+constructable from a mutable reference to `N` with lifetime `'program`. In effect, this enforces that this function
+may only be called with nodes composed of a single grammar with a single shared opaque node type.
+
+The other item of note in the `visit` function is that it is a _consuming_ function; the visitor is _owned_ by the
+function, which means that the visitor cannot be used again by the caller. In practice, this means that a visitor may
+only be used to visit a single node. So how do we traverse a whole tree?
+
+#### Part 3: VisitableChildren
+
+We define a second trait, `VisitableChildren`, for which definitions are generated both for opaque nodes and _mutable
+references to_ concrete nodes:
+
+```rust
+pub trait VisitableChildren<T> {
+    fn visit_each<V>(self, visitor: V) -> VisitResult<V, T>
+    where
+        V: Visitor<T, Continue=V>;
+
+    fn visit_each_reverse<V>(self, visitor: V) -> VisitResult<V, T>
+    where
+        V: Visitor<T, Continue=V>;
+
+    fn visit_each_from<V>(self, visitor: V, idx: usize) -> VisitResult<V, T>
+    where
+        V: Visitor<T, Continue=V>;
+
+    fn visit_each_reverse_from<V>(self, visitor: V, idx: usize) -> VisitResult<V, T>
+    where
+        V: Visitor<T, Continue=V>;
+
+    fn visit_nth<V>(self, visitor: V, idx: usize) -> MaybeVisitResult<V, T>
+    where
+        V: Visitor<T>;
+}
+
+pub type MaybeVisitResult<V, T>
+where
+    V: Visitor<T>,
+= Result<Result<ControlFlow<V::Break, V::Continue>, V::Error>, V>;
+```
+
+It is through this method that recursive access to trees becomes available. The `each` functions perform iteration over
+each node, and the `nth` operation visits exactly one node. Once again, `T` refers to the opaque node type, and each
+method is generic over `V` such that implementors must accept _any_ `V` where `V` is a `Visitor` over `T`.
+
+Note especially how the iteration functions perform iteration: the visitors _must return itself_ in the case where
+iteration continues, meaning that, in effect, the `visit` function consumes the visitor it is invoked upon, then returns
+it to the caller so that the caller may use it again. This allows LLVM to optimise this function more effectively into
+tail calls in most cases, but more importantly allows us to enforce certain properties about how visitors access nodes.
+
+The purpose of `VisitableChildren` is to enable implementors of `Visitor` to perform iteration on any `N`, as `N` in
+`visit` cannot be constrained further. Similarly, by ensuring these are consuming functions, the borrow checker may
+ensure that mutable references and opaque nodes are _consumed_ and therefore _no longer borrowed_, which allows us to
+perform operations like BFS while allowing the borrow checker to ensure that we are not mutably accessing a node more
+than once at a time.
 
 ## Licensing
 
