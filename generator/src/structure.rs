@@ -23,6 +23,7 @@ pub(crate) fn tokenize_metadata<'p, 's>(
             let children = p
                 .statements()
                 .iter()
+                .filter(|c| matches!(c.inner(), Statement::Production(_)))
                 .enumerate()
                 .map(|(i, c)| {
                     tokenize_metadata(
@@ -83,7 +84,7 @@ pub(crate) fn tokenize_metadata<'p, 's>(
                         )
                     }
                 }
-                Statement::Constraint(_) => {}
+                Statement::Constraint(_) => unreachable!(),
                 Statement::Python => unreachable!(),
             },
         ),
@@ -344,6 +345,7 @@ pub(crate) fn tokenize_metadata<'p, 's>(
                 }
             },
         ),
+        _ => unreachable!("Provided a node which is only represented within constraints"),
     };
 
     if let Some(name) = name {

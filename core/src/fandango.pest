@@ -149,11 +149,15 @@ rs_slice = {
 }
 
 rs_slice_range_step = {
-  integer? ~ ":" ~ integer? ~ ":" ~ integer?
+  rs_slice_start ~ rs_slice_start ~ integer?
 }
 
 rs_slice_range = {
-  integer? ~ ":" ~ integer?
+  rs_slice_start ~ integer?
+}
+
+rs_slice_start = {
+  integer? ~ ":"
 }
 
 // simplified inversion: just allowing selectors

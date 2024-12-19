@@ -142,10 +142,7 @@ impl<'program, 'source> IntoPestSource<PestContext<'_, 'program, 'source>>
                 let hash = hasher.finish();
                 writeln!(output, "{pest_name} = {{ lit_{hash} }}")?;
             }
-            FandangoNode::Program(_)
-            | FandangoNode::Statement(_)
-            | FandangoNode::Production(_)
-            | FandangoNode::Symbol(_) => {
+            _ => {
                 unimplemented!("Unexpected rule emission; should be elided")
             }
         }

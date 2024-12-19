@@ -62,7 +62,7 @@ impl<'a> TryFrom<Pair<'a, Rule>> for Implies<'a> {
 
         let mut inner = value.into_inner();
         let quantifier = Pair::try_into(inner.next().unwrap())?;
-        let implies = if let Some(implies) = inner {
+        let implies = if let Some(implies) = inner.next() {
             Some(Box::new(Pair::try_into(implies)?))
         } else {
             None
@@ -149,7 +149,7 @@ impl<'a> TryFrom<Pair<'a, Rule>> for QuantifierSpecification<'a> {
         Ok(Self {
             nonterminal: Pair::try_into(inner.next().unwrap())?,
             selector: Pair::try_into(inner.next().unwrap())?,
-            quantifier: Pair::try_into(inner.next().unwrap())?,
+            quantifier: Box::new(Pair::try_into(inner.next().unwrap())?),
         })
     }
 }
@@ -171,7 +171,7 @@ impl<'a> TryFrom<Pair<'a, Rule>> for Disjunction<'a> {
 
         Ok(Self {
             conjunctions: inner
-                .map(|p| Pair::try_from(p))
+                .map(Pair::try_into)
                 .collect::<Result<_, ParseError>>()?,
         })
     }
@@ -194,7 +194,7 @@ impl<'a> TryFrom<Pair<'a, Rule>> for Conjunction<'a> {
 
         Ok(Self {
             atoms: inner
-                .map(|p| Pair::try_from(p))
+                .map(Pair::try_into)
                 .collect::<Result<_, ParseError>>()?,
         })
     }
@@ -261,7 +261,7 @@ pub enum ConstraintOperator {
     Gt,
 }
 
-impl<'a> TryFrom<Pair<'a, Rule>> for ConstraintOperator<'a> {
+impl<'a> TryFrom<Pair<'a, Rule>> for ConstraintOperator {
     type Error = ParseError;
 
     fn try_from(value: Pair<'a, Rule>) -> Result<Self, Self::Error> {
@@ -286,7 +286,7 @@ pub enum Expr<'a> {
     Inversion(Tagged<'a, Inversion<'a>>),
 }
 
-impl_fandango_traverse!(Expr, match { Selector(selector) });
+impl_fandango_traverse!(Expr, match { Selector(selector), Inversion(inversion) });
 
 impl<'a> TryFrom<Pair<'a, Rule>> for Expr<'a> {
     type Error = ParseError;
@@ -376,10 +376,20 @@ impl<'a> TryFrom<Pair<'a, Rule>> for Selector<'a> {
 
         Ok(match inner.as_rule() {
             Rule::child_selection => {
-                SelectorLength::WithLength(Pair::try_into(inner.into_inner().next().unwrap())?)
+                let mut inner = inner.into_inner();
+                Selector::ChildSelector(
+                    Pair::try_into(inner.next().unwrap())?,
+                    Box::new(Pair::try_into(inner.next().unwrap())?),
+                )
             }
-            Rule::path_selection => {}
-            Rule::selector => SelectorLength::NoLength(Pair::try_into(inner)?),
+            Rule::path_selection => {
+                let mut inner = inner.into_inner();
+                Selector::PathSelector(
+                    Pair::try_into(inner.next().unwrap())?,
+                    Box::new(Pair::try_into(inner.next().unwrap())?),
+                )
+            }
+            Rule::selection => Selector::Basic(Pair::try_into(inner)?),
             _ => unreachable!("This case is not represented within the grammar."),
         })
     }
@@ -393,6 +403,30 @@ pub enum Selection<'a> {
 }
 
 impl_fandango_traverse!(Selection, match { OverSlices(basic, slices), OverPairs(basic, pairs), Basic(basic) });
+
+impl<'a> TryFrom<Pair<'a, Rule>> for Selection<'a> {
+    type Error = ParseError;
+
+    fn try_from(value: Pair<'a, Rule>) -> Result<Self, Self::Error> {
+        debug_assert_eq!(value.as_rule(), Rule::selection);
+
+        let mut inner = value.into_inner();
+        let base = inner.next().unwrap();
+
+        Ok(match inner.next() {
+            Some(inner) => match inner.as_rule() {
+                Rule::rs_slices => {
+                    Selection::OverSlices(Pair::try_into(base)?, Pair::try_into(inner)?)
+                }
+                Rule::rs_pairs => {
+                    Selection::OverPairs(Pair::try_into(base)?, Pair::try_into(inner)?)
+                }
+                _ => unreachable!("This case is not represented within the grammar."),
+            },
+            None => Selection::Basic(Pair::try_into(base)?),
+        })
+    }
+}
 
 #[derive(Debug, Clone, Ord, PartialOrd, Eq, PartialEq, Hash)]
 pub enum BaseSelection<'a> {
@@ -420,12 +454,44 @@ impl<'program, 'source: 'program> GraphTraverse<'program> for &'program BaseSele
     }
 }
 
+impl<'a> TryFrom<Pair<'a, Rule>> for BaseSelection<'a> {
+    type Error = ParseError;
+
+    fn try_from(value: Pair<'a, Rule>) -> Result<Self, Self::Error> {
+        debug_assert_eq!(value.as_rule(), Rule::base_selection);
+
+        let inner = value.into_inner().next().unwrap();
+
+        Ok(match inner.as_rule() {
+            Rule::nonterminal => BaseSelection::Nonterminal(Pair::try_into(inner)?),
+            Rule::selector => BaseSelection::Selector(Box::new(Pair::try_into(inner)?)),
+            _ => unreachable!("This case is not represented within the grammar."),
+        })
+    }
+}
+
 #[derive(Debug, Clone, Ord, PartialOrd, Eq, PartialEq, Hash)]
 pub struct RsPairs<'a> {
     pairs: Vec<Tagged<'a, RsPair<'a>>>,
 }
 
 impl_fandango_traverse!(RsPairs, [pairs]);
+
+impl<'a> TryFrom<Pair<'a, Rule>> for RsPairs<'a> {
+    type Error = ParseError;
+
+    fn try_from(value: Pair<'a, Rule>) -> Result<Self, Self::Error> {
+        debug_assert_eq!(value.as_rule(), Rule::rs_pairs);
+
+        let mut inner = value.into_inner();
+
+        Ok(Self {
+            pairs: inner
+                .map(Pair::try_into)
+                .collect::<Result<_, ParseError>>()?,
+        })
+    }
+}
 
 #[derive(Debug, Clone, Ord, PartialOrd, Eq, PartialEq, Hash)]
 pub struct RsPair<'a> {
@@ -435,6 +501,25 @@ pub struct RsPair<'a> {
 
 impl_fandango_traverse!(RsPair, nonterminal, [slice]);
 
+impl<'a> TryFrom<Pair<'a, Rule>> for RsPair<'a> {
+    type Error = ParseError;
+
+    fn try_from(value: Pair<'a, Rule>) -> Result<Self, Self::Error> {
+        debug_assert_eq!(value.as_rule(), Rule::rs_pair);
+
+        let mut inner = value.into_inner();
+
+        Ok(Self {
+            nonterminal: Pair::try_into(inner.next().unwrap())?,
+            slice: if let Some(slice) = inner.next() {
+                Some(Pair::try_into(slice)?)
+            } else {
+                None
+            },
+        })
+    }
+}
+
 #[derive(Debug, Clone, Ord, PartialOrd, Eq, PartialEq, Hash)]
 pub struct RsSlices<'a> {
     slices: Vec<Tagged<'a, RsSlice>>,
@@ -442,11 +527,96 @@ pub struct RsSlices<'a> {
 
 impl_fandango_traverse!(RsSlices, [slices]);
 
+impl<'a> TryFrom<Pair<'a, Rule>> for RsSlices<'a> {
+    type Error = ParseError;
+
+    fn try_from(value: Pair<'a, Rule>) -> Result<Self, Self::Error> {
+        debug_assert_eq!(value.as_rule(), Rule::rs_slices);
+
+        let mut inner = value.into_inner();
+
+        Ok(Self {
+            slices: inner
+                .map(Pair::try_into)
+                .collect::<Result<_, ParseError>>()?,
+        })
+    }
+}
+
 #[derive(Debug, Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Hash)]
 pub enum RsSlice {
     RangeWithStep(Option<usize>, Option<usize>, Option<usize>),
     Range(Option<usize>, Option<usize>),
     Exact(usize),
+}
+
+impl<'a> TryFrom<Pair<'a, Rule>> for RsSlice {
+    type Error = ParseError;
+
+    fn try_from(value: Pair<'a, Rule>) -> Result<Self, Self::Error> {
+        debug_assert_eq!(value.as_rule(), Rule::rs_slice);
+
+        let mut inner = value.into_inner();
+
+        let first = inner.next().unwrap();
+        Ok(match first.as_rule() {
+            Rule::rs_slice_range_step => {
+                let mut range = first.into_inner();
+                let start = range.next().unwrap();
+                debug_assert_eq!(start.as_rule(), Rule::rs_slice_start);
+                let end = range.next().unwrap();
+                debug_assert_eq!(end.as_rule(), Rule::rs_slice_start);
+                Self::RangeWithStep(
+                    start
+                        .into_inner()
+                        .next()
+                        .map(|p| p.as_str().parse().unwrap()),
+                    end.into_inner().next().map(|p| p.as_str().parse().unwrap()),
+                    inner.next().map(|p| p.as_str().parse().unwrap()),
+                )
+            }
+            Rule::rs_slice_range => {
+                let mut start = first.into_inner();
+                let start = start.next().unwrap();
+                debug_assert_eq!(start.as_rule(), Rule::rs_slice_start);
+                Self::Range(
+                    start
+                        .into_inner()
+                        .next()
+                        .map(|p| p.as_str().parse().unwrap()),
+                    inner.next().map(|p| p.as_str().parse().unwrap()),
+                )
+            }
+            Rule::integer => Self::Exact(first.as_str().parse().unwrap()),
+            _ => unreachable!("This case is not represented within the grammar."),
+        })
+    }
+}
+
+#[derive(Debug, Clone, Ord, PartialOrd, Eq, PartialEq, Hash)]
+pub enum Inversion<'a> {
+    Selector(Tagged<'a, Selector<'a>>),
+    Stringified(Tagged<'a, Selector<'a>>),
+}
+
+impl_fandango_traverse!(Inversion, match { Selector(selector), Stringified(selector) });
+
+impl<'a> TryFrom<Pair<'a, Rule>> for Inversion<'a> {
+    type Error = ParseError;
+
+    fn try_from(value: Pair<'a, Rule>) -> Result<Self, Self::Error> {
+        debug_assert_eq!(value.as_rule(), Rule::inversion);
+
+        let inner = value.into_inner().next().unwrap();
+
+        Ok(match inner.as_rule() {
+            Rule::stringified => {
+                Inversion::Stringified(Pair::try_into(inner.into_inner().next().unwrap())?)
+            }
+            Rule::selector => Inversion::Selector(Pair::try_into(inner)?),
+            _ => unreachable!("This case is not represented within the grammar."),
+        })
+    }
 }
 
 impl Display for RsSlice {

@@ -2,8 +2,8 @@
 
 use crate::lang::constraints::{
     Atom, BaseSelection, Comparison, Conjunction, Constraint, ConstraintOperator, Disjunction,
-    Expr, Implies, Quantifier, QuantifierSpecification, RsPair, RsPairs, RsSlice, RsSlices,
-    Selection, Selector, SelectorLength,
+    Expr, Implies, Inversion, Quantifier, QuantifierSpecification, RsPair, RsPairs, RsSlice,
+    RsSlices, Selection, Selector, SelectorLength,
 };
 use crate::lang::{
     Alternative, Concatenation, Nonterminal, Operator, Production, Program, Statement, Symbol,
@@ -452,6 +452,7 @@ pub enum FandangoNode<'program, 'source> {
     RsPair(&'program RsPair<'source>),
     RsSlices(&'program RsSlices<'source>),
     RsSlice(&'program Tagged<'source, RsSlice>),
+    Inversion(&'program Inversion<'source>),
 }
 
 impl Display for FandangoNode<'_, '_> {
@@ -507,6 +508,8 @@ impl Display for FandangoNode<'_, '_> {
             FandangoNode::RsPair(_) => f.write_str("PAIR"),
             FandangoNode::RsSlices(_) => f.write_str("SLICES"),
             FandangoNode::RsSlice(s) => Display::fmt(s.inner(), f),
+            FandangoNode::Inversion(Inversion::Selector(_)) => f.write_str("SELECTED"),
+            FandangoNode::Inversion(Inversion::Stringified(_)) => f.write_str("STRINGIFIED"),
         }
     }
 }
@@ -543,7 +546,9 @@ impl<'program> GraphTraverse<'program> for FandangoNode<'program, '_> {
             FandangoNode::RsPairs(s) => s.traverse(consumer),
             FandangoNode::RsPair(s) => s.traverse(consumer),
             FandangoNode::RsSlices(s) => s.traverse(consumer),
-            FandangoNode::String(_) => {} // nothing to do
+            FandangoNode::Inversion(s) => s.traverse(consumer),
+            // nothing to do in these cases; they are terminals
+            FandangoNode::String(_) => {}
             FandangoNode::ConstraintOperator(_) => {}
             FandangoNode::RsSlice(_) => {}
         }
@@ -601,6 +606,7 @@ impl_node_from!(BaseSelection);
 impl_node_from!(RsPairs);
 impl_node_from!(RsPair);
 impl_node_from!(RsSlices);
+impl_node_from!(Inversion);
 
 impl<'program, 'source> From<&'program Tagged<'source, Cow<'source, str>>>
     for FandangoNode<'program, 'source>

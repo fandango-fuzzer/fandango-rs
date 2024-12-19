@@ -587,6 +587,10 @@ consumed.
 
 Below is an implementation with these qualities, with comments:
 
+<details>
+
+<summary>Implementation of FindVisitor (BFS)</summary>
+
 ```rust
 impl<T> Visitor<T> for FindVisitor
 where
@@ -672,8 +676,138 @@ where
 }
 ```
 
+</details>
+
 In this way, we may visit the whole subtree while maintaining the typing requirements and exclusive access required by
 Rust.
+
+#### Example 3: Mutation
+
+Of course, we want to be able to perform mutation if we are seeking to do an evolutionary algorithm. To do so, we begin
+by defining two utility traits for the opaque node types:
+
+```rust
+pub trait InPlaceGenerated<'a, S, G> {
+    fn generate_in_place(&'a mut self, sampler: &mut S, with: &mut G);
+}
+
+pub trait VisitWith<'a, V>: Sized {
+    type Visited;
+
+    fn visit_with(&'a mut self, visitor: V, idx: usize) -> VisitResult<V, Self::Visited>
+    where
+        V: Visitor<Self::Visited>;
+}
+```
+
+Note that these both accept a _mutable reference to_ the opaque node type rather than consuming it, like we did with
+`VisitableChildren`. This is to allow us to repeatedly perform mutation on a node, e.g. if we want to perform other
+operations on the same node. With this machinery in place, we may now implement our mutator.
+
+To do so, assume the presence of a `start` node which represents the start of our grammar. We want to uniformly select a
+node for mutation. To do so, we may first simply count the number of nodes present within the tree and sample this
+uniformly; a `count_nodes` function is blanket defined to allow for easy usage of `NodeCountVisitor` like so:
+
+```rust
+fn mutate<R: Rng>(rng: &mut R, node: start, times: usize) -> start {
+    for _ in 0..times {
+        let count = node.count_nodes();
+        let selection = rng.gen_range(0..count);
+        // TODO
+    }
+}
+```
+
+Next, we need to traverse the tree to that node. This may be done with the `Advance` visitor, which simply performs
+pre-order traversal and returns the nth node.
+
+<details>
+
+<summary>Implementation of the Advance visitor</summary>
+
+```rust
+impl<T> Visitor<T> for Advance
+where
+    T: VisitableChildren<T>,
+{
+    type Continue = Self;
+    type Break = T;
+    type Error = Infallible;
+
+    fn visit<'program, N>(mut self, node: &'program mut N, _: usize) -> VisitResult<Self, T>
+    where
+        N: Node<TypeMut<'program>=T>,
+        T: From<&'program mut N>,
+    {
+        if self.count == self.target {
+            return Ok(ControlFlow::Break(T::from(node)));
+        }
+        self.count += 1;
+        match T::from(node).visit_each(self)? {
+            ControlFlow::Continue(visitor) => Ok(ControlFlow::Continue(visitor)),
+            b => Ok(b),
+        }
+    }
+}
+```
+
+</details>
+
+Now that we can traverse to a node uniformly, we may simply use `InPlaceGenerated::generate_in_place` to perform the
+generation (and thereby mutation) of the opaque node. Note that in this way, we only mutate this specific subtree:
+
+```rust
+fn mutate<R: Rng>(rng: &mut R, node: start, times: usize) -> Result<start, Box<dyn Error>> {
+    for _ in 0..times {
+        let count = node.count_nodes();
+        let selection = rng.gen_range(0..count);
+
+        let mut target = Advance::forward(selection)
+            .visit(&mut start, 0)?
+            .break_value()
+            .unwrap();
+        // no custom generators used, but you could easily add them
+        target.generate_in_place(&mut rng, &mut ());
+    }
+    Ok(node)
+}
+```
+
+This mutates the node in place. As a matter of optimisation, we can avoid counting the whole tree every time by counting
+the mutated derivation tree before and after mutation:
+
+```rust
+fn mutate<R: Rng>(rng: &mut R, node: start, times: usize) -> Result<start, Box<dyn Error>> {
+    let mut count = node.count_nodes();
+    for _ in 0..times {
+        let selection = rng.gen_range(0..count);
+
+        let mut target = Advance::forward(selection)
+            .visit(&mut start, 0)?
+            .break_value()
+            .unwrap();
+
+        let old_count = target.count_nodes();
+
+        // no custom generators used, but you could easily add them
+        target.generate_in_place(&mut rng, &mut ());
+
+        let new_count = target.count_nodes();
+        count = count - old_count + new_count;
+    }
+    Ok(node)
+}
+```
+
+In this way we have created an efficient mutator; at compile time, the count operations are wildly optimised, so this
+ends up being just about as efficient as counting the nodes once. As a matter of benchmarking, here are some results
+I previously recorded with my machine (you can find the corresponding grammars used
+in [tests/grammars](tests/grammars) and the benchmarks in [benches/generate.rs](benches/generate.rs)). "Elements" here
+represents the number of nodes used in the respective operation:
+
+![A line chart showing the evaluation of the "simple" grammar, with linear growth on each and similar times for generation, visitation, and mutation.](assets/simple.png)
+
+![A line chart showing the evaluation of the "xml" grammar, with linear growth on each. Generation has a notably higher growth rate than visitation and mutation, and mutation has a very slightly higher growth rate than visitation.](assets/xml.png)
 
 ### Constraining
 
