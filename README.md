@@ -4,7 +4,7 @@ This crate implements a heavily-optimised subset
 of [FANDANGO: Evolving Language-Based Testing](https://github.com/fandango-fuzzer/fandango), as a demonstration of "just
 how fast it can get".
 
-## Theory
+## Design
 
 Our ultimate goal is to concretise every operation in FANDANGO into a compiler-optimisable representation. In FANDANGO,
 there are four primary operations which take place:
