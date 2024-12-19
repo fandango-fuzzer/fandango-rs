@@ -96,7 +96,7 @@ stateDiagram-v2
     ~4 --> nonzero_use0
     nonzero_use0: non_zero
     ~4 --> kleene
-    kleene: *
+    kleene: KLEENE
     kleene --> digit_use0
     digit_use0: digit
     Production(non_zero) --> nonzero_def: nonterminal
@@ -160,7 +160,7 @@ stateDiagram-v2
     ~1: ~
     ~1 --> non_zero
     ~1 --> kleene
-    kleene: *
+    kleene: KLEENE
     kleene --> digit
     non_zero --> |2
     |2: |
