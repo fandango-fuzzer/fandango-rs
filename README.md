@@ -534,6 +534,154 @@ ensure that mutable references and opaque nodes are _consumed_ and therefore _no
 perform operations like BFS while allowing the borrow checker to ensure that we are not mutably accessing a node more
 than once at a time.
 
+#### Example 1: `NodeCountVisitor`
+
+Let's consider a simple example of a visitor which merely counts the number of nodes: `NodeCountVisitor`[^2]. We
+implement the visitor like so:
+
+```rust
+pub struct NodeCountVisitor {
+    count: usize,
+}
+
+impl<T> Visitor<T> for NodeCountVisitor
+where
+    T: VisitableChildren<T>,
+{
+    type Continue = Self;
+    type Break = Infallible;
+    type Error = Infallible;
+
+    fn visit<'program, N>(mut self, node: &'program mut N, idx: usize) -> VisitResult<Self, T>
+    where
+        N: Node<TypeMut<'program>=T>,
+        T: From<&'program mut N>,
+    {
+        self.count += 1;
+        T::from(node).visit_each(self)
+    }
+}
+```
+
+Of particular note is the generic bound `T: VisitableChildren<T>` which specifies that instances of `T` must implement
+`VisitableChildren`. Because of the bound `T: From<&'program mut N>` of `visit`, we may construct the opaque node using
+`T::from(node)`, then invoke the consuming function `visit_each` and pass the visitor as `self`. This, in practice,
+leads to a pre-order traversal over each node.
+
+This visitor is relatively simple to implement because we don't need to handle any bookkeeping with the nodes
+themselves. But what if we needed to?
+
+#### Example 2: `FindVisitor`
+
+Suppose we want to find a node in a given derivation tree based on some criteria by BFS. This is normally done by
+maintaining a work queue where one pops a node to search from the front of this queue and pushing its children to the
+back. In Rust, we can only create a queue (idiomatically, a `VecDeque`) of the same type, and since `N` is potentially
+different for each `visit` call, we cannot construct a queue out of nodes directly. Thankfully, we can show that `T` is
+consistent (because `N: Node<TypeMut<'program> = T>` at each callsite), so we can construct `VecDeque<T>`.
+
+Similarly, we cannot have mutable access to both a node and its children as this would break the exclusive mutability
+rule from the borrow checker (remember: a node is actually a full subtree!). When we traverse a given parent, we must
+prove to the borrow checker that we do not maintain a reference to the parent node -- which is why the `visit_each`
+implementation consumes the opaque node, in order to ensure that the mutable reference contained therein is also
+consumed.
+
+Below is an implementation with these qualities, with comments:
+
+```rust
+impl<T> Visitor<T> for FindVisitor
+where
+    T: VisitableChildren<T>,
+{
+    type Continue = Self; // allow for repeated use
+    type Break = VecDeque<usize>; // return the path to the target node
+    type Error = Infallible;
+
+    fn visit<'program, N>(self, node: &'program mut N, idx: usize) -> VisitResult<Self, T>
+    where
+        N: Node<TypeMut<'program>=T>,
+        T: From<&'program mut N>,
+    {
+        // create a list to track the parent->child index of each node
+        let mut stack = Vec::new();
+
+        // create a work queue
+        let mut work = VecDeque::new();
+        // init the queue with the provided node; it has no parent, its index is provided
+        work.push_back((usize::MAX, idx, T::from(node)));
+
+        // helper type to check and collect child nodes
+        struct ChildCollector<'a, T> {
+            predicate: /* somehow identify the node */,
+            parent: usize,
+            work: &'a mut VecDeque<(usize, usize, T)>,
+        }
+
+        impl<T> Visitor<T> for ChildCollector<'_, T> {
+            type Continue = Self;
+            type Break = usize;
+            type Error = Infallible;
+
+            fn visit<'program, N>(self, node: &'program mut N, idx: usize) -> VisitResult<Self, T>
+            where
+                N: Node,
+                T: From<&'program mut N>,
+            {
+                // if the child matches the predicate, return its index
+                if self.predicate(node) {
+                    return Ok(ControlFlow::Break(idx));
+                }
+                // otherwise, collect it in the work queue
+                self.work.push_back((self.parent, idx, t));
+                Ok(ControlFlow::Continue(self))
+            }
+        }
+
+        while let Some((parent, idx, next)) = work.pop_front() {
+            // record the index of the parent in the stack and actual index for this node
+            let next_parent = stack.len();
+            stack.push((parent, idx));
+
+            // construct the child collector
+            let collector = ChildCollector {
+                predicate: self.predicate,
+                parent: next_parent,
+                work: &mut work,
+            };
+
+            // visit each child with the collector
+            match next.visit_each(collector)? {
+                ControlFlow::Continue(_) => {} // nothing to do if the collector is returned
+                ControlFlow::Break(c) => {
+                    // construct a path to the node by traversing the stack
+                    let mut path = VecDeque::new();
+                    let mut parent = next_parent;
+                    path.push_front(c);
+                    while parent != 0 {
+                        let (next_parent, idx) = stack[parent];
+                        path.push_front(idx);
+                        parent = next_parent;
+                    }
+                    path.push_front(stack[0].1);
+                    return Ok(ControlFlow::Break(path));
+                }
+            }
+        }
+
+        Ok(ControlFlow::Continue(self))
+    }
+}
+```
+
+In this way, we may visit the whole subtree while maintaining the typing requirements and exclusive access required by
+Rust.
+
+### Constraining
+
+TODO
+
+[^2]: This is implemented slightly differently in the actual version for support of `StartingFrom`, but you can read the
+documentation for that if you need.
+
 ## Licensing
 
 This crate, like most others, uses dual-license MIT and Apache.
