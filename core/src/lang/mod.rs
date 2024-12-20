@@ -606,7 +606,6 @@ pub(crate) mod test {
     };
     use pest::iterators::Pair;
     use pest::Parser;
-    use rand::{thread_rng, Rng};
     use std::borrow::Cow;
     use std::boxed::Box;
     use std::error::Error;
@@ -943,8 +942,7 @@ pub(crate) mod test {
 
     #[test]
     fn test_fullparse_constraints() -> Result<(), Box<dyn Error>> {
-        let program = Program::try_from(XML_CONSTRAINED_GRAMMAR)?;
-
+        let _ = Program::try_from(XML_CONSTRAINED_GRAMMAR)?;
         Ok(())
     }
 }

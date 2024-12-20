@@ -1,14 +1,19 @@
+//! Parsing and representation routines for constraints defined within a FANDANGO grammar.
+
 use crate::graph::{traverse_children, FandangoNode, GraphTraverse};
-use crate::lang::{Nonterminal, ParseError, Rule, Statement, Tagged};
+use crate::lang::{Nonterminal, ParseError, Rule, Tagged};
 use pest::iterators::Pair;
 use pest::Span;
 use std::fmt::{Debug, Display, Formatter, Write};
 use std::iter;
 use std::ops::Deref;
 
+/// Represents a constraint statement in a FANDANGO grammar.
 #[derive(Debug, Clone, Ord, PartialOrd, Eq, PartialEq, Hash)]
 pub enum Constraint<'a> {
+    /// A constraint which expresses a fitness
     Fitness(Tagged<'a, Expr<'a>>),
+    /// A constraint which expresses an implication
     Implies(Tagged<'a, Implies<'a>>),
 }
 
@@ -30,6 +35,7 @@ impl<'a> TryFrom<Pair<'a, Rule>> for Constraint<'a> {
     }
 }
 
+/// An implication which defines the constraint
 #[derive(Debug, Clone, Ord, PartialOrd, Eq, PartialEq, Hash)]
 pub struct Implies<'a> {
     quantifier: Tagged<'a, Quantifier<'a>>,
@@ -74,10 +80,14 @@ impl<'a> TryFrom<Pair<'a, Rule>> for Implies<'a> {
     }
 }
 
+/// A quantifier for the constraint
 #[derive(Debug, Clone, Ord, PartialOrd, Eq, PartialEq, Hash)]
 pub enum Quantifier<'a> {
+    /// A statement over which all must hold
     Forall(Tagged<'a, QuantifierSpecification<'a>>),
+    /// A statement over which at least one must hold
     Exists(Tagged<'a, QuantifierSpecification<'a>>),
+    /// A specific, first-order statement that must hold
     Disjunction(Tagged<'a, Disjunction<'a>>),
 }
 
@@ -104,6 +114,7 @@ impl<'a> TryFrom<Pair<'a, Rule>> for Quantifier<'a> {
     }
 }
 
+/// The specification for the quantifier (i.e., what must hold)
 #[derive(Debug, Clone, Ord, PartialOrd, Eq, PartialEq, Hash)]
 pub struct QuantifierSpecification<'a> {
     nonterminal: Tagged<'a, Nonterminal<'a>>,
@@ -154,6 +165,7 @@ impl<'a> TryFrom<Pair<'a, Rule>> for QuantifierSpecification<'a> {
     }
 }
 
+/// A sequence of formula atoms of which at least one must hold for this to be considered true
 #[derive(Debug, Clone, Ord, PartialOrd, Eq, PartialEq, Hash)]
 pub struct Disjunction<'a> {
     conjunctions: Vec<Tagged<'a, Conjunction<'a>>>,
@@ -167,7 +179,7 @@ impl<'a> TryFrom<Pair<'a, Rule>> for Disjunction<'a> {
     fn try_from(value: Pair<'a, Rule>) -> Result<Self, Self::Error> {
         debug_assert_eq!(value.as_rule(), Rule::formula_disjunction);
 
-        let mut inner = value.into_inner();
+        let inner = value.into_inner();
 
         Ok(Self {
             conjunctions: inner
@@ -177,6 +189,7 @@ impl<'a> TryFrom<Pair<'a, Rule>> for Disjunction<'a> {
     }
 }
 
+/// A sequence of formula atoms which must all hold for this to be considered true
 #[derive(Debug, Clone, Ord, PartialOrd, Eq, PartialEq, Hash)]
 pub struct Conjunction<'a> {
     atoms: Vec<Tagged<'a, Atom<'a>>>,
@@ -190,7 +203,7 @@ impl<'a> TryFrom<Pair<'a, Rule>> for Conjunction<'a> {
     fn try_from(value: Pair<'a, Rule>) -> Result<Self, Self::Error> {
         debug_assert_eq!(value.as_rule(), Rule::formula_conjunction);
 
-        let mut inner = value.into_inner();
+        let inner = value.into_inner();
 
         Ok(Self {
             atoms: inner
@@ -200,10 +213,14 @@ impl<'a> TryFrom<Pair<'a, Rule>> for Conjunction<'a> {
     }
 }
 
+/// The smallest unit of a formula
 #[derive(Debug, Clone, Ord, PartialOrd, Eq, PartialEq, Hash)]
 pub enum Atom<'a> {
+    /// A comparison within the formula
     Comparison(Tagged<'a, Comparison<'a>>),
+    /// An implies statement, which must hold for the formula
     Implies(Tagged<'a, Implies<'a>>), // no indirection needed, we are in a Vec
+    /// The expression to be evaluated in the formula
     Expr(Tagged<'a, Expr<'a>>),
 }
 
@@ -226,6 +243,7 @@ impl<'a> TryFrom<Pair<'a, Rule>> for Atom<'a> {
     }
 }
 
+/// A comparison between two expressions
 #[derive(Debug, Clone, Ord, PartialOrd, Eq, PartialEq, Hash)]
 pub struct Comparison<'a> {
     left: Tagged<'a, Expr<'a>>,
@@ -251,7 +269,9 @@ impl<'a> TryFrom<Pair<'a, Rule>> for Comparison<'a> {
     }
 }
 
+/// An operator specified in a constraint
 #[derive(Debug, Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Hash)]
+#[allow(missing_docs)]
 pub enum ConstraintOperator {
     Neq,
     Lt,
@@ -279,10 +299,14 @@ impl<'a> TryFrom<Pair<'a, Rule>> for ConstraintOperator {
     }
 }
 
+/// An expression, either represented by a concrete selector or by an expression which needs to be
+/// evaluated
 #[derive(Debug, Clone, Ord, PartialOrd, Eq, PartialEq, Hash)]
 pub enum Expr<'a> {
+    /// A direct selector
     Selector(Tagged<'a, SelectorLength<'a>>),
     // ConstraintIte(Tagged<'a, ConstraintIte<'a>>),
+    /// An expression to be evaluated
     Inversion(Tagged<'a, Inversion<'a>>),
 }
 
@@ -304,9 +328,12 @@ impl<'a> TryFrom<Pair<'a, Rule>> for Expr<'a> {
     }
 }
 
+/// A selector, maybe specifying the length over a value or the value itself
 #[derive(Debug, Clone, Ord, PartialOrd, Eq, PartialEq, Hash)]
 pub enum SelectorLength<'a> {
+    /// Specifies a selection that is considering the length of the selection
     WithLength(Tagged<'a, Selector<'a>>),
+    /// Specifies a selection that is considering the value itself
     NoLength(Tagged<'a, Selector<'a>>),
 }
 
@@ -330,10 +357,14 @@ impl<'a> TryFrom<Pair<'a, Rule>> for SelectorLength<'a> {
     }
 }
 
+/// An expression which evaluates to a selected node
 #[derive(Debug, Clone, Ord, PartialOrd, Eq, PartialEq, Hash)]
 pub enum Selector<'a> {
+    /// A selection which specifies any direct child of the second type from the first
     ChildSelector(Tagged<'a, Selection<'a>>, Box<Tagged<'a, Selector<'a>>>),
+    /// A selection which specifies any descendent of the second type from the first
     PathSelector(Tagged<'a, Selection<'a>>, Box<Tagged<'a, Selector<'a>>>),
+    /// A basic selection
     Basic(Tagged<'a, Selection<'a>>),
 }
 
@@ -395,10 +426,14 @@ impl<'a> TryFrom<Pair<'a, Rule>> for Selector<'a> {
     }
 }
 
+/// A particular selection over which a constraint is evaluated
 #[derive(Debug, Clone, Ord, PartialOrd, Eq, PartialEq, Hash)]
 pub enum Selection<'a> {
+    /// A selection over a sequence of slices
     OverSlices(Tagged<'a, BaseSelection<'a>>, Tagged<'a, RsSlices<'a>>),
+    /// A selection over a sequence of pairs
     OverPairs(Tagged<'a, BaseSelection<'a>>, Tagged<'a, RsPairs<'a>>),
+    /// A basic selection
     Basic(Tagged<'a, BaseSelection<'a>>),
 }
 
@@ -428,9 +463,12 @@ impl<'a> TryFrom<Pair<'a, Rule>> for Selection<'a> {
     }
 }
 
+/// A base selection: either a nonterminal (specific), or another selection by recursion
 #[derive(Debug, Clone, Ord, PartialOrd, Eq, PartialEq, Hash)]
 pub enum BaseSelection<'a> {
+    /// Concrete non-terminal to be selected
     Nonterminal(Tagged<'a, Nonterminal<'a>>),
+    /// Specify another selector which defines this selection
     Selector(Box<Tagged<'a, Selector<'a>>>),
 }
 
@@ -470,6 +508,7 @@ impl<'a> TryFrom<Pair<'a, Rule>> for BaseSelection<'a> {
     }
 }
 
+/// A sequence of pairs over a node
 #[derive(Debug, Clone, Ord, PartialOrd, Eq, PartialEq, Hash)]
 pub struct RsPairs<'a> {
     pairs: Vec<Tagged<'a, RsPair<'a>>>,
@@ -483,7 +522,7 @@ impl<'a> TryFrom<Pair<'a, Rule>> for RsPairs<'a> {
     fn try_from(value: Pair<'a, Rule>) -> Result<Self, Self::Error> {
         debug_assert_eq!(value.as_rule(), Rule::rs_pairs);
 
-        let mut inner = value.into_inner();
+        let inner = value.into_inner();
 
         Ok(Self {
             pairs: inner
@@ -493,6 +532,7 @@ impl<'a> TryFrom<Pair<'a, Rule>> for RsPairs<'a> {
     }
 }
 
+/// TODO ask what this means :)
 #[derive(Debug, Clone, Ord, PartialOrd, Eq, PartialEq, Hash)]
 pub struct RsPair<'a> {
     nonterminal: Tagged<'a, Nonterminal<'a>>,
@@ -520,6 +560,7 @@ impl<'a> TryFrom<Pair<'a, Rule>> for RsPair<'a> {
     }
 }
 
+/// A sequence of slices
 #[derive(Debug, Clone, Ord, PartialOrd, Eq, PartialEq, Hash)]
 pub struct RsSlices<'a> {
     slices: Vec<Tagged<'a, RsSlice>>,
@@ -533,7 +574,7 @@ impl<'a> TryFrom<Pair<'a, Rule>> for RsSlices<'a> {
     fn try_from(value: Pair<'a, Rule>) -> Result<Self, Self::Error> {
         debug_assert_eq!(value.as_rule(), Rule::rs_slices);
 
-        let mut inner = value.into_inner();
+        let inner = value.into_inner();
 
         Ok(Self {
             slices: inner
@@ -543,10 +584,14 @@ impl<'a> TryFrom<Pair<'a, Rule>> for RsSlices<'a> {
     }
 }
 
+/// A slice access over a node
 #[derive(Debug, Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Hash)]
 pub enum RsSlice {
+    /// Extract a range from this sequence with a particular step size, possibly unbounded/unspecified for each
     RangeWithStep(Option<usize>, Option<usize>, Option<usize>),
+    /// Extract a range from this sequence, potentially unbounded at either or both ends
     Range(Option<usize>, Option<usize>),
+    /// Access an exact member of this sequence
     Exact(usize),
 }
 
@@ -593,9 +638,12 @@ impl<'a> TryFrom<Pair<'a, Rule>> for RsSlice {
     }
 }
 
+/// A single expression to be evaluated for the purposes of evaluating a constraint
 #[derive(Debug, Clone, Ord, PartialOrd, Eq, PartialEq, Hash)]
 pub enum Inversion<'a> {
+    /// Represents that a particular selector is evaluated directly
     Selector(Tagged<'a, Selector<'a>>),
+    /// Represents that a particular selection should be stringified before evaluation
     Stringified(Tagged<'a, Selector<'a>>),
 }
 
