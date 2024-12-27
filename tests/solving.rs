@@ -1,17 +1,18 @@
+//! Demonstration of using egg for constraint minimisation.
+
+#![allow(missing_docs)]
+
 use egg::{rewrite as rw, *};
 use fandango_core::graph::{FandangoNode, IntoGraph};
 use fandango_core::lang::{Nonterminal, Tagged};
-use fandango_core::typing::{AsNode, Structured};
+use fandango_core::typing::AsNode;
 use fandango_derive::Fandango;
 use pest::Span;
 use petgraph::algo;
-use petgraph::dot::Config;
 use petgraph::graphmap::DiGraphMap;
-use std::borrow::Cow;
 use std::cmp::Ordering;
-use std::collections::{BTreeMap, BTreeSet, BinaryHeap, HashMap, HashSet};
+use std::collections::{HashMap, HashSet};
 use std::error::Error;
-use std::ops::{Index, Not};
 
 #[allow(dead_code)]
 #[derive(Fandango)]
@@ -37,14 +38,13 @@ define_language! {
 }
 
 pub struct NodesPresent<'program, 'source> {
-    type_graph: DiGraphMap<FandangoNode<'program, 'source>, Span<'source>>,
     type_map: Vec<FandangoNode<'program, 'source>>,
     reachable: HashMap<FandangoNode<'program, 'source>, HashSet<FandangoNode<'program, 'source>>>,
 }
 
 impl<'program, 'source> NodesPresent<'program, 'source> {
     fn new(
-        type_graph: DiGraphMap<FandangoNode<'program, 'source>, Span<'source>>,
+        type_graph: &DiGraphMap<FandangoNode<'program, 'source>, Span<'source>>,
         type_map: Vec<FandangoNode<'program, 'source>>,
     ) -> Self {
         let mut reachable = HashMap::new();
@@ -56,7 +56,6 @@ impl<'program, 'source> NodesPresent<'program, 'source> {
             reachable.insert(node, weights);
         }
         Self {
-            type_graph,
             type_map,
             reachable,
         }
@@ -79,10 +78,11 @@ impl NodeCost<'_, '_> {
                 .untyped_access
                 .union(&other.untyped_access)
                 .copied()
+                .chain(self.is_access.then_some(id))
                 .chain(other.is_access.then_some(id))
                 .collect(),
             observed: self.observed.union(&other.observed).copied().collect(),
-            ast_size: self.ast_size.saturating_add(other.ast_size) + 1,
+            ast_size: self.ast_size.saturating_add(other.ast_size),
         }
     }
 }
@@ -119,25 +119,41 @@ impl<'program, 'source> CostFunction<FandangoConstraintLang> for NodesPresent<'p
         C: FnMut(Id) -> Self::Cost,
     {
         match enode {
-            FandangoConstraintLang::Typed([node, value]) => {
-                costs(*value).union(*node, costs(*node)) // clear the access type, if needed
+            FandangoConstraintLang::Typed([_, value]) => {
+                let mut cost = enode.fold(
+                    NodeCost {
+                        ast_size: 1,
+                        ..Default::default()
+                    },
+                    |sum, id| sum.union(id, costs(id)),
+                );
+                cost.untyped_access.remove(value);
+                cost
             }
             FandangoConstraintLang::Access(_) => {
-                let mut cost = NodeCost::default(); // we have to infer from the type what the cost of the access is
-                cost.is_access = true;
-                cost
+                NodeCost {
+                    // we have to infer from the type what the cost of the access is
+                    is_access: true,
+                    ..Default::default()
+                }
             }
             FandangoConstraintLang::Type(node) => {
-                let mut cost = NodeCost::default();
-                cost.observed
-                    .extend(self.reachable[&self.type_map[*node]].iter().copied());
-                cost
+                NodeCost {
+                    // we have to infer from the type what the cost of the access is
+                    observed: self.reachable[&self.type_map[*node]]
+                        .iter()
+                        .copied()
+                        .collect(),
+                    ..Default::default()
+                }
             }
-            _ => {
-                let mut cost = enode.fold(NodeCost::default(), |sum, id| sum.union(id, costs(id)));
-                cost.ast_size += 1;
-                cost
-            }
+            _ => enode.fold(
+                NodeCost {
+                    ast_size: 1,
+                    ..Default::default()
+                },
+                |sum, id| sum.union(id, costs(id)),
+            ),
         }
     }
 }
@@ -174,11 +190,11 @@ fn egg_demo() -> Result<(), Box<dyn Error>> {
 
     let graph = nonterminal_start::root().into_graph();
     let mut variant_map = graph.nodes().map(|n1| (n1, graph.edges(n1))).fold(
-        HashMap::new(),
+        HashMap::<_, Vec<_>>::new(),
         |mut collected, (n1, edges)| {
             collected
                 .entry(n1)
-                .or_insert_with(Vec::new)
+                .or_default()
                 .extend(edges.map(|(_, n2, &e)| Tagged::new(n2, e)));
             collected
         },
@@ -192,8 +208,8 @@ fn egg_demo() -> Result<(), Box<dyn Error>> {
         type_map.push(node);
     }
 
-    for (node, mut children) in &mut variant_map {
-        let &node_type = type_cache.get(&node).unwrap();
+    for (node, children) in &mut variant_map {
+        let &node_type = type_cache.get(node).unwrap();
 
         let mut base;
         children.sort(); // into visible order
@@ -306,10 +322,10 @@ fn egg_demo() -> Result<(), Box<dyn Error>> {
         )"#
     );
 
-    let cost = NodesPresent::new(graph, type_map);
+    let cost = NodesPresent::new(&graph, type_map);
 
     let start = attr_quant.parse()?;
-    let mut runner = Runner::<_, _, ()>::new(()).with_expr(&start).run(&rules);
+    let runner = Runner::<_, _, ()>::new(()).with_expr(&start).run(&rules);
     let extractor = Extractor::new(&runner.egraph, cost);
     let (_, best_expr) = extractor.find_best(runner.roots[0]);
 
