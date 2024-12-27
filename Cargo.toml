@@ -14,6 +14,8 @@ tuple_list.workspace = true
 
 [dev-dependencies]
 criterion.workspace = true
+egg.workspace = true
+petgraph.workspace = true
 rand.workspace = true
 
 [lints]
@@ -31,6 +33,7 @@ authors = ["Addison Crump <addison.crump@cispa.de>"]
 [workspace.dependencies]
 criterion = { version = "0.5.1", features = ["html_reports"] }
 either = "1.13"
+egg = "0.9.5"
 pest = "2.7"
 pest_derive = "2.7"
 pest_generator = "2.7"

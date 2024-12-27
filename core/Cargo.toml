@@ -6,6 +6,7 @@ authors.workspace = true
 
 [dependencies]
 either.workspace = true
+egg.workspace = true
 pest.workspace = true
 pest_derive.workspace = true
 petgraph.workspace = true

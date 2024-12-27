@@ -434,7 +434,7 @@ impl<'program, 'source> IntoRustSource<FandangoGenContext<'_, '_, 'program, 'sou
                         where
                             V: ::fandango::visitor::Visitor<TypeMut<'program, 'source>, Continue = V> {
                             match self {
-                                #(#name::#child_variants(n) => visitor.visit(n, 0)),*
+                                #(#name::#child_variants(n) => visitor.visit(n, #indices)),*
                             }
                         }
 
@@ -449,14 +449,20 @@ impl<'program, 'source> IntoRustSource<FandangoGenContext<'_, '_, 'program, 'sou
                         where
                             V: ::fandango::visitor::Visitor<TypeMut<'program, 'source>, Continue = V>
                         {
-                            self.visit_nth(visitor, idx).unwrap_or_else(|c| Ok(::std::ops::ControlFlow::Continue(c)))
+                            match self {
+                                #(#name::#child_variants(n) if idx >= #indices => visitor.visit(n, idx)),*,
+                                _ => Ok(::std::ops::ControlFlow::Continue(visitor))
+                            }
                         }
 
                         fn visit_each_from<V>(self, visitor: V, idx: usize) -> ::fandango::visitor::VisitResult<V, TypeMut<'program, 'source>>
                         where
                             V: ::fandango::visitor::Visitor<TypeMut<'program, 'source>, Continue = V>
                         {
-                            self.visit_nth(visitor, idx).unwrap_or_else(|c| Ok(::std::ops::ControlFlow::Continue(c)))
+                            match self {
+                                #(#name::#child_variants(n) if idx <= #indices => visitor.visit(n, idx)),*,
+                                _ => Ok(::std::ops::ControlFlow::Continue(visitor))
+                            }
                         }
 
                         fn visit_nth<V>(
@@ -466,12 +472,9 @@ impl<'program, 'source> IntoRustSource<FandangoGenContext<'_, '_, 'program, 'sou
                         ) -> ::fandango::visitor::MaybeVisitResult<V, TypeMut<'program, 'source>>
                         where
                             V: ::fandango::visitor::Visitor<TypeMut<'program, 'source>> {
-                            if idx == 0 {
-                                match self {
-                                    #(#name::#child_variants(n) => Ok(visitor.visit(n, 0))),*
-                                }
-                            } else {
-                                Err(visitor)
+                            match self {
+                                #(#name::#child_variants(n) if idx == #indices => Ok(visitor.visit(n, idx))),*,
+                                _ => Err(visitor)
                             }
                         }
                     }
