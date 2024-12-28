@@ -70,7 +70,9 @@ fn flatten(
             if stack.insert(node) {
                 let mut children = BTreeMap::new();
                 let mut total = 0usize;
-                for child in graph.edges(node).map(|e| e.target()) {
+                let mut edges = graph.edges(node).collect::<Vec<_>>();
+                edges.sort_by_key(|e| e.weight().start());
+                for child in edges.into_iter().map(|e| e.target()) {
                     let count = flatten(child, graph, stack, collected)?;
                     children.insert(total, *graph.node_weight(child).unwrap());
                     total += count;

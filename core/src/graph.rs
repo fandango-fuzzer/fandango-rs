@@ -663,6 +663,7 @@ impl<'program, 'source> From<&'program Tagged<'source, RsSlice>>
 #[cfg(test)]
 mod test {
     use crate::graph::{FandangoNode, IntoGraph};
+    use crate::lang::test::SIMPLE_GRAMMAR;
     use crate::lang::Program;
     use petgraph::data::{Element, FromElements};
     use petgraph::dot::{Config, Dot};
@@ -672,8 +673,7 @@ mod test {
     // this doesn't really test anything, just produces a graph in GraphViz format
     #[test]
     fn test_graph() -> Result<(), Box<dyn Error>> {
-        let program =
-            Program::try_from(include_str!("../../tests/grammars/multi_nonterminal.fan"))?;
+        let program = Program::try_from(SIMPLE_GRAMMAR)?;
 
         let (_, graph) = (&program).into_graph();
 
