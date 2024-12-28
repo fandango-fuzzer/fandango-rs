@@ -4,7 +4,9 @@ use crate::generation::{Generated, Generator, GeneratorTuple, Sampler};
 use crate::graph::IntoGraph;
 use crate::typing::AsNode;
 use pest::Span;
-use petgraph::graphmap::DiGraphMap;
+use petgraph::graph;
+use petgraph::graph::DiGraph;
+use petgraph::visit::EdgeRef;
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::error::Error;
 use std::fmt::{Debug, Display, Formatter};
@@ -57,23 +59,23 @@ struct Flattened {
 }
 
 fn flatten(
-    node: FandangoNode,
-    graph: &DiGraphMap<FandangoNode, Span<'static>>,
-    stack: &mut HashSet<FandangoNode>,
+    node: graph::NodeIndex,
+    graph: &DiGraph<FandangoNode, Span<'static>>,
+    stack: &mut HashSet<graph::NodeIndex>,
     collected: &mut HashMap<FandangoNode, Flattened>,
 ) -> Result<usize, Unflattenable> {
-    match node {
+    let weight = *graph.node_weight(node).unwrap();
+    match weight {
         FandangoNode::Nonterminal(_) | FandangoNode::Alternative(_) => {
             if stack.insert(node) {
                 let mut children = BTreeMap::new();
                 let mut total = 0usize;
-                assert!(graph.contains_node(node));
-                for child in graph.edges(node).map(|(_, c, _)| c) {
+                for child in graph.edges(node).map(|e| e.target()) {
                     let count = flatten(child, graph, stack, collected)?;
-                    children.insert(total, child);
+                    children.insert(total, *graph.node_weight(child).unwrap());
                     total += count;
                 }
-                collected.insert(node, Flattened { children, total });
+                collected.insert(weight, Flattened { children, total });
                 stack.remove(&node);
                 Ok(total)
             } else {
@@ -82,7 +84,7 @@ fn flatten(
         }
         FandangoNode::String(_) => {
             collected.insert(
-                node,
+                weight,
                 Flattened {
                     children: BTreeMap::new(),
                     total: 1,
@@ -104,10 +106,10 @@ impl Flattener {
 
     /// Adds a node to the flattening list. If a node is not listed here, it will not be flattened.
     pub fn flatten<N: AsNode>(mut self) -> Result<Self, Unflattenable> {
-        let graph = N::root().into_graph();
+        let (lookup, graph) = N::root().into_graph();
 
         flatten(
-            N::definition(),
+            lookup[&N::definition()],
             &graph,
             &mut HashSet::new(),
             &mut self.flattened,

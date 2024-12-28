@@ -167,7 +167,7 @@ pub fn derive_fandango_or_emit_error(
 ) -> Result<TokenStream, TokenStream> {
     let parsed = Program::try_from(&source.merged).map_err(|e| source.to_compile_error(e))?;
 
-    let graph = (&parsed).into_graph();
+    let (lookup, graph) = (&parsed).into_graph();
     let mut tokenized = TokenStream::new();
 
     let mut mapped_names = HashMap::new();

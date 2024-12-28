@@ -11,10 +11,11 @@ use crate::lang::{
 };
 use core::fmt::{Formatter, Write};
 use pest::Span;
-use petgraph::data::Build;
-use petgraph::graphmap::{DiGraphMap, NodeTrait};
+use petgraph::graph;
+use petgraph::graph::DiGraph;
+use petgraph::graphmap::NodeTrait;
 use std::borrow::Cow;
-use std::collections::VecDeque;
+use std::collections::{HashMap, VecDeque};
 use std::fmt;
 use std::fmt::Display;
 use std::hash::Hash;
@@ -53,7 +54,7 @@ pub fn traverse_children<'program, 'source, F, T>(
     mut consumer: F,
 ) where
     F: FnMut(T::Node, T::Node, Span<'source>),
-    T: GraphTraverse<'source>,
+    T: GraphTraverse<'program>,
     'source: 'program,
 {
     let node = parent.into();
@@ -358,10 +359,15 @@ macro_rules! impl_fandango_traverse {
     };
 }
 
-/// Convert a type which implements [`GraphTraverse`] into a [`DiGraphMap`].
-pub trait IntoGraph<'a>: GraphTraverse<'a> {
+/// Convert a type which implements [`GraphTraverse`] into a [`DiGraph`].
+pub trait IntoGraph<'program>: GraphTraverse<'program> {
     /// Perform the conversion.
-    fn into_graph(self) -> DiGraphMap<Self::Node, Span<'a>>;
+    fn into_graph(
+        self,
+    ) -> (
+        HashMap<Self::Node, graph::NodeIndex>,
+        DiGraph<Self::Node, Span<'program>>,
+    );
 }
 
 impl<'program, 'source, T> IntoGraph<'program> for T
@@ -369,15 +375,28 @@ where
     T: GraphTraverse<'program, Node = FandangoNode<'program, 'source>>,
     'source: 'program,
 {
-    fn into_graph(self) -> DiGraphMap<Self::Node, Span<'program>> {
-        let mut graph = DiGraphMap::new();
+    fn into_graph(
+        self,
+    ) -> (
+        HashMap<FandangoNode<'program, 'source>, graph::NodeIndex>,
+        DiGraph<Self::Node, Span<'program>>,
+    ) {
+        let mut graph = DiGraph::new();
         let mut work = VecDeque::new();
         self.traverse(|n1, n2, w| work.push_back((n1, n2, w)));
+
+        let mut node_indices: HashMap<FandangoNode<'program, 'source>, graph::NodeIndex> =
+            HashMap::new();
+        let mut idx = |g: &mut DiGraph<FandangoNode<'program, 'source>, _>, n| {
+            *node_indices.entry(n).or_insert_with(|| g.add_node(n))
+        };
 
         while let Some((n1, n2, w)) = work.pop_front() {
             match n1 {
                 FandangoNode::Production(_) if matches!(n2, FandangoNode::Nonterminal(_)) => {
-                    graph.update_edge(n1, n2, w);
+                    let n1 = idx(&mut graph, n1);
+                    let n2 = idx(&mut graph, n2);
+                    graph.add_edge(n1, n2, w);
                 }
                 FandangoNode::Production(prod) => {
                     work.push_back((prod.nonterminal().into(), n2, w));
@@ -403,11 +422,17 @@ where
                     | FandangoNode::Operator(_)
                         if !matches!(n2, FandangoNode::Operator(Operator::Symbol(_))) =>
                     {
-                        graph.update_edge(n1, n2, w);
+                        {
+                            let n1 = idx(&mut graph, n1);
+                            let n2 = idx(&mut graph, n2);
+                            graph.add_edge(n1, n2, w);
+                        }
                         n2.traverse(|n1, n2, w| work.push_back((n1, n2, w)))
                     }
                     FandangoNode::Nonterminal(_) | FandangoNode::String(_) => {
-                        graph.update_edge(n1, n2, w);
+                        let n1 = idx(&mut graph, n1);
+                        let n2 = idx(&mut graph, n2);
+                        graph.add_edge(n1, n2, w);
                     }
                     _ => n2.traverse(|_, n2, w| work.push_back((n1, n2, w))),
                 },
@@ -415,7 +440,7 @@ where
             }
         }
 
-        graph
+        (node_indices, graph)
     }
 }
 
@@ -514,7 +539,10 @@ impl Display for FandangoNode<'_, '_> {
     }
 }
 
-impl<'program> GraphTraverse<'program> for FandangoNode<'program, '_> {
+impl<'program, 'source> GraphTraverse<'program> for FandangoNode<'program, 'source>
+where
+    'source: 'program,
+{
     type Node = Self;
 
     fn traverse<F>(self, consumer: F)
@@ -635,34 +663,45 @@ impl<'program, 'source> From<&'program Tagged<'source, RsSlice>>
 #[cfg(test)]
 mod test {
     use crate::graph::{FandangoNode, IntoGraph};
-    use crate::lang::test::SIMPLE_GRAMMAR;
     use crate::lang::Program;
+    use petgraph::data::{Element, FromElements};
     use petgraph::dot::{Config, Dot};
-    use petgraph::graphmap::DiGraphMap;
+    use petgraph::graph::DiGraph;
     use std::error::Error;
 
     // this doesn't really test anything, just produces a graph in GraphViz format
     #[test]
     fn test_graph() -> Result<(), Box<dyn Error>> {
-        let program = Program::try_from(SIMPLE_GRAMMAR)?;
+        let program =
+            Program::try_from(include_str!("../../tests/grammars/multi_nonterminal.fan"))?;
 
-        let graph = (&program).into_graph();
+        let (_, graph) = (&program).into_graph();
 
-        let renderable = DiGraphMap::from_edges(graph.all_edges().map(|(n1, n2, weight)| {
-            let (start_line, start_col) = weight.start_pos().line_col();
-            let (end_line, end_col) = weight.end_pos().line_col();
-            let rendered = if start_line == end_line {
-                format!("{start_line}:{start_col}-{end_col}")
-            } else {
-                format!("{start_line}:{start_col}-{end_line}:{end_col}")
-            };
-            (n1, n2, rendered)
-        }));
+        let renderable = DiGraph::<_, _>::from_elements(
+            graph
+                .raw_nodes()
+                .iter()
+                .map(|n| Element::Node { weight: n.weight })
+                .chain(graph.raw_edges().iter().map(|e| {
+                    let (start_line, start_col) = e.weight.start_pos().line_col();
+                    let (end_line, end_col) = e.weight.end_pos().line_col();
+                    let rendered = if start_line == end_line {
+                        format!("{start_line}:{start_col}-{end_col}")
+                    } else {
+                        format!("{start_line}:{start_col}-{end_line}:{end_col}")
+                    };
+                    Element::Edge {
+                        source: e.source().index(),
+                        target: e.target().index(),
+                        weight: rendered,
+                    }
+                })),
+        );
 
         let rendered = Dot::with_attr_getters(
             &renderable,
             &[Config::NodeNoLabel, Config::EdgeNoLabel],
-            &|_, (_, _, weight)| format!("label = {:?}", weight),
+            &|_, e| format!("label = {:?}", e.weight()),
             &|_, (_, node)| {
                 format!(
                     "label = {:?}",

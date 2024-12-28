@@ -4,7 +4,8 @@ use std::collections::HashSet;
 use fandango_core::graph::FandangoNode;
 use fandango_core::lang::{Nonterminal, Operator};
 pub use pest::*;
-use petgraph::graphmap::DiGraphMap;
+use petgraph::graph::{DiGraph, EdgeReference, NodeIndex};
+use petgraph::visit::EdgeRef;
 use std::fmt;
 use std::fmt::Write;
 use std::hash::{DefaultHasher, Hash, Hasher};
@@ -17,15 +18,18 @@ pub trait IntoPestSource<C> {
     fn emit_pest(&self, ctx: &mut C, output: &mut String) -> Result<(), Self::OutputError>;
 }
 
-impl<'source> IntoPestSource<()> for DiGraphMap<FandangoNode<'_, 'source>, Span<'source>> {
+impl<'source> IntoPestSource<()> for DiGraph<FandangoNode<'_, 'source>, Span<'source>> {
     type OutputError = fmt::Error;
 
     fn emit_pest(&self, _ctx: &mut (), output: &mut String) -> Result<(), Self::OutputError> {
         let mut hashes = HashSet::new();
-        for string in self.nodes().filter_map(|n| match n {
-            FandangoNode::String(s) => Some(s),
-            _ => None,
-        }) {
+        for string in
+            self.node_indices()
+                .filter_map(|n| match self.node_weight(n).copied().unwrap() {
+                    FandangoNode::String(s) => Some(s),
+                    _ => None,
+                })
+        {
             let mut hasher = DefaultHasher::new();
             string.hash(&mut hasher);
             let hash = hasher.finish();
@@ -36,17 +40,23 @@ impl<'source> IntoPestSource<()> for DiGraphMap<FandangoNode<'_, 'source>, Span<
         }
 
         let pest_name = "start";
-        let start = Nonterminal::new(pest_name);
-        let start = FandangoNode::Nonterminal(&start);
+        let start = self
+            .node_indices()
+            .find(|&n| matches!(self.node_weight(n).unwrap(), FandangoNode::Nonterminal(nt) if nt.name() == "start"))
+            .expect("No start node?");
 
         let mut visited = HashSet::new();
         visited.insert(start);
 
         let mut children = self.edges(start);
-        let (_, child, _) = children.next().expect("Start node has exactly one member.");
+        let child = children
+            .next()
+            .expect("Start node has exactly one member.")
+            .target();
         assert!(children.next().is_none());
+        let child_weight = self.node_weight(child).copied().unwrap();
 
-        let pest_child_name = if let FandangoNode::Nonterminal(nt) = child {
+        let pest_child_name = if let FandangoNode::Nonterminal(nt) = child_weight {
             Cow::Borrowed(nt.name())
         } else {
             Cow::Owned(format!("{pest_name}_0"))
@@ -63,14 +73,12 @@ impl<'source> IntoPestSource<()> for DiGraphMap<FandangoNode<'_, 'source>, Span<
 }
 
 type PestContext<'graph, 'program, 'source> = (
-    &'graph DiGraphMap<FandangoNode<'program, 'source>, Span<'source>>,
-    HashSet<FandangoNode<'program, 'source>>,
+    &'graph DiGraph<FandangoNode<'program, 'source>, Span<'source>>,
+    HashSet<NodeIndex>,
     Cow<'source, str>,
 );
 
-impl<'program, 'source> IntoPestSource<PestContext<'_, 'program, 'source>>
-    for FandangoNode<'program, 'source>
-{
+impl<'program, 'source> IntoPestSource<PestContext<'_, 'program, 'source>> for NodeIndex {
     type OutputError = fmt::Error;
 
     fn emit_pest(
@@ -82,7 +90,16 @@ impl<'program, 'source> IntoPestSource<PestContext<'_, 'program, 'source>>
         if !visited.insert(*self) {
             return Ok(());
         }
-        let mut children = graph.edges(*self).collect::<Vec<_>>();
+        let mut children = graph
+            .edges(*self)
+            .map(|e| {
+                (
+                    e.target(),
+                    *graph.node_weight(e.target()).unwrap(),
+                    *e.weight(),
+                )
+            })
+            .collect::<Vec<_>>();
         children.sort_by_key(|v| v.2.start());
         let pest_child_names = children
             .iter()
@@ -95,7 +112,7 @@ impl<'program, 'source> IntoPestSource<PestContext<'_, 'program, 'source>>
                 }
             })
             .collect::<Vec<_>>();
-        match self {
+        match graph.node_weight(*self).unwrap() {
             FandangoNode::Nonterminal(_) => {
                 assert_eq!(children.len(), 1);
                 writeln!(output, "{pest_name} = {{ {} }}", pest_child_names[0])?;
@@ -148,7 +165,7 @@ impl<'program, 'source> IntoPestSource<PestContext<'_, 'program, 'source>>
         }
         for (alternative, pest_child_name) in children
             .iter()
-            .map(|(_, child, _)| child)
+            .map(|(child, _, _)| child)
             .zip(pest_child_names)
         {
             ctx.2 = pest_child_name;
@@ -171,7 +188,7 @@ mod test {
     fn produce_grammar() -> Result<(), Box<dyn Error>> {
         let program = Program::try_from(SIMPLE_GRAMMAR)?;
 
-        let graph = (&program).into_graph();
+        let (_, graph) = (&program).into_graph();
 
         let mut pest_grammar = String::new();
         graph.emit_pest(&mut (), &mut pest_grammar)?;

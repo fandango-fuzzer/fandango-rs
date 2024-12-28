@@ -1,7 +1,9 @@
 use fandango_core::graph::FandangoNode;
 use fandango_core::lang::Operator;
 use pest::Span;
-use petgraph::graphmap::DiGraphMap;
+use petgraph::graph;
+use petgraph::graph::{DiGraph, EdgeReference};
+use petgraph::visit::EdgeRef;
 use proc_macro2::{Ident, TokenStream};
 use quote::{format_ident, quote};
 use std::collections::hash_map::Entry;
@@ -59,7 +61,7 @@ fn from_boilerplate(name: &Ident) -> TokenStream {
 
 impl<'graph, 'program, 'source>
     IntoRustSource<&'graph mut HashMap<FandangoNode<'program, 'source>, Ident>>
-    for DiGraphMap<FandangoNode<'program, 'source>, Span<'source>>
+    for DiGraph<FandangoNode<'program, 'source>, Span<'source>>
 where
     'program: 'graph,
 {
@@ -71,20 +73,25 @@ where
         output: &mut TokenStream,
     ) -> Result<(), Self::OutputError> {
         let start_node = self
-            .nodes()
-            .find(|n| matches!(n, FandangoNode::Nonterminal(nt) if nt.name() == "start"))
+            .node_indices()
+            .find(|&n| matches!(self.node_weight(n).unwrap(), FandangoNode::Nonterminal(nt) if nt.name() == "start"))
             .expect("No start node?");
 
         let mut edges = self.edges(start_node);
-        let (_, child, &weight) = edges
+        let e = edges
             .next()
             .expect("Nonterminals should have exactly one definition.");
+        let child = e.target();
+        let weight = *e.weight();
         assert!(
             edges.next().is_none(),
             "Nonterminals should have exactly one definition."
         );
 
-        let FandangoNode::Nonterminal(nt) = start_node else {
+        let node_weight = *self.node_weight(start_node).unwrap();
+        let child_weight = *self.node_weight(child).unwrap();
+
+        let FandangoNode::Nonterminal(nt) = node_weight else {
             unimplemented!("Can only transforms non-terminals into source code.")
         };
 
@@ -97,17 +104,17 @@ where
         let pest_name = format_ident!("{}", nt.name());
         let name = format_ident!("nonterminal_{}", nt.name());
 
-        let pest_child_name = if let FandangoNode::Nonterminal(nt) = child {
+        let pest_child_name = if let FandangoNode::Nonterminal(nt) = child_weight {
             format_ident!("{}", nt.name())
         } else {
             format_ident!("{name}_0")
         };
-        let child_name = if let FandangoNode::Nonterminal(nt) = child {
+        let child_name = if let FandangoNode::Nonterminal(nt) = child_weight {
             format_ident!("nonterminal_{}", nt.name())
         } else {
             format_ident!("{name}_0")
         };
-        let child_type = match child {
+        let child_type = match child_weight {
             FandangoNode::Nonterminal(_) => {
                 quote! { ::std::boxed::Box<#child_name<'source>> }
             }
@@ -213,9 +220,15 @@ where
             }
         });
 
-        mapped_names.insert(start_node, name);
+        mapped_names.insert(node_weight, name);
         child.emit_rust(
-            (child_name, pest_child_name, weight, mapped_names, self),
+            (
+                child_name,
+                pest_child_name,
+                child_weight,
+                mapped_names,
+                self,
+            ),
             output,
         )
     }
@@ -224,13 +237,13 @@ where
 type FandangoGenContext<'names, 'graph, 'program, 'source> = (
     Ident,
     Ident,
-    Span<'source>,
+    FandangoNode<'program, 'source>,
     &'names mut HashMap<FandangoNode<'program, 'source>, Ident>,
-    &'graph DiGraphMap<FandangoNode<'program, 'source>, Span<'source>>,
+    &'graph DiGraph<FandangoNode<'program, 'source>, Span<'source>>,
 );
 
 impl<'program, 'source> IntoRustSource<FandangoGenContext<'_, '_, 'program, 'source>>
-    for FandangoNode<'program, 'source>
+    for graph::NodeIndex
 {
     type OutputError = Infallible;
 
@@ -239,8 +252,8 @@ impl<'program, 'source> IntoRustSource<FandangoGenContext<'_, '_, 'program, 'sou
         ctx: FandangoGenContext<'_, '_, 'program, 'source>,
         output: &mut TokenStream,
     ) -> Result<(), Self::OutputError> {
-        let (name, pest_name, _, mapped_names, graph) = ctx;
-        match mapped_names.entry(*self) {
+        let (name, pest_name, node_weight, mapped_names, graph) = ctx;
+        match mapped_names.entry(node_weight) {
             Entry::Occupied(_) => return Ok(()),
             Entry::Vacant(e) => {
                 e.insert(name.clone());
@@ -251,13 +264,20 @@ impl<'program, 'source> IntoRustSource<FandangoGenContext<'_, '_, 'program, 'sou
 
         let mut children = graph
             .edges(*self)
-            .map(|(n1, n2, &w)| (n1, n2, w))
+            .map(|e| {
+                (
+                    e.source(),
+                    e.target(),
+                    graph.node_weight(e.target()).copied().unwrap(),
+                    *e.weight(),
+                )
+            })
             .collect::<Vec<_>>();
-        children.sort_by_key(|(_, _, w)| w.start());
+        children.sort_by_key(|(_, _, _, w)| w.start());
         let pest_child_names = children
             .iter()
             .enumerate()
-            .map(|(i, (_, child, _))| {
+            .map(|(i, (_, _, child, _))| {
                 if let FandangoNode::Nonterminal(nt) = child {
                     format_ident!("{}", nt.name())
                 } else {
@@ -268,7 +288,7 @@ impl<'program, 'source> IntoRustSource<FandangoGenContext<'_, '_, 'program, 'sou
         let child_types = children
             .iter()
             .enumerate()
-            .map(|(i, (_, child, _))| {
+            .map(|(i, (_, _, child, _))| {
                 if let FandangoNode::Nonterminal(nt) = child {
                     format_ident!("nonterminal_{}", nt.name())
                 } else {
@@ -280,9 +300,9 @@ impl<'program, 'source> IntoRustSource<FandangoGenContext<'_, '_, 'program, 'sou
         let child_field_types = children
             .iter()
             .zip(&child_types)
-            .map(|((_, child, _), name)| {
+            .map(|((_, _, child, _), name)| {
                 let base = quote! { #name<'source> };
-                match self {
+                match node_weight {
                     FandangoNode::Operator(op) => match op {
                         Operator::Kleene(_) | Operator::Plus(_) | Operator::Repeat(_, _, _) => {
                             quote! { ::std::vec::Vec<#base> }
@@ -307,7 +327,7 @@ impl<'program, 'source> IntoRustSource<FandangoGenContext<'_, '_, 'program, 'sou
             })
             .collect::<Vec<_>>();
 
-        match self {
+        match node_weight {
             FandangoNode::String(s) => {
                 let s = s.inner();
                 output.extend(quote! {
@@ -833,10 +853,10 @@ impl<'program, 'source> IntoRustSource<FandangoGenContext<'_, '_, 'program, 'sou
                 });
             }
         }
-        for (((_, child, i), name), pest_name) in
+        for (((_, child, child_weight, _), name), pest_name) in
             children.into_iter().zip(child_types).zip(pest_child_names)
         {
-            child.emit_rust((name, pest_name, i, mapped_names, graph), output)?;
+            child.emit_rust((name, pest_name, child_weight, mapped_names, graph), output)?;
         }
 
         Ok(())
