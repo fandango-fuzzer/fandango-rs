@@ -574,8 +574,6 @@ fn gen_rules<N: Analysis<FandangoConstraintLang>>(
     Ok(rules)
 }
 
-struct ConcreteValueAnalysis {}
-
 #[test]
 fn egg_demo() -> Result<(), Box<dyn Error>> {
     let (lookup, graph) = nonterminal_start::root().into_graph();
