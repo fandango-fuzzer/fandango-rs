@@ -2,22 +2,28 @@
 
 #![allow(missing_docs)]
 
+use clap::Parser;
 use egg::{rewrite as rw, *};
+use fandango_core::generation::Generated;
 use fandango_core::graph::{FandangoNode, IntoGraph};
 use fandango_core::lang::{Nonterminal, Tagged};
-use fandango_core::typing::AsNode;
+use fandango_core::typing::{AsNode, Node};
+use fandango_core::visitor::{VisitResult, VisitableChildren, Visitor};
 use fandango_derive::Fandango;
 use pest::Span;
 use petgraph::algo;
 use petgraph::graph::{DiGraph, NodeIndex};
 use petgraph::visit::{EdgeFiltered, EdgeRef, NodeFiltered};
+use rand::rngs::StdRng;
+use rand::{thread_rng, SeedableRng};
 use std::cmp::Ordering;
 use std::collections::{HashMap, HashSet, VecDeque};
+use std::convert::Infallible;
 use std::error::Error;
-use std::fmt;
 use std::fmt::{Debug, Display, Formatter};
-use std::ops::{Deref, Index};
+use std::ops::{ControlFlow, Deref, Index};
 use std::str::FromStr;
+use std::{fmt, mem};
 
 #[allow(dead_code)]
 #[derive(Fandango)]
@@ -38,8 +44,9 @@ define_language! {
         "access" = Access([Id; 2]),
         "ite" = Ite([Id; 3]),
         "X" = Invalid,
-        Lit(bool),
+        Bool(bool),
         Type(usize),
+        Concrete(usize),
         Var(Symbol),
     }
 }
@@ -376,10 +383,9 @@ impl Eq for NodeCost {}
 
 impl Ord for NodeCost {
     fn cmp(&self, other: &Self) -> Ordering {
-        self.untyped_access
+        self.observed
             .len()
-            .cmp(&other.untyped_access.len())
-            .then_with(|| self.observed.len().cmp(&other.observed.len()))
+            .cmp(&other.observed.len())
             .then_with(|| self.ast_size.cmp(&other.ast_size))
     }
 }
@@ -440,11 +446,11 @@ fn gen_rules<N: Analysis<FandangoConstraintLang>>(
     <Pattern<FandangoConstraintLang> as FromStr>::Err,
 > {
     let mut rules: Vec<Rewrite<FandangoConstraintLang, _>> = vec![
-        rw!("unsat-and"; "(& ?x (! ?x))" => "false"),
         rw!("eq"; "(= ?x ?x)" => "true"),
         rw!("not-1"; "(! true)" => "false"),
         rw!("not-2"; "(! false)" => "true"),
         rw!("commute-eq"; "(= ?x ?y)" => "(= ?y ?x)"),
+        rw!("unsat-and"; "(& ?x (! ?x))" => "false"),
         rw!("commute-eq-and"; "(& (= ?x ?y) (= ?y ?z))" => "(& (= ?x ?y) (= ?x ?z))"),
         rw!("commute-and"; "(& ?x ?y)" => "(& ?y ?x)"),
         rw!("exchange-and"; "(& ?x (& ?y ?z))" => "(& ?y (& ?x ?z))"),
@@ -574,6 +580,189 @@ fn gen_rules<N: Analysis<FandangoConstraintLang>>(
     Ok(rules)
 }
 
+#[derive(Debug, Default, Clone)]
+struct ConcreteInputAnalysis {
+    symbols: HashMap<Symbol, usize>,
+    indexer: Vec<HashMap<usize, usize>>,
+}
+
+impl ConcreteInputAnalysis {
+    fn new<'a, N>(node: &'a mut N, idx: usize) -> Self
+    where
+        N: Node,
+        <N as Node>::TypeMut<'a>: From<&'a mut N> + VisitableChildren<<N as Node>::TypeMut<'a>>,
+    {
+        let mut collected = vec![HashMap::new()];
+        let mut choices = HashMap::new();
+        let builder = ConcreteInputAnalysisBuilder {
+            collected: &mut collected,
+            choices: &mut choices,
+        };
+        let _ = builder.visit(node, idx);
+
+        ConcreteInputAnalysis {
+            symbols: HashMap::new(),
+            indexer: collected,
+        }
+    }
+
+    fn define_symbol(mut self, symbol: Symbol, node_idx: usize) -> Self {
+        self.symbols.insert(symbol, node_idx);
+        self
+    }
+}
+
+#[derive(Debug, Eq, PartialEq, Copy, Clone)]
+enum ConcreteInputAnalysisData {
+    Concrete(usize),
+    Variant(usize),
+    Symbol(Symbol),
+    Unknown,
+}
+
+impl Analysis<FandangoConstraintLang> for ConcreteInputAnalysis {
+    type Data = ConcreteInputAnalysisData;
+
+    fn make(
+        egraph: &EGraph<FandangoConstraintLang, Self>,
+        enode: &FandangoConstraintLang,
+    ) -> Self::Data {
+        match enode {
+            FandangoConstraintLang::Typed([_, id]) => egraph[*id].data,
+            FandangoConstraintLang::Variant(id) => {
+                if let ConcreteInputAnalysisData::Concrete(concrete) = egraph[*id].data {
+                    ConcreteInputAnalysisData::Variant(
+                        *egraph.analysis.indexer[concrete].keys().next().unwrap(),
+                    )
+                } else {
+                    ConcreteInputAnalysisData::Unknown
+                }
+            }
+            FandangoConstraintLang::Access([id, idx]) => {
+                if let ConcreteInputAnalysisData::Concrete(concrete) = egraph[*id].data {
+                    if let Some(idx) = egraph[*idx].nodes.iter().find_map(|n| {
+                        if let FandangoConstraintLang::Concrete(idx) = n {
+                            Some(idx)
+                        } else {
+                            None
+                        }
+                    }) {
+                        if let Some(id) = egraph.analysis.indexer[concrete].get(idx).copied() {
+                            return ConcreteInputAnalysisData::Concrete(id);
+                        }
+                    }
+                }
+                ConcreteInputAnalysisData::Unknown
+            }
+            FandangoConstraintLang::Concrete(value) => ConcreteInputAnalysisData::Concrete(*value),
+            FandangoConstraintLang::Var(name) => ConcreteInputAnalysisData::Symbol(*name),
+            _ => ConcreteInputAnalysisData::Unknown,
+        }
+    }
+
+    fn merge(&mut self, a: &mut Self::Data, b: Self::Data) -> DidMerge {
+        match (a, b) {
+            (
+                ConcreteInputAnalysisData::Concrete(first),
+                ConcreteInputAnalysisData::Concrete(second),
+            ) => {
+                assert_eq!(*first, second);
+                DidMerge(false, false)
+            }
+            (
+                ConcreteInputAnalysisData::Variant(first),
+                ConcreteInputAnalysisData::Variant(second),
+            ) => {
+                assert_eq!(*first, second);
+                DidMerge(false, false)
+            }
+            (
+                ConcreteInputAnalysisData::Symbol(first),
+                ConcreteInputAnalysisData::Symbol(second),
+            ) => {
+                let mut old = second;
+                mem::swap(&mut old, first);
+                DidMerge(old == *first, false)
+            }
+            (ConcreteInputAnalysisData::Unknown, ConcreteInputAnalysisData::Unknown) => {
+                DidMerge(false, false)
+            }
+            (_, ConcreteInputAnalysisData::Unknown) => DidMerge(false, true),
+            (first @ ConcreteInputAnalysisData::Unknown, second) => {
+                *first = second;
+                DidMerge(true, false)
+            }
+            (first, second) => panic!("Illegal merge between {first:?} and {second:?}."),
+        }
+    }
+
+    fn modify(egraph: &mut EGraph<FandangoConstraintLang, Self>, id: Id) {
+        let class = &egraph[id];
+        if class
+            .iter()
+            .any(|n| matches!(n, FandangoConstraintLang::Typed(_)))
+        {
+            return; // we don't want to replace typed nodes because this would clear our cost info
+        }
+        match class.data {
+            ConcreteInputAnalysisData::Concrete(value)
+            | ConcreteInputAnalysisData::Variant(value) => {
+                let other = egraph.add(FandangoConstraintLang::Concrete(value));
+                egraph.union(id, other);
+            }
+            ConcreteInputAnalysisData::Symbol(sym) => {
+                if let Some(&value) = egraph.analysis.symbols.get(&sym) {
+                    let other = egraph.add(FandangoConstraintLang::Concrete(value));
+                    egraph.union(id, other);
+                }
+            }
+            ConcreteInputAnalysisData::Unknown => {
+                // nothing to do; we don't know what this node is
+            }
+        }
+    }
+}
+
+struct ConcreteInputAnalysisBuilder<'a, 'b> {
+    collected: &'a mut Vec<HashMap<usize, usize>>,
+    choices: &'b mut HashMap<usize, usize>,
+}
+
+impl ConcreteInputAnalysisBuilder<'_, '_> {
+    fn descendent<'a, 'b>(
+        &'a mut self,
+        choices: &'b mut HashMap<usize, usize>,
+    ) -> ConcreteInputAnalysisBuilder<'a, 'b> {
+        ConcreteInputAnalysisBuilder {
+            collected: self.collected,
+            choices,
+        }
+    }
+}
+
+impl<T> Visitor<T> for ConcreteInputAnalysisBuilder<'_, '_>
+where
+    T: VisitableChildren<T>,
+{
+    type Continue = Self;
+    type Break = Infallible;
+    type Error = Infallible;
+
+    fn visit<'program, N>(mut self, node: &'program mut N, idx: usize) -> VisitResult<Self, T>
+    where
+        N: Node<TypeMut<'program> = T>,
+        T: From<&'program mut N>,
+    {
+        let node_idx = self.collected.len();
+        self.collected.push(HashMap::new());
+        self.choices.insert(idx, node_idx); // we don't have all indices in alternations
+        let mut choices = HashMap::new();
+        T::from(node).visit_each(self.descendent(&mut choices))?;
+        self.collected[node_idx] = choices;
+        Ok(ControlFlow::Continue(self))
+    }
+}
+
 #[test]
 fn egg_demo() -> Result<(), Box<dyn Error>> {
     let (lookup, graph) = nonterminal_start::root().into_graph();
@@ -598,51 +787,59 @@ fn egg_demo() -> Result<(), Box<dyn Error>> {
         type_map.push(node);
     }
 
+    let uninit_analysis = ConcreteInputAnalysis::default();
     let rules = gen_rules(&graph, &mut variant_map, &type_cache)?;
+    let costs = NodesPresent::new(&graph, type_map);
 
-    let xml_attr_node = lookup[&FandangoNode::Nonterminal(&Nonterminal::new("xml_attribute"))];
-    let first_typed = NodeEntry::concrete(
-        format!("(typed {} first)", type_cache[&xml_attr_node]),
-        xml_attr_node,
-        &type_cache,
-        &variant_map,
-        &graph,
-    );
-    let second_typed = NodeEntry::concrete(
-        format!("(typed {} second)", type_cache[&xml_attr_node]),
-        xml_attr_node,
-        &type_cache,
-        &variant_map,
-        &graph,
-    );
-
-    let attr_quant = format!(
-        r#"(|
-            (=
-                (str {first_typed})
-                (str {second_typed})
-            )
-            (! (=
-                (str {})
-                (str {})
-            ))
-        )"#,
-        first_typed
-            .clone()
-            .child(lookup[&FandangoNode::Nonterminal(&Nonterminal::new("id"))]),
-        second_typed
-            .clone()
-            .child(lookup[&FandangoNode::Nonterminal(&Nonterminal::new("id"))]),
-    );
-
-    let cost = NodesPresent::new(&graph, type_map);
-
-    let start = attr_quant.parse()?;
-    let runner = Runner::<_, _, ()>::new(()).with_expr(&start).run(&rules);
-    let extractor = Extractor::new(&runner.egraph, &cost);
-    let (_, best_attr_expr) = extractor.find_best(runner.roots[0]);
-
-    println!("{best_attr_expr}");
+    // let xml_attr_node = lookup[&FandangoNode::Nonterminal(&Nonterminal::new("xml_attribute"))];
+    // let first_typed = NodeEntry::concrete(
+    //     format!("(typed {} first)", type_cache[&xml_attr_node]),
+    //     xml_attr_node,
+    //     &type_cache,
+    //     &variant_map,
+    //     &graph,
+    // );
+    // let second_typed = NodeEntry::concrete(
+    //     format!("(typed {} second)", type_cache[&xml_attr_node]),
+    //     xml_attr_node,
+    //     &type_cache,
+    //     &variant_map,
+    //     &graph,
+    // );
+    //
+    // let attr_quant = format!(
+    //     r#"(|
+    //         (=
+    //             (str {first_typed})
+    //             (str {second_typed})
+    //         )
+    //         (! (=
+    //             (str {})
+    //             (str {})
+    //         ))
+    //     )"#,
+    //     first_typed
+    //         .clone()
+    //         .child(lookup[&FandangoNode::Nonterminal(&Nonterminal::new("id"))]),
+    //     second_typed
+    //         .clone()
+    //         .child(lookup[&FandangoNode::Nonterminal(&Nonterminal::new("id"))]),
+    // );
+    //
+    // let start = attr_quant.parse()?;
+    // let orig_cost = (&costs).cost_rec(&start);
+    // let runner = Runner::<_, _>::new(uninit_analysis.clone())
+    //     .with_expr(&start)
+    //     .run(&rules);
+    // let extractor = Extractor::new(&runner.egraph, &costs);
+    // let (cost, best_attr_expr) = extractor.find_best(runner.roots[0]);
+    //
+    // println!(
+    //     "{} controlled nodes => {} controlled nodes",
+    //     orig_cost.observed.len(),
+    //     cost.observed.len()
+    // );
+    // println!("{} => {}", start.pretty(2), best_attr_expr.pretty(2));
 
     let xml_tree_node = lookup[&FandangoNode::Nonterminal(&Nonterminal::new("xml_tree"))];
     let tree_typed = NodeEntry::concrete(
@@ -668,11 +865,37 @@ fn egg_demo() -> Result<(), Box<dyn Error>> {
     );
 
     let start = tree_quant.parse()?;
-    let runner = Runner::<_, _, ()>::new(()).with_expr(&start).run(&rules);
-    let extractor = Extractor::new(&runner.egraph, &cost);
-    let (_, best_attr_expr) = extractor.find_best(runner.roots[0]);
+    let orig_cost = (&costs).cost_rec(&start);
+    let mut runner = Runner::<_, _>::new(uninit_analysis)
+        .with_expr(&start)
+        .run(&rules);
+    let extractor = Extractor::new(&runner.egraph, &costs);
+    let (cost, best_tree_expr) = extractor.find_best(runner.roots[0]);
 
-    println!("{best_attr_expr}");
+    println!(
+        "{} controlled nodes => {} controlled nodes",
+        orig_cost.observed.len(),
+        cost.observed.len()
+    );
+    println!("{} => {}", start.pretty(2), best_tree_expr.pretty(2));
+
+    // let mut rng = StdRng::seed_from_u64(0);
+    // let mut concrete = nonterminal_start::generate(&mut rng, &mut ());
+    // let init_analysis = ConcreteInputAnalysis::new(&mut concrete, 0);
+    //
+    // let mut runner = Runner::<_, _>::new(init_analysis)
+    //     .with_expr(&best_tree_expr)
+    //     .run(&rules);
+    //
+    // let extractor = Extractor::new(&runner.egraph, &costs);
+    // let (_, best_tree_expr) = extractor.find_best(runner.roots[0]);
+    //
+    // println!(
+    //     "{} controlled nodes => {} controlled nodes",
+    //     orig_cost.observed.len(),
+    //     cost.observed.len()
+    // );
+    // println!("{} => {}", start.pretty(2), best_tree_expr.pretty(2));
 
     Ok(())
 }
