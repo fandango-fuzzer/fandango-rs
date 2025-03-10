@@ -1,4 +1,4 @@
-use fandango_core::graph::FandangoNode;
+use fandango_core::lang::FandangoNode;
 use fandango_core::lang::{compute_tag_hash, Operator, Statement, Symbol};
 use pest::Span;
 use proc_macro2::{Ident, TokenStream};
@@ -32,7 +32,7 @@ pub(crate) fn tokenize_metadata<'p, 's>(
                         quote! {
                             ({
                                 match #accessor.inner().statements() {
-                                    ::std::borrow::Cow::Borrowed(inner) => &inner[#i],
+                                    ::alloc::borrow::Cow::Borrowed(inner) => &inner[#i],
                                     _ => unreachable!()
                                 }
                             })
@@ -152,7 +152,7 @@ pub(crate) fn tokenize_metadata<'p, 's>(
                         quote! {
                             ({
                                 match #accessor.inner().concatenations() {
-                                    ::std::borrow::Cow::Borrowed(inner) => &inner[#i],
+                                    ::alloc::borrow::Cow::Borrowed(inner) => &inner[#i],
                                     _ => unreachable!()
                                 }
                             })
@@ -192,7 +192,7 @@ pub(crate) fn tokenize_metadata<'p, 's>(
                         quote! {
                             ({
                                 match #accessor.inner().operators() {
-                                    ::std::borrow::Cow::Borrowed(inner) => &inner[#i],
+                                    ::alloc::borrow::Cow::Borrowed(inner) => &inner[#i],
                                     _ => unreachable!()
                                 }
                             })
@@ -336,12 +336,12 @@ pub(crate) fn tokenize_metadata<'p, 's>(
         }
         FandangoNode::String(s) => (
             quote! {
-                ::std::borrow::Cow<'static, str>
+                ::alloc::borrow::Cow<'static, str>
             },
             {
                 let s = s.inner();
                 quote! {
-                    ::std::borrow::Cow::Borrowed(#s)
+                    ::alloc::borrow::Cow::Borrowed(#s)
                 }
             },
         ),

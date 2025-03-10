@@ -4,6 +4,8 @@ use criterion::{black_box, criterion_group, criterion_main, Criterion};
 use fandango_core::graph::IntoGraph;
 use fandango_core::lang::Program;
 
+extern crate alloc;
+
 pub const SIMPLE_GRAMMAR: &str = include_str!("../tests/grammars/simple.fan");
 
 fn parse_simple(c: &mut Criterion) {
@@ -93,7 +95,7 @@ mod simple {
                 b.iter_batched_ref(
                     || start.clone(),
                     |start| {
-                        let selection = rng.gen_range(0..count);
+                        let selection = rng.random_range(0..count);
                         let _: Result<(), Box<dyn Error>> = (|| {
                             let mut target = Advance::forward(selection)
                                 .visit(start, 0)?
@@ -230,7 +232,7 @@ mod xml {
                 b.iter_batched_ref(
                     || start.clone(),
                     |start| {
-                        let selection = rng.gen_range(0..count);
+                        let selection = rng.random_range(0..count);
                         let _: Result<(), Box<dyn Error>> = (|| {
                             let mut target = Advance::forward(selection)
                                 .visit(start, 0)?

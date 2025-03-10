@@ -1,11 +1,19 @@
 //! Build tests for FANDANGO, to ensure that we are generating code as expected.
 
+#![no_std]
+
 use fandango::parse_pairs_as;
 use fandango::Parser;
 use fandango_core::typing::Node;
 
+extern crate alloc;
+
 mod simple {
     use super::*;
+    use alloc::boxed::Box;
+    use alloc::string::String;
+    use alloc::vec::Vec;
+    use core::error::Error;
     use fandango::Fandango;
     use fandango_core::generation::util::Flattener;
     use fandango_core::generation::{Generated, InPlaceGenerated};
@@ -13,8 +21,8 @@ mod simple {
     use fandango_core::visitor::write::WriteVisitor;
     use fandango_core::visitor::Visitor;
     use fandango_core::visitor_chain;
-    use rand::{thread_rng, Rng};
-    use std::error::Error;
+    use rand::rng;
+    use rand::Rng;
     use tuple_list::tuple_list;
 
     #[derive(Fandango)]
@@ -30,7 +38,7 @@ mod simple {
         let mut dfs = None;
         let mut bfs = None;
 
-        let mut start = Simple::extract(SAMPLE)?;
+        let mut start = Simple::extract(SAMPLE).unwrap();
         {
             let expr = start.children_mut().0;
             if let nonterminal_expr_0::variant_0(expr) = expr.children_mut().0 {
@@ -113,7 +121,7 @@ mod simple {
 
     #[test]
     fn mutate() -> Result<(), Box<dyn Error>> {
-        let mut rng = thread_rng();
+        let mut rng = rng();
         let mut start = nonterminal_start::generate(&mut rng, &mut ());
 
         let mut generators = ();
@@ -123,7 +131,7 @@ mod simple {
         let mut count = start.count_nodes();
         for _ in 0..100_000 {
             let old_start = start.clone();
-            let selection = rng.gen_range(0..count);
+            let selection = rng.random_range(0..count);
             let mut target = Advance::forward(selection)
                 .visit(&mut start, 0)?
                 .break_value()
@@ -144,7 +152,7 @@ mod simple {
 
     #[test]
     fn generate() -> Result<(), Box<dyn Error>> {
-        let mut rng = thread_rng();
+        let mut rng = rng();
         let mut start = nonterminal_start::generate(&mut rng, &mut ());
 
         let serialized = String::from_utf8(
@@ -155,13 +163,15 @@ mod simple {
                 .output(),
         )?;
 
-        println!("{}", serialized);
+        extern crate std;
+
+        std::println!("{}", serialized);
         Ok(())
     }
 
     #[test]
     fn generate_unflattened() -> Result<(), Box<dyn Error>> {
-        let mut rng = thread_rng();
+        let mut rng = rng();
 
         let mut buf = Vec::new();
         let mut distribution = [0usize; 10];
@@ -178,14 +188,16 @@ mod simple {
             buf.clear();
         }
 
-        println!("{distribution:?}");
+        extern crate std;
+
+        std::println!("{distribution:?}");
 
         Ok(())
     }
 
     #[test]
     fn generate_flattened() -> Result<(), Box<dyn Error>> {
-        let mut rng = thread_rng();
+        let mut rng = rng();
 
         let flattener = Flattener::new().flatten::<nonterminal_digit>()?;
 
@@ -206,7 +218,9 @@ mod simple {
             buf.clear();
         }
 
-        println!("{distribution:?}");
+        extern crate std;
+
+        std::println!("{distribution:?}");
 
         Ok(())
     }
@@ -239,12 +253,15 @@ mod pest_renamed {
 }
 
 mod xml {
+    use alloc::boxed::Box;
+    use alloc::string::String;
+    use alloc::vec::Vec;
+    use core::error::Error;
     use fandango_core::generation::DefaultGenerated;
     use fandango_core::visitor::write::WriteVisitor;
     use fandango_core::visitor::Visitor;
     use fandango_derive::Fandango;
-    use rand::thread_rng;
-    use std::error::Error;
+    use rand::rng;
 
     #[allow(dead_code)]
     #[derive(Fandango)]
@@ -253,7 +270,7 @@ mod xml {
 
     #[test]
     fn generate() -> Result<(), Box<dyn Error>> {
-        let mut rng = thread_rng();
+        let mut rng = rng();
         let mut start = nonterminal_start::generate_default(&mut rng, &mut ());
 
         let serialized = String::from_utf8(
@@ -264,7 +281,9 @@ mod xml {
                 .output(),
         )?;
 
-        println!("{}", serialized);
+        extern crate std;
+
+        std::println!("{}", serialized);
         Ok(())
     }
 }

@@ -1,17 +1,16 @@
 //! Utility generators, which perform some common generator routines.
 
 use crate::generation::{Generated, Generator, GeneratorTuple, Sampler};
-use crate::graph::IntoGraph;
-use crate::typing::AsNode;
-use pest::Span;
-use petgraph::graph;
-use petgraph::graph::DiGraph;
-use petgraph::visit::EdgeRef;
-use std::collections::{BTreeMap, HashMap, HashSet};
-use std::error::Error;
-use std::fmt::{Debug, Display, Formatter};
+use crate::lang::{Nonterminal, Operator, Statement, Symbol, Tagged};
+use crate::typing::{AsNode, Structured};
+use alloc::collections::BTreeMap;
+use alloc::vec;
+use alloc::vec::Vec;
+use core::error::Error;
+use core::fmt::{Debug, Display, Formatter};
+use hashbrown::{HashMap, HashSet};
 
-type FandangoNode = crate::graph::FandangoNode<'static, 'static>;
+type FandangoNode = crate::lang::FandangoNode<'static, 'static>;
 
 /// Error variant which indicates that a [`Flattener`] could not be created for a given type, e.g.
 /// because it contained a cycle.
@@ -19,7 +18,7 @@ type FandangoNode = crate::graph::FandangoNode<'static, 'static>;
 pub struct Unflattenable;
 
 impl Display for Unflattenable {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
         f.write_str("The structure could not be flattened.")
     }
 }
@@ -52,51 +51,69 @@ pub struct Flattener {
     flattened: HashMap<FandangoNode, Flattened>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 struct Flattened {
     children: BTreeMap<usize, FandangoNode>,
     total: usize,
 }
 
 fn flatten(
-    node: graph::NodeIndex,
-    graph: &DiGraph<FandangoNode, Span<'static>>,
-    stack: &mut HashSet<graph::NodeIndex>,
-    collected: &mut HashMap<FandangoNode, Flattened>,
+    nonterminals: &HashMap<FandangoNode, FandangoNode>,
+    node: FandangoNode,
+    visited: &mut Vec<FandangoNode>,
+    flattened: &mut HashMap<FandangoNode, Flattened>,
 ) -> Result<usize, Unflattenable> {
-    let weight = *graph.node_weight(node).unwrap();
-    match weight {
-        FandangoNode::Nonterminal(_) | FandangoNode::Alternative(_) => {
-            if stack.insert(node) {
-                let mut children = BTreeMap::new();
-                let mut total = 0usize;
-                let mut edges = graph.edges(node).collect::<Vec<_>>();
-                edges.sort_by_key(|e| e.weight().start());
-                for child in edges.into_iter().map(|e| e.target()) {
-                    let count = flatten(child, graph, stack, collected)?;
-                    children.insert(total, *graph.node_weight(child).unwrap());
-                    total += count;
-                }
-                collected.insert(weight, Flattened { children, total });
-                stack.remove(&node);
-                Ok(total)
-            } else {
-                Err(Unflattenable)
-            }
-        }
-        FandangoNode::String(_) => {
-            collected.insert(
-                weight,
-                Flattened {
-                    children: BTreeMap::new(),
-                    total: 1,
-                },
-            );
-            Ok(1)
-        }
-        FandangoNode::Concatenation(_) | FandangoNode::Operator(_) => Err(Unflattenable),
-        _ => unreachable!("Encountered a node which should never be a descendant in a graph"),
+    if visited.contains(&node) {
+        return Err(Unflattenable);
     }
+    visited.push(node);
+    let mut inner = || match node {
+        nonterminal @ FandangoNode::Nonterminal(_) => {
+            let alt = nonterminals
+                .get(&nonterminal)
+                .expect("Nonterminal is used, so it must be defined");
+            let total = flatten(nonterminals, *alt, visited, flattened)?;
+            flattened.insert(
+                node,
+                flattened
+                    .get(alt)
+                    .expect("We just processed this alternative")
+                    .clone(),
+            );
+            Ok(total)
+        }
+        FandangoNode::Alternative(alt) => {
+            let mut children = BTreeMap::new();
+            let mut total = 0;
+            for (idx, concat) in alt.concatenations().iter().enumerate() {
+                let child = FandangoNode::from(concat);
+                total += flatten(nonterminals, child, visited, flattened)?;
+                children.insert(idx, child);
+            }
+            flattened.insert(node, Flattened { children, total });
+            Ok(total)
+        }
+        FandangoNode::Operator(Operator::Symbol(s)) => match s.inner() {
+            Symbol::Nonterminal(n) => {
+                flatten(nonterminals, FandangoNode::from(n), visited, flattened)
+            }
+            Symbol::String(s) => flatten(nonterminals, FandangoNode::from(s), visited, flattened),
+            Symbol::Alternative(a) => {
+                flatten(nonterminals, FandangoNode::from(a), visited, flattened)
+            }
+        },
+        FandangoNode::Concatenation(concat) if concat.operators().len() == 1 => flatten(
+            nonterminals,
+            FandangoNode::from(FandangoNode::from(&concat.operators()[0])),
+            visited,
+            flattened,
+        ),
+        FandangoNode::String(_) => Ok(1),
+        _ => Err(Unflattenable),
+    };
+    let result = inner();
+    visited.pop();
+    result
 }
 
 impl Flattener {
@@ -107,17 +124,33 @@ impl Flattener {
     }
 
     /// Adds a node to the flattening list. If a node is not listed here, it will not be flattened.
-    pub fn flatten<N: AsNode>(mut self) -> Result<Self, Unflattenable> {
-        let (lookup, graph) = N::root().into_graph();
+    pub fn flatten<N>(mut self) -> Result<Self, Unflattenable>
+    where
+        N: Structured,
+        FandangoNode: From<&'static Tagged<'static, N::FandangoType>>,
+        // rust bug: we have to remind the type checker that FandangoNode implements this?
+        FandangoNode: From<&'static Tagged<'static, Nonterminal<'static>>>,
+    {
+        let nonterminals = N::ROOT
+            .inner()
+            .statements()
+            .iter()
+            .filter_map(|s| match s.inner() {
+                Statement::Production(p) => Some(p.inner()),
+                _ => None,
+            })
+            .map(|p| {
+                (
+                    FandangoNode::from(p.nonterminal()),
+                    FandangoNode::from(p.alternative()),
+                )
+            })
+            .collect::<HashMap<_, _>>();
 
-        flatten(
-            lookup[&N::definition()],
-            &graph,
-            &mut HashSet::new(),
-            &mut self.flattened,
-        )?;
-        self.targets.insert(N::definition());
+        let node = FandangoNode::from(N::STRUCTURE);
+        flatten(&nonterminals, node, &mut vec![], &mut self.flattened)?;
 
+        self.targets.insert(node);
         Ok(self)
     }
 }

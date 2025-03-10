@@ -5,7 +5,7 @@ edition.workspace = true
 authors.workspace = true
 
 [dependencies]
-fandango-core = { path = "../core" }
+fandango-core = { path = "../core", features = ["std"] }
 
 pest.workspace = true
 pest_generator.workspace = true

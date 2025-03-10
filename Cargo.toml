@@ -11,13 +11,11 @@ fandango-derive = { path = "derive" }
 pest.workspace = true
 pest_derive.workspace = true
 tuple_list.workspace = true
-clap = { version = "4.5.23", features = ["derive"] }
 
 [dev-dependencies]
+fandango-core = { path = "core", features = ["std"] }
 criterion.workspace = true
-egg.workspace = true
-petgraph.workspace = true
-rand.workspace = true
+rand = { workspace = true, features = ["default"] }
 
 [lints]
 workspace = true
@@ -33,15 +31,16 @@ authors = ["Addison Crump <addison.crump@cispa.de>"]
 
 [workspace.dependencies]
 criterion = { version = "0.5.1", features = ["html_reports"] }
-either = "1.13"
-egg = "0.9.5"
-pest = "2.7"
-pest_derive = "2.7"
-pest_generator = "2.7"
-petgraph = "0.6.5"
+either = { version = "1.13", default-features = false }
+embedded-io = { version = "0.6.1", features = ["alloc"] }
+hashbrown = "0.15.2"
+pest = { version = "2.7", default-features = false }
+pest_derive = { version = "2.7", default-features = false }
+pest_generator = { version = "2.7", default-features = false }
+petgraph = "0.7.1"
 proc-macro2 = "1.0"
 quote = "1.0"
-rand = "0.8.5"
+rand = { version = "0.9.0", default-features = false }
 syn = "2.0"
 tuple_list = "0.1.3"
 

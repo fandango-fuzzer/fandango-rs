@@ -6,8 +6,8 @@ mod rust;
 mod structure;
 
 use ::pest::Span;
-use fandango_core::graph::{FandangoNode, IntoGraph};
-use fandango_core::lang::{ParseError, Program};
+use fandango_core::graph::IntoGraph;
+use fandango_core::lang::{FandangoNode, ParseError, Program};
 use pest::error::{InputLocation, LineColLocation};
 use quote::quote;
 use std::borrow::Cow;
@@ -167,7 +167,7 @@ pub fn derive_fandango_or_emit_error(
 ) -> Result<TokenStream, TokenStream> {
     let parsed = Program::try_from(&source.merged).map_err(|e| source.to_compile_error(e))?;
 
-    let (lookup, graph) = (&parsed).into_graph();
+    let (_lookup, graph) = (&parsed).into_graph();
     let mut tokenized = TokenStream::new();
 
     let mut mapped_names = HashMap::new();
@@ -235,13 +235,13 @@ pub fn derive_fandango_or_emit_error(
         trait TypeGenerator<'source, S>
         where
             #(Self: ::fandango::generation::GeneratorTuple<#node_names<'source>, S>),*,
-            #(Self: ::fandango::generation::GeneratorTuple<::std::boxed::Box<#node_names<'source>>, S>),*
+            #(Self: ::fandango::generation::GeneratorTuple<::alloc::boxed::Box<#node_names<'source>>, S>),*
         {}
 
         impl<'source, S, G> TypeGenerator<'source, S> for G
         where
             #(G: ::fandango::generation::GeneratorTuple<#node_names<'source>, S>),*,
-            #(G: ::fandango::generation::GeneratorTuple<::std::boxed::Box<#node_names<'source>>, S>),*
+            #(G: ::fandango::generation::GeneratorTuple<::alloc::boxed::Box<#node_names<'source>>, S>),*
         {}
 
         #[derive(Clone, Debug)]
@@ -289,7 +289,7 @@ pub fn derive_fandango_or_emit_error(
         impl<'a, 'program, 'source, S, G> ::fandango::generation::InPlaceGenerated<'a, S, G> for TypeMut<'program, 'source>
         where
             #(#node_names<'source>: ::fandango::generation::Generated<S, G>),*,
-            #(Box<#node_names<'source>>: ::fandango::generation::Generated<S, G>),*,
+            #(::alloc::boxed::Box<#node_names<'source>>: ::fandango::generation::Generated<S, G>),*,
             'program: 'a,
             'source: 'program,
         {
@@ -367,11 +367,11 @@ pub fn derive_fandango_or_emit_error(
         impl #ident {
             pub fn extract<'source>(
                 source: &'source str
-            ) -> ::std::result::Result<nonterminal_start<'_>, ParseError> {
+            ) -> ::core::result::Result<nonterminal_start<'_>, ParseError> {
                 use ::fandango::Parser;
 
                 let (grammar,) = ::fandango::parse_pairs_as!(#ident::parse(Rule::start, source)?, (Rule::start,));
-                let source = ::std::rc::Rc::new(::std::borrow::Cow::Borrowed(source));
+                let source = ::alloc::rc::Rc::new(::alloc::borrow::Cow::Borrowed(source));
 
                 nonterminal_start::try_from((source, grammar))
             }

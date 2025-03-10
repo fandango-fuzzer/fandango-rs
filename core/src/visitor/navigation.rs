@@ -3,10 +3,11 @@
 use crate::typing::Node;
 use crate::visitor::error::InvalidPath;
 use crate::visitor::{VisitResult, VisitWith, VisitableChildren, Visitor};
+use alloc::collections::VecDeque;
+use alloc::vec::Vec;
+use core::convert::Infallible;
+use core::ops::ControlFlow;
 use either::Either;
-use std::collections::VecDeque;
-use std::convert::Infallible;
-use std::ops::ControlFlow;
 
 /// Trait which enables chaining of visitors by returning paths between them (e.g. with
 /// [`crate::visitor_chain`]). One would choose this over simply traversing a given node if the
@@ -431,7 +432,7 @@ where
         T: From<&'program mut N>,
     {
         self.count += 1;
-        GoToVisitor::new(std::mem::take(&mut self.from))
+        GoToVisitor::new(core::mem::take(&mut self.from))
             .visit(node, idx)?
             .break_value()
             .unwrap()

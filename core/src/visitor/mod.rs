@@ -5,10 +5,12 @@ pub mod navigation;
 pub mod write;
 
 use crate::typing::Node;
+use alloc::boxed::Box;
+use alloc::vec::Vec;
+use core::error::Error;
+use core::fmt::{Debug, Display, Formatter};
+use core::ops::ControlFlow;
 use either::Either;
-use std::error::Error;
-use std::fmt::{Debug, Display, Formatter};
-use std::ops::ControlFlow;
 
 type NodeTrace<T> = Vec<(T, usize, Option<((usize, usize), (usize, usize))>)>;
 
@@ -52,7 +54,7 @@ pub trait VisitWith<'a, V>: Sized {
     /// # use std::ops::ControlFlow;
     /// # use std::marker::PhantomData;
     /// # use std::convert::Infallible;
-    /// # use fandango_core::graph::FandangoNode;
+    /// # use fandango_core::lang::FandangoNode;
     /// # use fandango_core::typing::{AsNode, Discriminable, Node};
     /// # use fandango_core::visitor::{MaybeVisitResult, VisitResult, VisitWith, VisitableChildren, Visitor};
     /// #
@@ -309,7 +311,7 @@ pub enum ChainError<C> {
 }
 
 impl<C> Display for ChainError<C> {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
         match self {
             ChainError::UnexpectedContinue(_) => {
                 f.write_str("The first visitor continued when we expected a break")
@@ -346,8 +348,8 @@ macro_rules! visitor_chain {
     (@ $next:expr, $node:expr, $idx:ident, $visitor:expr, $($visitors:expr),+) => {{
         assert_eq!($idx, $next.pop_front().unwrap());
         let mut next = match visitor_chain!(@ $next, $node, $idx, $visitor) {
-            ::std::ops::ControlFlow::Continue(c) => ::std::result::Result::Err(::fandango::visitor::ChainError::UnexpectedContinue(c))?,
-            ::std::ops::ControlFlow::Break(b) => b
+            ::core::ops::ControlFlow::Continue(c) => ::core::result::Result::Err(::fandango::visitor::ChainError::UnexpectedContinue(c))?,
+            ::core::ops::ControlFlow::Break(b) => b
         };
         visitor_chain!(starting from next, $node, $idx, $($visitors),+)
     }};
@@ -355,8 +357,8 @@ macro_rules! visitor_chain {
     ($node:expr, $idx:expr, $visitor:expr, $($visitors:expr),+) => {{
         let idx = $idx;
         let mut next = match visitor_chain!($node, idx, $visitor) {
-            ::std::ops::ControlFlow::Continue(c) => ::std::result::Result::Err(::fandango::visitor::ChainError::UnexpectedContinue(c))?,
-            ::std::ops::ControlFlow::Break(b) => b
+            ::core::ops::ControlFlow::Continue(c) => ::core::result::Result::Err(::fandango::visitor::ChainError::UnexpectedContinue(c))?,
+            ::core::ops::ControlFlow::Break(b) => b
         };
         visitor_chain!(@ next, $node, idx, $($visitors),+)
     }};

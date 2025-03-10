@@ -1,14 +1,15 @@
+use fandango_core::lang::FandangoNode;
+use fandango_core::lang::Operator;
+use petgraph::graph::{DiGraph, NodeIndex};
+use petgraph::visit::EdgeRef;
 use std::borrow::Cow;
 use std::collections::HashSet;
-// re-export to maintain import sanity
-use fandango_core::graph::FandangoNode;
-use fandango_core::lang::{Nonterminal, Operator};
-pub use pest::*;
-use petgraph::graph::{DiGraph, EdgeReference, NodeIndex};
-use petgraph::visit::EdgeRef;
 use std::fmt;
 use std::fmt::Write;
 use std::hash::{DefaultHasher, Hash, Hasher};
+
+// re-export to maintain import sanity
+pub use pest::*;
 
 pub trait IntoPestSource<C> {
     /// The error type which is encountered as a result of trying to emit the source code.

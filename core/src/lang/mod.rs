@@ -2,18 +2,24 @@
 
 pub mod constraints;
 
-use crate::graph::{FandangoNode, GraphTraverse};
-use crate::impl_traverse;
 use crate::lang::py_literal::parse_string;
+use alloc::borrow::Cow;
+use alloc::boxed::Box;
+use alloc::string::{String, ToString};
+use core::cmp::Ordering;
+use core::fmt::{Debug, Display, Formatter, Write};
+use core::hash::Hash;
+use core::hash::Hasher;
+use core::str::FromStr;
 use pest::error::{Error as PestError, ErrorVariant};
 use pest::iterators::Pair;
 use pest::Parser;
-use std::borrow::Cow;
-use std::cmp::Ordering;
-use std::fmt::{Debug, Formatter};
-use std::hash::{DefaultHasher, Hash, Hasher};
-use std::str::FromStr;
 
+#[allow(deprecated)]
+use core::hash::SipHasher;
+
+use alloc::format;
+use core::fmt;
 pub use pest::Span;
 
 mod parser {
@@ -27,9 +33,13 @@ mod parser {
     pub struct Fandango;
 }
 
-use crate::lang::constraints::Constraint;
-use parser::Fandango;
-pub use parser::Rule;
+use parser::{Fandango, Rule};
+
+use crate::lang::constraints::{
+    Atom, BaseSelection, Comparison, Conjunction, Constraint, ConstraintOperator, Disjunction,
+    Expr, Implies, Inversion, Quantifier, QuantifierSpecification, RsPair, RsPairs, RsSlice,
+    RsSlices, Selection, Selector, SelectorLength,
+};
 
 /// The [`PestError`] specific to FANDANGO.
 pub type ParseError = Box<PestError<Rule>>;
@@ -47,7 +57,7 @@ impl<T> Debug for Tagged<'_, T>
 where
     T: Debug,
 {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
         f.debug_struct("Tagged")
             .field("inner", &self.inner)
             .field("span", &self.span().as_str())
@@ -57,8 +67,9 @@ where
 
 /// Pre-compute the hash for a given [`Tagged`] instance. Only to be used for known hashes during
 /// generation; your mileage may vary.
+#[allow(deprecated)]
 pub fn compute_tag_hash(span: &Span<'_>) -> u64 {
-    let mut hasher = DefaultHasher::new();
+    let mut hasher = SipHasher::new_with_keys(0, 0);
     span.as_str().hash(&mut hasher);
     hasher.finish()
 }
@@ -171,7 +182,7 @@ where
 #[derive(Debug, Clone, Ord, PartialOrd, Eq, PartialEq, Hash)]
 pub struct Program<'a> {
     /// The statements contained within this grammar.
-    statements: Cow<'a, [Tagged<'a, Statement<'a>>]>,
+    pub(crate) statements: Cow<'a, [Tagged<'a, Statement<'a>>]>,
 }
 
 impl<'a> Program<'a> {
@@ -189,8 +200,6 @@ impl Program<'static> {
         }
     }
 }
-
-impl_fandango_traverse!(Program, [statements]);
 
 impl<'a> TryFrom<&'a str> for Program<'a> {
     type Error = ParseError;
@@ -238,8 +247,6 @@ pub enum Statement<'a> {
     Python,
 }
 
-impl_fandango_traverse!(Statement, match { Production(prod), Constraint(constraint), Python });
-
 impl<'a> TryFrom<Pair<'a, Rule>> for Statement<'a> {
     type Error = ParseError;
 
@@ -261,9 +268,9 @@ impl<'a> TryFrom<Pair<'a, Rule>> for Statement<'a> {
 #[derive(Debug, Clone, Ord, PartialOrd, Eq, PartialEq, Hash)]
 pub struct Production<'a> {
     /// The nonterminal which is defined by this production.
-    nonterminal: Tagged<'a, Nonterminal<'a>>,
+    pub(crate) nonterminal: Tagged<'a, Nonterminal<'a>>,
     /// An alternative which defines the rule.
-    alternative: Tagged<'a, Alternative<'a>>,
+    pub(crate) alternative: Tagged<'a, Alternative<'a>>,
 }
 
 impl<'a> Production<'a> {
@@ -290,8 +297,6 @@ impl Production<'static> {
         }
     }
 }
-
-impl_fandango_traverse!(Production, nonterminal, alternative);
 
 impl<'a> TryFrom<Pair<'a, Rule>> for Production<'a> {
     type Error = ParseError;
@@ -328,10 +333,6 @@ impl<'a> Nonterminal<'a> {
     }
 }
 
-impl<'program, 'source> GraphTraverse<'program> for &'program Nonterminal<'source> {
-    type Node = FandangoNode<'program, 'source>;
-}
-
 impl<'a> TryFrom<Pair<'a, Rule>> for Nonterminal<'a> {
     type Error = ParseError;
 
@@ -350,7 +351,7 @@ impl<'a> TryFrom<Pair<'a, Rule>> for Nonterminal<'a> {
 #[derive(Debug, Clone, Ord, PartialOrd, Eq, PartialEq, Hash)]
 pub struct Alternative<'a> {
     /// The [`Concatenation`]s which represent the possible alternatives.
-    concatenations: Cow<'a, [Tagged<'a, Concatenation<'a>>]>,
+    pub(crate) concatenations: Cow<'a, [Tagged<'a, Concatenation<'a>>]>,
 }
 
 impl<'a> Alternative<'a> {
@@ -368,8 +369,6 @@ impl Alternative<'static> {
         }
     }
 }
-
-impl_fandango_traverse!(Alternative, [concatenations]);
 
 impl<'a> TryFrom<Pair<'a, Rule>> for Alternative<'a> {
     type Error = ParseError;
@@ -390,7 +389,7 @@ impl<'a> TryFrom<Pair<'a, Rule>> for Alternative<'a> {
 #[derive(Debug, Clone, Ord, PartialOrd, Eq, PartialEq, Hash)]
 pub struct Concatenation<'a> {
     /// The concatenated operators.
-    operators: Cow<'a, [Tagged<'a, Operator<'a>>]>,
+    pub(crate) operators: Cow<'a, [Tagged<'a, Operator<'a>>]>,
 }
 
 impl<'a> Concatenation<'a> {
@@ -408,8 +407,6 @@ impl Concatenation<'static> {
         }
     }
 }
-
-impl_fandango_traverse!(Concatenation, [operators]);
 
 impl<'a> TryFrom<Pair<'a, Rule>> for Concatenation<'a> {
     type Error = ParseError;
@@ -441,8 +438,6 @@ pub enum Operator<'a> {
     /// Simple case: exactly 1 [`Symbol`].
     Symbol(Tagged<'a, Symbol<'a>>),
 }
-
-impl_fandango_traverse!(Operator, match { Kleene(sym), Plus(sym), Option(sym), Repeat(sym, _, _), Symbol(sym) });
 
 fn parse_range(pair: Pair<Rule>) -> Result<usize, ParseError> {
     usize::from_str(pair.as_str()).map_err(|_| {
@@ -491,8 +486,6 @@ pub enum Symbol<'a> {
     Alternative(Tagged<'a, Alternative<'a>>),
 }
 
-impl_fandango_traverse!(Symbol, match { Nonterminal(nt), String(s), Alternative(alt) });
-
 impl<'a> TryFrom<Pair<'a, Rule>> for Symbol<'a> {
     type Error = ParseError;
 
@@ -514,9 +507,12 @@ impl<'a> TryFrom<Pair<'a, Rule>> for Symbol<'a> {
 /// This is necessary because pest does not easily allow for grammar + extract dependencies.
 mod py_literal {
     use crate::lang::{ParseError, Rule, Tagged};
+    use alloc::borrow::Cow;
+    use alloc::boxed::Box;
+    use alloc::format;
+    use alloc::string::String;
     use pest::error::{Error as PestError, ErrorVariant};
     use pest::iterators::Pair;
-    use std::borrow::Cow;
 
     fn parse_string_escape_seq(escape_seq: Pair<'_, Rule>) -> Result<char, ParseError> {
         debug_assert_eq!(escape_seq.as_rule(), Rule::string_escape_seq);
@@ -535,7 +531,7 @@ mod py_literal {
                 "v" => '\x0B',
                 _ => unreachable!(),
             }),
-            Rule::octal_escape => ::std::char::from_u32(
+            Rule::octal_escape => core::char::from_u32(
                 u32::from_str_radix(seq.as_str(), 8).unwrap(),
             )
             .ok_or_else(|| {
@@ -547,7 +543,7 @@ mod py_literal {
                 ))
             }),
             Rule::hex_escape | Rule::unicode_hex_escape => {
-                ::std::char::from_u32(u32::from_str_radix(&seq.as_str()[1..], 16).unwrap())
+                core::char::from_u32(u32::from_str_radix(&seq.as_str()[1..], 16).unwrap())
                     .ok_or_else(|| {
                         Box::new(PestError::new_from_span(
                             ErrorVariant::CustomError {
@@ -604,11 +600,13 @@ pub(crate) mod test {
         parse_string, Alternative, Concatenation, Nonterminal, Operator, Production, Program, Rule,
         Statement, Symbol,
     };
+    use alloc::borrow::Cow;
+    use alloc::boxed::Box;
+    use alloc::format;
+    use alloc::vec::Vec;
+    use core::error::Error;
     use pest::iterators::Pair;
     use pest::Parser;
-    use std::borrow::Cow;
-    use std::boxed::Box;
-    use std::error::Error;
 
     fn check_string_operator<const BORROW: bool>(operator: Pair<'_, Rule>, expected: &str) {
         let (symbol,) = parse_pairs_as!(operator.into_inner(), (Rule::symbol,));
@@ -652,7 +650,7 @@ pub(crate) mod test {
     #[test]
     fn test_grammar() -> Result<(), Box<dyn Error>> {
         let (grammar,) = parse_pairs_as!(
-            Fandango::parse(Rule::fandango, SIMPLE_GRAMMAR)?,
+            Fandango::parse(Rule::fandango, SIMPLE_GRAMMAR).unwrap(),
             (Rule::fandango,)
         );
         let (program, _) = parse_pairs_as!(grammar.into_inner(), (Rule::program, Rule::EOI));
@@ -764,7 +762,7 @@ pub(crate) mod test {
 
     #[test]
     fn test_fullparse() -> Result<(), Box<dyn Error>> {
-        let program = Program::try_from(SIMPLE_GRAMMAR)?;
+        let program = Program::try_from(SIMPLE_GRAMMAR).unwrap();
 
         let [start, expr, number, non_zero, digit] =
             program.statements.into_owned().try_into().unwrap();
@@ -941,8 +939,170 @@ pub(crate) mod test {
     }
 
     #[test]
-    fn test_fullparse_constraints() -> Result<(), Box<dyn Error>> {
-        let _ = Program::try_from(XML_CONSTRAINED_GRAMMAR)?;
-        Ok(())
+    fn test_fullparse_constraints() {
+        let _ = Program::try_from(XML_CONSTRAINED_GRAMMAR).unwrap();
     }
 }
+
+/// The node type used to represent the grammar's graph.
+#[derive(Debug, Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Hash)]
+#[allow(missing_docs)]
+pub enum FandangoNode<'program, 'source> {
+    // Core grammar components
+    Program(&'program Program<'source>),
+    Statement(&'program Statement<'source>),
+    Production(&'program Production<'source>),
+    Nonterminal(&'program Nonterminal<'source>),
+    Alternative(&'program Alternative<'source>),
+    Concatenation(&'program Concatenation<'source>),
+    Operator(&'program Operator<'source>),
+    Symbol(&'program Symbol<'source>),
+    String(&'program Tagged<'source, Cow<'source, str>>),
+    // Constraint components
+    Constraint(&'program Constraint<'source>),
+    Implies(&'program Implies<'source>),
+    Quantifier(&'program Quantifier<'source>),
+    QuantifierSpecification(&'program QuantifierSpecification<'source>),
+    Disjunction(&'program Disjunction<'source>),
+    Conjunction(&'program Conjunction<'source>),
+    Atom(&'program Atom<'source>),
+    Comparison(&'program Comparison<'source>),
+    ConstraintOperator(&'program Tagged<'source, ConstraintOperator>),
+    Expr(&'program Expr<'source>),
+    SelectorLength(&'program SelectorLength<'source>),
+    Selection(&'program Selection<'source>),
+    Selector(&'program Selector<'source>),
+    BaseSelection(&'program BaseSelection<'source>),
+    RsPairs(&'program RsPairs<'source>),
+    RsPair(&'program RsPair<'source>),
+    RsSlices(&'program RsSlices<'source>),
+    RsSlice(&'program Tagged<'source, RsSlice>),
+    Inversion(&'program Inversion<'source>),
+}
+
+impl Display for FandangoNode<'_, '_> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        match self {
+            FandangoNode::Program(_) => f.write_str("PROG"),
+            FandangoNode::Statement(_) => f.write_str("STMT"),
+            FandangoNode::Production(_) => f.write_str("PROD"),
+            FandangoNode::Nonterminal(nt) => {
+                f.write_char('<')?;
+                f.write_str(nt.name())?;
+                f.write_char('>')
+            }
+            FandangoNode::Alternative(_) => f.write_char('|'),
+            FandangoNode::Concatenation(_) => f.write_char('~'),
+            FandangoNode::Operator(op) => match op {
+                Operator::Kleene(_) => f.write_char('*'),
+                Operator::Plus(_) => f.write_char('+'),
+                Operator::Option(_) => f.write_char('?'),
+                Operator::Repeat(_, start, end) => f.write_str(&format!("{{{},{}}}", start, end)),
+                Operator::Symbol(_) => f.write_str("OP"),
+            },
+            FandangoNode::Symbol(_) => f.write_str("SYM"),
+            FandangoNode::String(s) => fmt::Debug::fmt(s, f),
+            FandangoNode::Constraint(_) => f.write_str("CNST"),
+            FandangoNode::Implies(_) => f.write_str("=>"),
+            FandangoNode::Quantifier(Quantifier::Forall(_)) => f.write_char('∀'),
+            FandangoNode::Quantifier(Quantifier::Exists(_)) => f.write_char('∃'),
+            FandangoNode::Quantifier(Quantifier::Disjunction(_)) => f.write_str("QNTF"),
+            FandangoNode::QuantifierSpecification(_) => f.write_str("QSPEC"),
+            FandangoNode::Disjunction(_) => f.write_str("DISJ"),
+            FandangoNode::Conjunction(_) => f.write_str("CONJ"),
+            FandangoNode::Atom(_) => f.write_str("ATOM"),
+            FandangoNode::Comparison(_) => f.write_str("CMP"),
+            FandangoNode::ConstraintOperator(op) => match op.inner() {
+                ConstraintOperator::Neq => f.write_str("!="),
+                ConstraintOperator::Lt => f.write_char('<'),
+                ConstraintOperator::LtEq => f.write_str("<="),
+                ConstraintOperator::Eq => f.write_str("=="),
+                ConstraintOperator::GtEq => f.write_str(">="),
+                ConstraintOperator::Gt => f.write_char('>'),
+            },
+            FandangoNode::Expr(_) => f.write_str("EXPR"),
+            FandangoNode::SelectorLength(SelectorLength::WithLength(_)) => f.write_str("COUNT"),
+            FandangoNode::SelectorLength(SelectorLength::NoLength(_)) => f.write_str("SELECT"),
+            FandangoNode::Selector(_) => f.write_str("SELECTOR"),
+            FandangoNode::Selection(Selection::OverSlices(_, _))
+            | FandangoNode::Selection(Selection::OverPairs(_, _)) => f.write_str("OVER"),
+            FandangoNode::Selection(Selection::Basic(_)) => f.write_str("DIRECT"),
+            FandangoNode::BaseSelection(BaseSelection::Nonterminal(_)) => f.write_str("EXACT"),
+            FandangoNode::BaseSelection(BaseSelection::Selector(_)) => f.write_str("SELECTED"),
+            FandangoNode::RsPairs(_) => f.write_str("PAIRS"),
+            FandangoNode::RsPair(_) => f.write_str("PAIR"),
+            FandangoNode::RsSlices(_) => f.write_str("SLICES"),
+            FandangoNode::RsSlice(s) => Display::fmt(s.inner(), f),
+            FandangoNode::Inversion(Inversion::Selector(_)) => f.write_str("SELECTED"),
+            FandangoNode::Inversion(Inversion::Stringified(_)) => f.write_str("STRINGIFIED"),
+        }
+    }
+}
+
+impl<'program, 'source> From<&'program Tagged<'source, Cow<'source, str>>>
+    for FandangoNode<'program, 'source>
+{
+    fn from(value: &'program Tagged<'source, Cow<'source, str>>) -> Self {
+        Self::String(value)
+    }
+}
+
+impl<'program, 'source> From<&'program Tagged<'source, ConstraintOperator>>
+    for FandangoNode<'program, 'source>
+{
+    fn from(value: &'program Tagged<'source, ConstraintOperator>) -> Self {
+        Self::ConstraintOperator(value)
+    }
+}
+
+impl<'program, 'source> From<&'program Tagged<'source, RsSlice>>
+    for FandangoNode<'program, 'source>
+{
+    fn from(value: &'program Tagged<'source, RsSlice>) -> Self {
+        Self::RsSlice(value)
+    }
+}
+
+macro_rules! impl_node_from {
+    ($node:tt) => {
+        impl<'program, 'source> From<&'program $node<'source>> for FandangoNode<'program, 'source> {
+            fn from(value: &'program $node<'source>) -> Self {
+                Self::$node(value)
+            }
+        }
+
+        impl<'program, 'source> From<&'program Tagged<'source, $node<'source>>>
+            for FandangoNode<'program, 'source>
+        {
+            fn from(value: &'program Tagged<'source, $node<'source>>) -> Self {
+                Self::$node(value.inner())
+            }
+        }
+    };
+}
+
+impl_node_from!(Program);
+impl_node_from!(Statement);
+impl_node_from!(Production);
+impl_node_from!(Nonterminal);
+impl_node_from!(Alternative);
+impl_node_from!(Concatenation);
+impl_node_from!(Operator);
+impl_node_from!(Symbol);
+impl_node_from!(Constraint);
+impl_node_from!(Implies);
+impl_node_from!(Quantifier);
+impl_node_from!(QuantifierSpecification);
+impl_node_from!(Disjunction);
+impl_node_from!(Conjunction);
+impl_node_from!(Atom);
+impl_node_from!(Comparison);
+impl_node_from!(Expr);
+impl_node_from!(SelectorLength);
+impl_node_from!(Selector);
+impl_node_from!(Selection);
+impl_node_from!(BaseSelection);
+impl_node_from!(RsPairs);
+impl_node_from!(RsPair);
+impl_node_from!(RsSlices);
+impl_node_from!(Inversion);

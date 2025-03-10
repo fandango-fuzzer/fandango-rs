@@ -1,13 +1,13 @@
 //! Visitors for emitting FANDANGO-generated inputs.
 
-use crate::graph::FandangoNode;
+use crate::lang::FandangoNode;
 use crate::typing::Node;
 use crate::visitor::navigation::StartingFrom;
 use crate::visitor::{VisitResult, VisitableChildren, Visitor};
-use std::collections::VecDeque;
-use std::convert::Infallible;
-use std::io;
-use std::ops::ControlFlow;
+use alloc::collections::VecDeque;
+use core::convert::Infallible;
+use core::ops::ControlFlow;
+use embedded_io as io;
 
 /// A visitor which emits the string representation of the tree, optionally using the existing
 /// string representation in memory.
@@ -55,10 +55,7 @@ impl<W> WriteVisitor<W, false> {
     }
 }
 
-impl<W, const CACHE: bool> StartingFrom for WriteVisitor<W, CACHE>
-where
-    W: io::Write,
-{
+impl<W, const CACHE: bool> StartingFrom for WriteVisitor<W, CACHE> {
     type WithPath = Self;
 
     fn starting_from(self, from: VecDeque<usize>) -> Self::WithPath {
@@ -83,7 +80,7 @@ where
 {
     type Continue = Self;
     type Break = Infallible;
-    type Error = io::Error;
+    type Error = <W as io::ErrorType>::Error;
 
     fn visit<'program, N>(mut self, node: &'program mut N, _: usize) -> VisitResult<Self, T>
     where

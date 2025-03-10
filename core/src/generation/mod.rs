@@ -2,6 +2,7 @@
 
 pub mod util;
 
+use alloc::boxed::Box;
 use rand::Rng;
 
 /// Sampler definition, allowing for tuning of the random generation. See [`util::Flattener`]'s
@@ -28,23 +29,23 @@ where
     R: Rng,
 {
     fn sample_kleene(&mut self) -> usize {
-        self.gen_range(0..DEFAULT_UPPER_COUNT)
+        self.random_range(0..DEFAULT_UPPER_COUNT)
     }
 
     fn sample_plus(&mut self) -> usize {
-        self.gen_range(0..DEFAULT_UPPER_COUNT)
+        self.random_range(0..DEFAULT_UPPER_COUNT)
     }
 
     fn sample_optional(&mut self) -> bool {
-        self.r#gen()
+        self.random()
     }
 
     fn sample_repetition(&mut self, lower: usize, upper: usize) -> usize {
-        self.gen_range(lower..=upper)
+        self.random_range(lower..=upper)
     }
 
     fn sample_alternative(&mut self, count: usize) -> usize {
-        self.gen_range(0..count)
+        self.random_range(0..count)
     }
 }
 

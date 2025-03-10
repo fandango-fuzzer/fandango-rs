@@ -1,12 +1,13 @@
 //! Parsing and representation routines for constraints defined within a FANDANGO grammar.
 
-use crate::graph::{traverse_children, FandangoNode, GraphTraverse};
-use crate::lang::{Nonterminal, ParseError, Rule, Tagged};
+use crate::lang::Nonterminal;
+use crate::lang::ParseError;
+use crate::lang::Rule;
+use crate::lang::Tagged;
+use alloc::boxed::Box;
+use alloc::vec::Vec;
+use core::fmt::{Debug, Display, Formatter, Write};
 use pest::iterators::Pair;
-use pest::Span;
-use std::fmt::{Debug, Display, Formatter, Write};
-use std::iter;
-use std::ops::Deref;
 
 /// Represents a constraint statement in a FANDANGO grammar.
 #[derive(Debug, Clone, Ord, PartialOrd, Eq, PartialEq, Hash)]
@@ -16,8 +17,6 @@ pub enum Constraint<'a> {
     /// A constraint which expresses an implication
     Implies(Tagged<'a, Implies<'a>>),
 }
-
-impl_fandango_traverse!(Constraint, match { Fitness(fitness), Implies(implies) });
 
 impl<'a> TryFrom<Pair<'a, Rule>> for Constraint<'a> {
     type Error = ParseError;
@@ -38,26 +37,8 @@ impl<'a> TryFrom<Pair<'a, Rule>> for Constraint<'a> {
 /// An implication which defines the constraint
 #[derive(Debug, Clone, Ord, PartialOrd, Eq, PartialEq, Hash)]
 pub struct Implies<'a> {
-    quantifier: Tagged<'a, Quantifier<'a>>,
-    implies: Option<Box<Tagged<'a, Implies<'a>>>>,
-}
-
-impl<'program, 'source: 'program> GraphTraverse<'program> for &'program Implies<'source> {
-    type Node = FandangoNode<'program, 'source>;
-
-    fn traverse<F>(self, consumer: F)
-    where
-        F: FnMut(Self::Node, Self::Node, Span<'program>),
-    {
-        traverse_children(
-            self,
-            {
-                let next = iter::once(&self.quantifier).map(From::from);
-                next.chain(self.implies.iter().map(Deref::deref).map(From::from))
-            },
-            consumer,
-        );
-    }
+    pub(crate) quantifier: Tagged<'a, Quantifier<'a>>,
+    pub(crate) implies: Option<Box<Tagged<'a, Implies<'a>>>>,
 }
 
 impl<'a> TryFrom<Pair<'a, Rule>> for Implies<'a> {
@@ -91,8 +72,6 @@ pub enum Quantifier<'a> {
     Disjunction(Tagged<'a, Disjunction<'a>>),
 }
 
-impl_fandango_traverse!(Quantifier, match { Forall(forall), Exists(exists), Disjunction(disjunction) });
-
 impl<'a> TryFrom<Pair<'a, Rule>> for Quantifier<'a> {
     type Error = ParseError;
 
@@ -117,36 +96,9 @@ impl<'a> TryFrom<Pair<'a, Rule>> for Quantifier<'a> {
 /// The specification for the quantifier (i.e., what must hold)
 #[derive(Debug, Clone, Ord, PartialOrd, Eq, PartialEq, Hash)]
 pub struct QuantifierSpecification<'a> {
-    nonterminal: Tagged<'a, Nonterminal<'a>>,
-    selector: Tagged<'a, Selector<'a>>,
-    quantifier: Box<Tagged<'a, Quantifier<'a>>>,
-}
-
-impl<'program, 'source: 'program> GraphTraverse<'program>
-    for &'program QuantifierSpecification<'source>
-{
-    type Node = FandangoNode<'program, 'source>;
-
-    fn traverse<F>(self, consumer: F)
-    where
-        F: FnMut(Self::Node, Self::Node, Span<'program>),
-    {
-        traverse_children(
-            self,
-            {
-                let next = iter::once(&self.nonterminal).map(From::from);
-                {
-                    let next = next.chain(iter::once(&self.selector).map(From::from));
-                    next.chain(
-                        iter::once(&self.quantifier)
-                            .map(Deref::deref)
-                            .map(From::from),
-                    )
-                }
-            },
-            consumer,
-        );
-    }
+    pub(crate) nonterminal: Tagged<'a, Nonterminal<'a>>,
+    pub(crate) selector: Tagged<'a, Selector<'a>>,
+    pub(crate) quantifier: Box<Tagged<'a, Quantifier<'a>>>,
 }
 
 impl<'a> TryFrom<Pair<'a, Rule>> for QuantifierSpecification<'a> {
@@ -168,10 +120,8 @@ impl<'a> TryFrom<Pair<'a, Rule>> for QuantifierSpecification<'a> {
 /// A sequence of formula atoms of which at least one must hold for this to be considered true
 #[derive(Debug, Clone, Ord, PartialOrd, Eq, PartialEq, Hash)]
 pub struct Disjunction<'a> {
-    conjunctions: Vec<Tagged<'a, Conjunction<'a>>>,
+    pub(crate) conjunctions: Vec<Tagged<'a, Conjunction<'a>>>,
 }
-
-impl_fandango_traverse!(Disjunction, [conjunctions]);
 
 impl<'a> TryFrom<Pair<'a, Rule>> for Disjunction<'a> {
     type Error = ParseError;
@@ -192,10 +142,8 @@ impl<'a> TryFrom<Pair<'a, Rule>> for Disjunction<'a> {
 /// A sequence of formula atoms which must all hold for this to be considered true
 #[derive(Debug, Clone, Ord, PartialOrd, Eq, PartialEq, Hash)]
 pub struct Conjunction<'a> {
-    atoms: Vec<Tagged<'a, Atom<'a>>>,
+    pub(crate) atoms: Vec<Tagged<'a, Atom<'a>>>,
 }
-
-impl_fandango_traverse!(Conjunction, [atoms]);
 
 impl<'a> TryFrom<Pair<'a, Rule>> for Conjunction<'a> {
     type Error = ParseError;
@@ -224,8 +172,6 @@ pub enum Atom<'a> {
     Expr(Tagged<'a, Expr<'a>>),
 }
 
-impl_fandango_traverse!(Atom, match { Comparison(comp), Implies(implies), Expr(expr) });
-
 impl<'a> TryFrom<Pair<'a, Rule>> for Atom<'a> {
     type Error = ParseError;
 
@@ -246,12 +192,10 @@ impl<'a> TryFrom<Pair<'a, Rule>> for Atom<'a> {
 /// A comparison between two expressions
 #[derive(Debug, Clone, Ord, PartialOrd, Eq, PartialEq, Hash)]
 pub struct Comparison<'a> {
-    left: Tagged<'a, Expr<'a>>,
-    right: Tagged<'a, Expr<'a>>,
-    operator: Tagged<'a, ConstraintOperator>,
+    pub(crate) left: Tagged<'a, Expr<'a>>,
+    pub(crate) right: Tagged<'a, Expr<'a>>,
+    pub(crate) operator: Tagged<'a, ConstraintOperator>,
 }
-
-impl_fandango_traverse!(Comparison, left, right, operator);
 
 impl<'a> TryFrom<Pair<'a, Rule>> for Comparison<'a> {
     type Error = ParseError;
@@ -310,8 +254,6 @@ pub enum Expr<'a> {
     Inversion(Tagged<'a, Inversion<'a>>),
 }
 
-impl_fandango_traverse!(Expr, match { Selector(selector), Inversion(inversion) });
-
 impl<'a> TryFrom<Pair<'a, Rule>> for Expr<'a> {
     type Error = ParseError;
 
@@ -336,8 +278,6 @@ pub enum SelectorLength<'a> {
     /// Specifies a selection that is considering the value itself
     NoLength(Tagged<'a, Selector<'a>>),
 }
-
-impl_fandango_traverse!(SelectorLength, match { WithLength(selector), NoLength(selector) });
 
 impl<'a> TryFrom<Pair<'a, Rule>> for SelectorLength<'a> {
     type Error = ParseError;
@@ -366,35 +306,6 @@ pub enum Selector<'a> {
     PathSelector(Tagged<'a, Selection<'a>>, Box<Tagged<'a, Selector<'a>>>),
     /// A basic selection
     Basic(Tagged<'a, Selection<'a>>),
-}
-
-impl<'program, 'source: 'program> GraphTraverse<'program> for &'program Selector<'source> {
-    type Node = FandangoNode<'program, 'source>;
-
-    fn traverse<F>(self, consumer: F)
-    where
-        F: FnMut(Self::Node, Self::Node, Span<'program>),
-    {
-        #![allow(unused_imports)]
-        use Selector::*;
-        match self {
-            ChildSelector(basic, child) => traverse_children(
-                self,
-                iter::once(basic)
-                    .map(From::from)
-                    .chain(iter::once(child.deref()).map(From::from)),
-                consumer,
-            ),
-            PathSelector(basic, descendent) => traverse_children(
-                self,
-                iter::once(basic)
-                    .map(From::from)
-                    .chain(iter::once(descendent.deref()).map(From::from)),
-                consumer,
-            ),
-            Basic(basic) => traverse_children(self, iter::once(basic).map(From::from), consumer),
-        }
-    }
 }
 
 impl<'a> TryFrom<Pair<'a, Rule>> for Selector<'a> {
@@ -437,8 +348,6 @@ pub enum Selection<'a> {
     Basic(Tagged<'a, BaseSelection<'a>>),
 }
 
-impl_fandango_traverse!(Selection, match { OverSlices(basic, slices), OverPairs(basic, pairs), Basic(basic) });
-
 impl<'a> TryFrom<Pair<'a, Rule>> for Selection<'a> {
     type Error = ParseError;
 
@@ -472,26 +381,6 @@ pub enum BaseSelection<'a> {
     Selector(Box<Tagged<'a, Selector<'a>>>),
 }
 
-impl<'program, 'source: 'program> GraphTraverse<'program> for &'program BaseSelection<'source> {
-    type Node = FandangoNode<'program, 'source>;
-
-    fn traverse<F>(self, consumer: F)
-    where
-        F: FnMut(Self::Node, Self::Node, Span<'program>),
-    {
-        #![allow(unused_imports)]
-        use BaseSelection::*;
-        match self {
-            Nonterminal(nonterminal) => {
-                traverse_children(self, iter::once(nonterminal).map(From::from), consumer)
-            }
-            Selector(selector) => {
-                traverse_children(self, iter::once(selector.deref()).map(From::from), consumer)
-            }
-        }
-    }
-}
-
 impl<'a> TryFrom<Pair<'a, Rule>> for BaseSelection<'a> {
     type Error = ParseError;
 
@@ -511,10 +400,8 @@ impl<'a> TryFrom<Pair<'a, Rule>> for BaseSelection<'a> {
 /// A sequence of pairs over a node
 #[derive(Debug, Clone, Ord, PartialOrd, Eq, PartialEq, Hash)]
 pub struct RsPairs<'a> {
-    pairs: Vec<Tagged<'a, RsPair<'a>>>,
+    pub(crate) pairs: Vec<Tagged<'a, RsPair<'a>>>,
 }
-
-impl_fandango_traverse!(RsPairs, [pairs]);
 
 impl<'a> TryFrom<Pair<'a, Rule>> for RsPairs<'a> {
     type Error = ParseError;
@@ -535,11 +422,9 @@ impl<'a> TryFrom<Pair<'a, Rule>> for RsPairs<'a> {
 /// TODO ask what this means :)
 #[derive(Debug, Clone, Ord, PartialOrd, Eq, PartialEq, Hash)]
 pub struct RsPair<'a> {
-    nonterminal: Tagged<'a, Nonterminal<'a>>,
-    slice: Option<Tagged<'a, RsSlice>>,
+    pub(crate) nonterminal: Tagged<'a, Nonterminal<'a>>,
+    pub(crate) slice: Option<Tagged<'a, RsSlice>>,
 }
-
-impl_fandango_traverse!(RsPair, nonterminal, [slice]);
 
 impl<'a> TryFrom<Pair<'a, Rule>> for RsPair<'a> {
     type Error = ParseError;
@@ -563,10 +448,8 @@ impl<'a> TryFrom<Pair<'a, Rule>> for RsPair<'a> {
 /// A sequence of slices
 #[derive(Debug, Clone, Ord, PartialOrd, Eq, PartialEq, Hash)]
 pub struct RsSlices<'a> {
-    slices: Vec<Tagged<'a, RsSlice>>,
+    pub(crate) slices: Vec<Tagged<'a, RsSlice>>,
 }
-
-impl_fandango_traverse!(RsSlices, [slices]);
 
 impl<'a> TryFrom<Pair<'a, Rule>> for RsSlices<'a> {
     type Error = ParseError;
@@ -647,8 +530,6 @@ pub enum Inversion<'a> {
     Stringified(Tagged<'a, Selector<'a>>),
 }
 
-impl_fandango_traverse!(Inversion, match { Selector(selector), Stringified(selector) });
-
 impl<'a> TryFrom<Pair<'a, Rule>> for Inversion<'a> {
     type Error = ParseError;
 
@@ -668,7 +549,7 @@ impl<'a> TryFrom<Pair<'a, Rule>> for Inversion<'a> {
 }
 
 impl Display for RsSlice {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
         match self {
             RsSlice::RangeWithStep(start, end, step) => {
                 if let Some(start) = start {

@@ -1,11 +1,12 @@
 //! Type information used in generated FANDANGO grammars.
 
-use crate::graph::FandangoNode;
+use crate::lang::FandangoNode;
 use crate::lang::{Program, Tagged};
+use alloc::borrow::Cow;
+use alloc::boxed::Box;
+use alloc::rc::Rc;
+use core::ops::Deref;
 use pest::Span;
-use std::borrow::Cow;
-use std::ops::Deref;
-use std::rc::Rc;
 
 /// Convert a maybe owned string span into a span. Only for use with generated code.
 pub fn maybe_owned_span<'program>(

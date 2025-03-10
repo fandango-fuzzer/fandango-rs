@@ -4,8 +4,9 @@
 
 use crate::typing::Node;
 use crate::visitor::NodeTrace;
-use std::error::Error;
-use std::fmt::{Debug, Display, Formatter, Write};
+use alloc::vec::Vec;
+use core::error::Error;
+use core::fmt::{Debug, Display, Formatter, Write};
 
 #[derive(Debug)]
 pub struct VisitErrorTrace<E, T> {
@@ -33,7 +34,7 @@ where
     E: Error,
     T: Display,
 {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
         f.write_fmt(format_args!("{}, backtrace:\n", self.inner))?;
         let largest_idx = self
             .trace
@@ -76,7 +77,7 @@ impl<E, T> From<E> for VisitErrorTrace<E, T> {
 pub struct InvalidPath;
 
 impl Display for InvalidPath {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
         f.write_str("Invalid path provided while traversing")
     }
 }
