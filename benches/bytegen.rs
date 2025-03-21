@@ -42,13 +42,12 @@ mod xml {
     use criterion::{black_box, BatchSize, BenchmarkId, Criterion, Throughput};
     use fandango_core::generation::Generated;
     use fandango_core::visitor::navigation::CountBytes;
-    
+
     use fandango_core::visitor::Visitor;
     use fandango_derive::Fandango;
     use rand::seq::IndexedRandom;
     use rand::SeedableRng;
     use std::collections::{BTreeMap, Bound};
-    
 
     #[allow(dead_code)]
     #[derive(Fandango)]
