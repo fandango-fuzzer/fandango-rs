@@ -54,3 +54,8 @@ missing_docs = "warn"
 name = "generation"
 path = "benches/generate.rs"
 harness = false
+
+[[bench]]
+name = "bytegen"
+path = "benches/bytegen.rs"
+harness = false

@@ -1,5 +1,6 @@
 //! Utility visitors for navigating type trees.
 
+use crate::lang::FandangoNode;
 use crate::typing::Node;
 use crate::visitor::error::InvalidPath;
 use crate::visitor::{VisitResult, VisitWith, VisitableChildren, Visitor};
@@ -477,6 +478,103 @@ where
 {
     fn count_nodes(&'a mut self) -> usize {
         self.visit_with(NodeCountVisitor::new(), 0)
+            .unwrap()
+            .continue_value()
+            .unwrap()
+            .count()
+    }
+}
+
+/// Count the number of bytes in the derivation tree underneath a given node.
+#[derive(Debug, Default)]
+pub struct ByteCountVisitor {
+    count: usize,
+    from: VecDeque<usize>,
+}
+
+impl ByteCountVisitor {
+    /// Create a new counter.
+    pub fn new() -> Self {
+        Self {
+            count: 0,
+            from: VecDeque::new(),
+        }
+    }
+
+    /// Consume the visitor and acquire the final count.
+    pub fn count(self) -> usize {
+        self.count
+    }
+}
+
+impl StartingFrom for ByteCountVisitor {
+    type WithPath = Self;
+
+    fn starting_from(mut self, from: VecDeque<usize>) -> Self::WithPath {
+        self.from = from;
+        self
+    }
+}
+
+impl<T> Visitor<T> for ByteCountVisitor
+where
+    T: VisitableChildren<T>,
+{
+    type Continue = Self;
+    type Break = Infallible;
+    type Error = InvalidPath;
+
+    fn visit<'program, N>(mut self, node: &'program mut N, idx: usize) -> VisitResult<Self, T>
+    where
+        N: Node<TypeMut<'program> = T>,
+        T: From<&'program mut N>,
+    {
+        self.count += 1;
+        GoToVisitor::new(core::mem::take(&mut self.from))
+            .visit(node, idx)?
+            .break_value()
+            .unwrap()
+            .visit_each(self)
+    }
+}
+
+/// Helper trait to use [`ByteCountVisitor`] as a method on the derivation tree from the provided
+/// node.
+pub trait CountBytes<'a> {
+    /// Perform the count!
+    fn count_bytes(&'a mut self) -> usize;
+}
+
+/// Helper trait to use [`ByteCountVisitor`] as a method on the derivation tree from the provided
+/// opaque node.
+pub trait CountBytesWith<'a> {
+    /// Perform the count!
+    fn count_bytes(&'a mut self) -> usize;
+}
+
+impl<'a, N> CountBytes<'a> for N
+where
+    N: Node + 'a,
+    ByteCountVisitor: Visitor<N::TypeMut<'a>, Continue = ByteCountVisitor, Error = InvalidPath>,
+    N::TypeMut<'a>: From<&'a mut N>,
+{
+    fn count_bytes(&'a mut self) -> usize {
+        ByteCountVisitor::new()
+            .visit(self, 0)
+            .unwrap()
+            .continue_value()
+            .unwrap()
+            .count()
+    }
+}
+
+impl<'a, T> CountBytesWith<'a> for T
+where
+    T: VisitWith<'a, ByteCountVisitor>,
+    T::Visited: VisitableChildren<T::Visited>,
+{
+    fn count_bytes(&'a mut self) -> usize {
+        self.visit_with(ByteCountVisitor::new(), 0)
             .unwrap()
             .continue_value()
             .unwrap()
