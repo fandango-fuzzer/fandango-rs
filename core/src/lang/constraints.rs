@@ -163,6 +163,8 @@ impl<'a> TryFrom<Pair<'a, Rule>> for Conjunction<'a> {
 
 /// The smallest unit of a formula
 #[derive(Debug, Clone, Ord, PartialOrd, Eq, PartialEq, Hash)]
+// Comparison is a very large struct, but memory usage is not a concern for codegen
+#[allow(clippy::large_enum_variant)]
 pub enum Atom<'a> {
     /// A comparison within the formula
     Comparison(Tagged<'a, Comparison<'a>>),

@@ -2,10 +2,7 @@
 
 extern crate alloc;
 use criterion::{criterion_group, criterion_main, Criterion, Throughput};
-use fandango_core::typing::Node;
-use fandango_core::visitor::{VisitableChildren, Visitor};
 use rand::{RngCore, SeedableRng};
-use std::error::Error;
 use std::fs::File;
 use std::io::Read;
 
@@ -43,15 +40,15 @@ fn chacha_throughput(c: &mut Criterion) {
 
 mod xml {
     use criterion::{black_box, BatchSize, BenchmarkId, Criterion, Throughput};
-    use fandango_core::generation::{Generated, InPlaceGenerated};
-    use fandango_core::visitor::navigation::{Advance, CountBytes, CountNodes};
-    use fandango_core::visitor::write::WriteVisitor;
+    use fandango_core::generation::Generated;
+    use fandango_core::visitor::navigation::CountBytes;
+    
     use fandango_core::visitor::Visitor;
     use fandango_derive::Fandango;
     use rand::seq::IndexedRandom;
-    use rand::{Rng, SeedableRng};
+    use rand::SeedableRng;
     use std::collections::{BTreeMap, Bound};
-    use std::error::Error;
+    
 
     #[allow(dead_code)]
     #[derive(Fandango)]

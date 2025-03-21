@@ -1,6 +1,5 @@
 //! Utility visitors for navigating type trees.
 
-use crate::lang::FandangoNode;
 use crate::typing::Node;
 use crate::visitor::error::InvalidPath;
 use crate::visitor::{VisitResult, VisitWith, VisitableChildren, Visitor};
