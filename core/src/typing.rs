@@ -157,3 +157,19 @@ where
         (**self).children_mut()
     }
 }
+
+/// Trait automatically implemented for opaque nodes which allows for downcasting of immutable
+/// references to concrete nodes.
+pub trait AsNodeRef<N> {
+    /// Downcast this opaque node into a immutable concrete node reference, if this opaque node
+    /// contains that node.
+    fn as_node(&self) -> Option<&N>;
+}
+
+/// Trait automatically implemented for opaque nodes which allows for downcasting of mutable
+/// references to concrete nodes.
+pub trait AsNodeMut<N> {
+    /// Downcast this opaque node into a mutable concrete node reference, if this opaque node
+    /// contains that node.
+    fn as_node_mut(&mut self) -> Option<&mut N>;
+}

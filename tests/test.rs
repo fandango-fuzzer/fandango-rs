@@ -258,6 +258,8 @@ mod xml {
     use alloc::vec::Vec;
     use core::error::Error;
     use fandango_core::generation::DefaultGenerated;
+    use fandango_core::typing::{AsNodeMut, Node};
+    use fandango_core::visitor::assignment::AssignmentVisitor;
     use fandango_core::visitor::write::WriteVisitor;
     use fandango_core::visitor::Visitor;
     use fandango_derive::Fandango;
@@ -284,6 +286,43 @@ mod xml {
         extern crate std;
 
         std::println!("{}", serialized);
+        Ok(())
+    }
+
+    // this looks horrible, but this means we can effectively downcast N1 to N2 conditionally
+    // this also applies to visitors
+    fn swap_example<'a, N1, N2>(n1: &'a mut N1, n2: &'a mut N2)
+    where
+        N1: Node,
+        N2: Node<TypeMut<'a> = N1::TypeMut<'a>>,
+        N1::TypeMut<'a>: From<&'a mut N1> + AsNodeMut<N2>,
+    {
+        core::mem::swap(<N1::TypeMut<'a>>::from(n1).as_node_mut().unwrap(), n2);
+    }
+
+    #[test]
+    fn find_replace() -> Result<(), Box<dyn Error>> {
+        let mut rng = rng();
+        let mut first = nonterminal_start::generate_default(&mut rng, &mut ());
+        let mut second = nonterminal_start::generate_default(&mut rng, &mut ());
+        while first == second {
+            second = nonterminal_start::generate_default(&mut rng, &mut ());
+        }
+
+        let second_clone = second.clone();
+
+        swap_example(&mut first, &mut second);
+
+        assert_eq!(first, second_clone);
+        assert_ne!(second, second_clone);
+
+        assert!(AssignmentVisitor(first)
+            .visit(&mut second, 0)
+            .unwrap()
+            .is_break());
+
+        assert_eq!(second, second_clone);
+
         Ok(())
     }
 }

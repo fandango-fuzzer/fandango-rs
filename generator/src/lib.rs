@@ -249,10 +249,41 @@ pub fn derive_fandango_or_emit_error(
             #(#node_names(&'program #node_names<'source>)),*
         }
 
+        #(
+            impl<'program, 'source> ::fandango::typing::AsNodeRef<#node_names<'source>> for Type<'program, 'source> {
+                fn as_node(&self) -> Option<&#node_names<'source>> {
+                    match self {
+                        Self::#node_names(n) => Some(n),
+                        _ => None,
+                    }
+                }
+            }
+        )*
+
         #[derive(Debug)]
         pub enum TypeMut<'program, 'source> {
             #(#node_names(&'program mut #node_names<'source>)),*
         }
+
+        #(
+            impl<'program, 'source> ::fandango::typing::AsNodeRef<#node_names<'source>> for TypeMut<'program, 'source> {
+                fn as_node(&self) -> Option<&#node_names<'source>> {
+                    match self {
+                        Self::#node_names(n) => Some(n),
+                        _ => None,
+                    }
+                }
+            }
+
+            impl<'program, 'source> ::fandango::typing::AsNodeMut<#node_names<'source>> for TypeMut<'program, 'source> {
+                fn as_node_mut(&mut self) -> Option<&mut #node_names<'source>> {
+                    match self {
+                        Self::#node_names(n) => Some(n),
+                        _ => None,
+                    }
+                }
+            }
+        )*
 
         impl<'program, 'source> TypeMut<'program, 'source> {
             fn reborrow<'a>(&'a mut self) -> TypeMut<'a, 'source> where 'source: 'a {
