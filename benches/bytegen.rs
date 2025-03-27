@@ -167,10 +167,10 @@ mod xml {
 
 criterion_group!(
     benches,
-    //    urandom_throughput,
-    //    chacha_throughput,
-    //    xoshiro_throughput,
+    urandom_throughput,
+    chacha_throughput,
+    xoshiro_throughput,
     xml::nowrite,
-    //    xml::throughput
+    xml::throughput
 );
 criterion_main!(benches);
