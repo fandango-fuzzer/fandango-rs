@@ -33,7 +33,7 @@ where
     }
 
     fn sample_plus(&mut self) -> usize {
-        self.random_range(0..DEFAULT_UPPER_COUNT)
+        self.random_range(1..DEFAULT_UPPER_COUNT)
     }
 
     fn sample_optional(&mut self) -> bool {
