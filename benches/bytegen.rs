@@ -38,6 +38,22 @@ fn chacha_throughput(c: &mut Criterion) {
     }
 }
 
+fn xoshiro_throughput(c: &mut Criterion) {
+    let mut group = c.benchmark_group("Xoshiro256PlusPlus");
+    let mut rng = rand::rngs::SmallRng::seed_from_u64(0);
+
+    for buffer_size in (0u64..=10u64).map(|i| 1u64 << i) {
+        group.throughput(Throughput::Bytes(buffer_size));
+        let mut scratch = vec![0u8; buffer_size as usize];
+
+        group.bench_function("throughput", |b| {
+            b.iter(|| {
+                rng.fill_bytes(black_box(&mut scratch));
+            })
+        });
+    }
+}
+
 mod xml {
     use criterion::{black_box, BatchSize, BenchmarkId, Criterion, Throughput};
     use fandango_core::generation::Generated;
@@ -60,7 +76,7 @@ mod xml {
 
         let rngs = (0..10000)
             .map(|i| {
-                let mut rng = rand::rngs::StdRng::seed_from_u64(i);
+                let mut rng = rand::rngs::SmallRng::seed_from_u64(i);
                 let stashed = rng.clone();
 
                 (
@@ -86,7 +102,7 @@ mod xml {
         for (count, rngs) in rngs {
             group.throughput(Throughput::Bytes(count as u64));
 
-            let mut picker = rand::rngs::StdRng::seed_from_u64(0);
+            let mut picker = rand::rngs::SmallRng::seed_from_u64(0);
 
             group.bench_with_input(BenchmarkId::new("throughput", count), &rngs, |b, rngs| {
                 b.iter_batched_ref(
@@ -103,7 +119,7 @@ mod xml {
 
         let rngs = (0..10000)
             .map(|i| {
-                let mut rng = rand::rngs::StdRng::seed_from_u64(i);
+                let mut rng = rand::rngs::SmallRng::seed_from_u64(i);
                 let stashed = rng.clone();
 
                 (
@@ -129,7 +145,7 @@ mod xml {
         for (count, rngs) in rngs {
             group.throughput(Throughput::Bytes(count as u64));
 
-            let mut picker = rand::rngs::StdRng::seed_from_u64(0);
+            let mut picker = rand::rngs::SmallRng::seed_from_u64(0);
             let mut scratch = vec![0u8; count << 1];
 
             group.bench_with_input(BenchmarkId::new("throughput", count), &rngs, |b, rngs| {
@@ -151,9 +167,10 @@ mod xml {
 
 criterion_group!(
     benches,
-    urandom_throughput,
-    chacha_throughput,
+    //    urandom_throughput,
+    //    chacha_throughput,
+    //    xoshiro_throughput,
     xml::nowrite,
-    xml::throughput
+    //    xml::throughput
 );
 criterion_main!(benches);

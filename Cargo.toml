@@ -20,6 +20,10 @@ rand = { workspace = true, features = ["default"] }
 [profile.release]
 lto = true
 
+[profile.bench]
+inherits = "release"
+debug = true
+
 [lints]
 workspace = true
 
