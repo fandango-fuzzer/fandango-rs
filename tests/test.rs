@@ -254,16 +254,16 @@ mod pest_renamed {
 
 mod xml {
     use alloc::boxed::Box;
-    use alloc::collections::VecDeque;
+
     use alloc::string::String;
     use alloc::vec::Vec;
     use core::error::Error;
-    use fandango_core::generation::{DefaultGenerated, InPlaceGenerated};
-    use fandango_core::typing::{AsNodeMut, AsNodeRef, Node};
+    use fandango_core::generation::DefaultGenerated;
+    use fandango_core::typing::{AsNodeMut, Node};
     use fandango_core::visitor::assignment::AssignmentVisitor;
-    use fandango_core::visitor::navigation::GoToWith;
+
     use fandango_core::visitor::write::WriteVisitor;
-    use fandango_core::visitor::{VisitWith, Visitor};
+    use fandango_core::visitor::Visitor;
     use fandango_derive::Fandango;
     use rand::rng;
 
