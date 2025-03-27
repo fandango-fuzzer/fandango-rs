@@ -1,13 +1,13 @@
 use fandango_core::lang::FandangoNode;
 use fandango_core::lang::Operator;
 use pest::Span;
-use petgraph::graph;
 use petgraph::graph::DiGraph;
 use petgraph::visit::EdgeRef;
+use petgraph::{algo, graph};
 use proc_macro2::{Ident, TokenStream};
 use quote::{format_ident, quote};
 use std::collections::hash_map::Entry;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::convert::Infallible;
 
 /// Produces a Rust source tree using the provided context.
@@ -77,6 +77,29 @@ where
             .find(|&n| matches!(self.node_weight(n).unwrap(), FandangoNode::Nonterminal(nt) if nt.name() == "start"))
             .expect("No start node?");
 
+        let vec_pruned = self.filter_map(
+            |_n, w| Some(*w),
+            |e, w| {
+                self.edge_endpoints(e).and_then(|(n1, _)| {
+                    (!matches!(
+                        self.node_weight(n1).unwrap(),
+                        FandangoNode::Operator(Operator::Kleene(_))
+                            | FandangoNode::Operator(Operator::Plus(_))
+                            | FandangoNode::Operator(Operator::Repeat(_, _, _))
+                    ))
+                    .then_some(*w)
+                })
+            },
+        );
+        let needs_indirection = algo::greedy_feedback_arc_set(&vec_pruned)
+            .map(|e| {
+                (
+                    *vec_pruned.node_weight(e.source()).unwrap(),
+                    *vec_pruned.node_weight(e.target()).unwrap(),
+                )
+            })
+            .collect::<HashSet<_>>();
+
         let mut edges = self.edges(start_node);
         let e = edges
             .next()
@@ -114,11 +137,10 @@ where
         } else {
             format_ident!("{name}_0")
         };
-        let child_type = match child_weight {
-            FandangoNode::Nonterminal(_) => {
-                quote! { ::alloc::boxed::Box<#child_name<'source>> }
-            }
-            _ => quote! { #child_name<'source> },
+        let child_type = if needs_indirection.contains(&(node_weight, child_weight)) {
+            quote! { ::alloc::boxed::Box<#child_name<'source>> }
+        } else {
+            quote! { #child_name<'source> }
         };
 
         let from = from_boilerplate(&name);
@@ -228,6 +250,7 @@ where
                 child_weight,
                 mapped_names,
                 self,
+                &needs_indirection,
             ),
             output,
         )
@@ -240,6 +263,10 @@ type FandangoGenContext<'names, 'graph, 'program, 'source> = (
     FandangoNode<'program, 'source>,
     &'names mut HashMap<FandangoNode<'program, 'source>, Ident>,
     &'graph DiGraph<FandangoNode<'program, 'source>, Span<'source>>,
+    &'graph HashSet<(
+        FandangoNode<'program, 'source>,
+        FandangoNode<'program, 'source>,
+    )>,
 );
 
 impl<'program, 'source> IntoRustSource<FandangoGenContext<'_, '_, 'program, 'source>>
@@ -252,7 +279,7 @@ impl<'program, 'source> IntoRustSource<FandangoGenContext<'_, '_, 'program, 'sou
         ctx: FandangoGenContext<'_, '_, 'program, 'source>,
         output: &mut TokenStream,
     ) -> Result<(), Self::OutputError> {
-        let (name, pest_name, node_weight, mapped_names, graph) = ctx;
+        let (name, pest_name, node_weight, mapped_names, graph, needs_indirection) = ctx;
         match mapped_names.entry(node_weight) {
             Entry::Occupied(_) => return Ok(()),
             Entry::Vacant(e) => {
@@ -307,22 +334,24 @@ impl<'program, 'source> IntoRustSource<FandangoGenContext<'_, '_, 'program, 'sou
                         Operator::Kleene(_) | Operator::Plus(_) | Operator::Repeat(_, _, _) => {
                             quote! { ::alloc::vec::Vec<#base> }
                         }
-                        Operator::Option(_) => match child {
-                            FandangoNode::Nonterminal(_) => {
+                        Operator::Option(_) => {
+                            if needs_indirection.contains(&(node_weight, *child)) {
                                 quote! { ::core::option::Option<::alloc::boxed::Box<#base>> }
+                            } else {
+                                quote! { ::core::option::Option<#base> }
                             }
-                            _ => quote! { ::core::option::Option<#base> },
-                        },
+                        }
                         Operator::Symbol(_) => {
                             unimplemented!("Unexpected symbol; should be elided.")
                         }
                     },
-                    _ => match child {
-                        FandangoNode::Nonterminal(_) => {
+                    _ => {
+                        if needs_indirection.contains(&(node_weight, *child)) {
                             quote! { ::alloc::boxed::Box<#base> }
+                        } else {
+                            base
                         }
-                        _ => base,
-                    },
+                    }
                 }
             })
             .collect::<Vec<_>>();
@@ -856,7 +885,17 @@ impl<'program, 'source> IntoRustSource<FandangoGenContext<'_, '_, 'program, 'sou
         for (((_, child, child_weight, _), name), pest_name) in
             children.into_iter().zip(child_types).zip(pest_child_names)
         {
-            child.emit_rust((name, pest_name, child_weight, mapped_names, graph), output)?;
+            child.emit_rust(
+                (
+                    name,
+                    pest_name,
+                    child_weight,
+                    mapped_names,
+                    graph,
+                    needs_indirection,
+                ),
+                output,
+            )?;
         }
 
         Ok(())

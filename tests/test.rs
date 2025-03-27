@@ -254,14 +254,16 @@ mod pest_renamed {
 
 mod xml {
     use alloc::boxed::Box;
+    use alloc::collections::VecDeque;
     use alloc::string::String;
     use alloc::vec::Vec;
     use core::error::Error;
-    use fandango_core::generation::DefaultGenerated;
-    use fandango_core::typing::{AsNodeMut, Node};
+    use fandango_core::generation::{DefaultGenerated, InPlaceGenerated};
+    use fandango_core::typing::{AsNodeMut, AsNodeRef, Node};
     use fandango_core::visitor::assignment::AssignmentVisitor;
+    use fandango_core::visitor::navigation::GoToWith;
     use fandango_core::visitor::write::WriteVisitor;
-    use fandango_core::visitor::Visitor;
+    use fandango_core::visitor::{VisitWith, Visitor};
     use fandango_derive::Fandango;
     use rand::rng;
 
@@ -290,7 +292,7 @@ mod xml {
     }
 
     // this looks horrible, but this means we can effectively downcast N1 to N2 conditionally
-    // this also applies to visitors
+    // this also applies to visitors; see the AssignmentVisitor impl for an example
     fn swap_example<'a, N1, N2>(n1: &'a mut N1, n2: &'a mut N2)
     where
         N1: Node,
