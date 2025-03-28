@@ -620,6 +620,7 @@ mod test {
     use crate::lang::test::SIMPLE_GRAMMAR;
     use crate::lang::{FandangoNode, Program};
     use alloc::boxed::Box;
+    use alloc::string::ToString;
     use alloc::format;
     use core::error::Error;
     use petgraph::data::{Element, FromElements};
@@ -664,7 +665,7 @@ mod test {
                 format!(
                     "label = {:?}",
                     match node {
-                        FandangoNode::String(s) => format!("{}", s.inner()),
+                        FandangoNode::String(s) => str::from_utf8(s.inner()).unwrap().to_string(),
                         _ => format!("{}", node),
                     }
                 )

@@ -681,13 +681,13 @@ pub(crate) mod test {
         let (string,) = parse_pairs_as!(symbol.into_inner(), (Rule::string,));
         let actual = parse_string(string).expect("Expected valid string");
         assert_eq!(matches!(actual.inner(), Cow::Borrowed(_)), BORROW);
-        assert_eq!(actual.inner(), expected.as_bytes());
+        assert_eq!(*actual.inner(), expected.as_bytes());
     }
 
     fn check_nonterminal_symbol(symbol: Pair<'_, Rule>, expected: &str) {
         let (nonterminal,) = parse_pairs_as!(symbol.into_inner(), (Rule::nonterminal,));
         let (name,) = parse_pairs_as!(nonterminal.into_inner(), (Rule::name,));
-        assert_eq!(name.as_str(), expected.as_bytes());
+        assert_eq!(name.as_str(), expected);
     }
 
     fn check_nonterminal_operator(operator: Pair<'_, Rule>, expected: &str) {
@@ -889,7 +889,7 @@ pub(crate) mod test {
 
         let sym = untag_or_die!(op2, Operator::Symbol(nt));
         let value = untag_or_die!(sym, Symbol::String(sym));
-        assert_eq!(value.inner, b"+");
+        assert_eq!(value.inner, b"+".as_slice());
 
         let sym = untag_or_die!(op3, Operator::Symbol(nt));
         let nt = untag_or_die!(sym, Symbol::Nonterminal(sym));
@@ -928,7 +928,7 @@ pub(crate) mod test {
             .unwrap();
         let sym = untag_or_die!(op, Operator::Symbol(nt));
         let value = untag_or_die!(sym, Symbol::String(sym));
-        assert_eq!(value.inner, "0");
+        assert_eq!(value.inner, b"0".as_slice());
 
         let [op1, op2] = untag_or_die!(c2, Concatenation { operators })
             .into_owned()
@@ -966,7 +966,7 @@ pub(crate) mod test {
                 .unwrap();
             let sym = untag_or_die!(op, Operator::Symbol(nt));
             let value = untag_or_die!(sym, Symbol::String(sym));
-            assert_eq!(value.inner, format!("{}", i));
+            assert_eq!(value.inner, format!("{}", i).as_bytes());
         }
 
         let prod = untag_or_die!(digit, Statement::Production(prod));
@@ -992,7 +992,7 @@ pub(crate) mod test {
             .unwrap();
         let sym = untag_or_die!(op, Operator::Symbol(nt));
         let value = untag_or_die!(sym, Symbol::String(sym));
-        assert_eq!(value.inner, "0");
+        assert_eq!(value.inner, b"0".as_slice());
 
         let [op] = untag_or_die!(c2, Concatenation { operators })
             .into_owned()
