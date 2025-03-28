@@ -17,18 +17,20 @@ use std::io::Read;
 use std::path::{Path, PathBuf};
 use syn::parse::{Parse, ParseStream};
 use syn::spanned::Spanned;
-use syn::{DeriveInput, Expr, ExprLit, Lit, Meta};
+use syn::{DeriveInput, Expr, ExprLit, Lit, Meta, MetaNameValue, Token};
 
 use crate::pest::IntoPestSource;
 use crate::rust::IntoRustSource;
 use crate::structure::tokenize_metadata;
 use proc_macro2::{Ident, TokenStream, TokenTree};
+use syn::punctuated::Punctuated;
 
 /// A `#[derive]`-style derivation of a FANDANGO grammar.
 pub struct FandangoDerivation {
     ident: Ident,
     merged: String,
     offsets: BTreeMap<usize, PathBuf>,
+    parse: bool,
 }
 
 impl FandangoDerivation {
@@ -44,7 +46,7 @@ impl FandangoDerivation {
             .next()
             .map(|s| s.as_ptr() as usize - self.merged.as_ptr() as usize)
             .and_then(|offset| {
-                let (&lower, path) = self.offsets.range(0..offset).last()?;
+                let (&lower, path) = self.offsets.range(0..=offset).last()?;
                 Some((path.as_path(), self.merged[lower..offset].lines().count()))
             })
     }
@@ -99,6 +101,10 @@ impl FandangoDerivation {
             compile_error!("Parse error: {}", #stringified)
         }
     }
+
+    fn parse(&self) -> bool {
+        self.parse
+    }
 }
 
 impl Parse for FandangoDerivation {
@@ -107,41 +113,66 @@ impl Parse for FandangoDerivation {
         let ident = derived.ident;
         let mut merged = Vec::new();
         let mut offsets = BTreeMap::new();
+        let mut parse = true;
         for attr in derived.attrs {
             let span = attr.span();
-            if let Meta::NameValue(v) = attr.meta {
+            if let Meta::List(v) = attr.meta {
                 if let Some(ident) = v.path.get_ident() {
-                    if ident == "grammar" {
-                        if let Expr::Lit(ExprLit {
-                            lit: Lit::Str(s), ..
-                        }) = v.value
-                        {
-                            let path = PathBuf::from(s.value());
-                            let mut file = File::open(&path).map_err(|e| {
-                                syn::Error::new(
-                                    span,
-                                    format!("Failed to open {}: {}", path.to_string_lossy(), e),
-                                )
-                            })?;
-                            let offset_before = merged.len();
-                            file.read_to_end(&mut merged).map_err(|e| {
-                                syn::Error::new(
-                                    span,
-                                    format!(
-                                        "Error while reading {}: {}",
-                                        path.to_string_lossy(),
-                                        e
-                                    ),
-                                )
-                            })?;
-                            merged.push(b'\n'); // accounting for potential no endline
-                            offsets.insert(offset_before, path);
-                            continue;
+                    if ident == "fandango" {
+                        let args = v.parse_args_with(
+                            Punctuated::<MetaNameValue, Token![,]>::parse_terminated,
+                        )?;
+                        for arg in args {
+                            if let Some(ident) = arg.path.get_ident() {
+                                if ident == "grammar" {
+                                    if let Expr::Lit(ExprLit {
+                                        lit: Lit::Str(s), ..
+                                    }) = arg.value
+                                    {
+                                        let path = PathBuf::from(s.value());
+                                        let mut file = File::open(&path).map_err(|e| {
+                                            syn::Error::new(
+                                                span,
+                                                format!(
+                                                    "Failed to open {}: {}",
+                                                    path.to_string_lossy(),
+                                                    e
+                                                ),
+                                            )
+                                        })?;
+                                        let offset_before = merged.len();
+                                        file.read_to_end(&mut merged).map_err(|e| {
+                                            syn::Error::new(
+                                                span,
+                                                format!(
+                                                    "Error while reading {}: {}",
+                                                    path.to_string_lossy(),
+                                                    e
+                                                ),
+                                            )
+                                        })?;
+                                        merged.push(b'\n'); // accounting for potential no endline
+                                        offsets.insert(offset_before, path);
+                                        continue;
+                                    }
+                                } else if ident == "parse" {
+                                    if let Expr::Lit(ExprLit {
+                                        lit: Lit::Bool(b), ..
+                                    }) = arg.value
+                                    {
+                                        parse = b.value();
+                                        continue;
+                                    }
+                                }
+                                return Err(syn::Error::new(span, "Invalid fandango list."));
+                            }
                         }
-                        return Err(syn::Error::new(span, "Invalid grammar source."));
                     }
                 }
             }
+        }
+        if offsets.is_empty() {
+            return Err(syn::Error::new(input.span(), "Invalid fandango derivation; need at least 1 grammar specified. Use #[fandango(grammar = ...)]."));
         }
         let merged = String::from_utf8(merged).map_err(|e| {
             let invalid = e.utf8_error().valid_up_to() + 1;
@@ -157,6 +188,7 @@ impl Parse for FandangoDerivation {
             ident,
             merged,
             offsets,
+            parse,
         })
     }
 }
@@ -171,10 +203,9 @@ pub fn derive_fandango_or_emit_error(
     let mut tokenized = TokenStream::new();
 
     let mut mapped_names = HashMap::new();
-    graph.emit_rust(&mut mapped_names, &mut tokenized).unwrap();
-
-    let mut grammar_source = String::new();
-    graph.emit_pest(&mut (), &mut grammar_source).unwrap();
+    graph
+        .emit_rust((&mut mapped_names, source.parse()), &mut tokenized)
+        .unwrap();
 
     let node_names = mapped_names.values().cloned().collect::<Vec<_>>();
 
@@ -191,27 +222,48 @@ pub fn derive_fandango_or_emit_error(
 
     let ident = &source.ident;
 
-    let mocked = quote! {
-        #[derive(Parser)]
-        #[grammar_inline = #grammar_source]
-        pub struct #ident;
-    };
+    let grammar = if source.parse() {
+        let mut grammar_source = String::new();
+        graph.emit_pest(&mut (), &mut grammar_source).unwrap();
+        let mocked = quote! {
+            #[derive(Parser)]
+            #[grammar_inline = #grammar_source]
+            pub struct #ident;
+        };
 
-    let grammar = pest_generator::derive_parser(mocked, false);
-    // rewrite: we don't want to force people to import other dependencies
-    let grammar = grammar
-        .into_iter()
-        .map(|e| match e {
-            TokenTree::Ident(ident) => {
-                if ident == "pest" || ident == "pest_derive" {
-                    TokenTree::Ident(Ident::new("fandango", proc_macro2::Span::mixed_site()))
-                } else {
-                    TokenTree::Ident(ident)
+        let grammar = pest_generator::derive_parser(mocked, false);
+        // rewrite: we don't want to force people to import other dependencies
+        let mut grammar = grammar
+            .into_iter()
+            .map(|e| match e {
+                TokenTree::Ident(ident) => {
+                    if ident == "pest" || ident == "pest_derive" {
+                        TokenTree::Ident(Ident::new("fandango", proc_macro2::Span::mixed_site()))
+                    } else {
+                        TokenTree::Ident(ident)
+                    }
+                }
+                other => other,
+            })
+            .collect::<TokenStream>();
+        grammar.extend(quote! {
+            impl #ident {
+                pub fn extract<'source>(
+                    source: &'source str
+                ) -> ::core::result::Result<nonterminal_start<'_>, ParseError> {
+                    use ::fandango::Parser;
+
+                    let (grammar,) = ::fandango::parse_pairs_as!(#ident::parse(Rule::start, source)?, (Rule::start,));
+                    let source = ::alloc::rc::Rc::new(::alloc::borrow::Cow::Borrowed(source));
+
+                    nonterminal_start::try_from((source, grammar))
                 }
             }
-            other => other,
-        })
-        .collect::<TokenStream>();
+        });
+        grammar
+    } else {
+        TokenStream::new()
+    };
 
     let discriminants = (0usize..node_names.len()).collect::<Vec<_>>();
 
@@ -391,22 +443,6 @@ pub fn derive_fandango_or_emit_error(
             'static,
             ::fandango::lang::Program
         > = &#metadata;
-
-        // debug: pest grammar source
-        pub const _PEST_SOURCE: &'static str = #grammar_source;
-
-        impl #ident {
-            pub fn extract<'source>(
-                source: &'source str
-            ) -> ::core::result::Result<nonterminal_start<'_>, ParseError> {
-                use ::fandango::Parser;
-
-                let (grammar,) = ::fandango::parse_pairs_as!(#ident::parse(Rule::start, source)?, (Rule::start,));
-                let source = ::alloc::rc::Rc::new(::alloc::borrow::Cow::Borrowed(source));
-
-                nonterminal_start::try_from((source, grammar))
-            }
-        }
 
         #grammar
     })

@@ -21,7 +21,7 @@ const HEAP_SIZE: usize = 1 << 14;
 static HEAP: Heap = Heap::empty();
 
 #[derive(Fandango)]
-#[grammar = "../tests/grammars/xml.fan"]
+#[fandango(grammar = "../tests/grammars/xml.fan")]
 pub struct Xml;
 
 #[rtic::app(device = lm3s6965, dispatchers = [GPIOA, GPIOB, GPIOC])]

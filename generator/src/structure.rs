@@ -1,7 +1,7 @@
 use fandango_core::lang::FandangoNode;
 use fandango_core::lang::{compute_tag_hash, Operator, Statement, Symbol};
 use pest::Span;
-use proc_macro2::{Ident, TokenStream};
+use proc_macro2::{Ident, Literal, TokenStream};
 use quote::{format_ident, quote};
 use std::collections::HashMap;
 
@@ -336,10 +336,10 @@ pub(crate) fn tokenize_metadata<'p, 's>(
         }
         FandangoNode::String(s) => (
             quote! {
-                ::alloc::borrow::Cow<'static, str>
+                ::alloc::borrow::Cow<'static, [u8]>
             },
             {
-                let s = s.inner();
+                let s = Literal::byte_string(s.inner());
                 quote! {
                     ::alloc::borrow::Cow::Borrowed(#s)
                 }

@@ -26,7 +26,7 @@ mod simple {
     use tuple_list::tuple_list;
 
     #[derive(Fandango)]
-    #[grammar = "tests/grammars/simple.fan"]
+    #[fandango(grammar = "tests/grammars/simple.fan")]
     pub struct Simple;
 
     #[test]
@@ -231,7 +231,7 @@ mod pest_renamed {
     use fandango::Fandango;
 
     #[derive(Fandango)]
-    #[grammar = "tests/grammars/pest-renamed.fan"]
+    #[fandango(grammar = "tests/grammars/pest-renamed.fan")]
     pub struct PestRenamed;
 
     #[test]
@@ -246,7 +246,7 @@ mod pest_renamed {
         let pest = start.children().0;
         let string = pest.children().0.children().0;
 
-        assert_eq!(string, SAMPLE);
+        assert_eq!(string, SAMPLE.as_bytes());
 
         Ok(())
     }
@@ -269,7 +269,7 @@ mod xml {
 
     #[allow(dead_code)]
     #[derive(Fandango)]
-    #[grammar = "tests/grammars/xml.fan"]
+    #[fandango(grammar = "tests/grammars/xml.fan")]
     pub struct Xml;
 
     #[test]
@@ -325,6 +325,44 @@ mod xml {
 
         assert_eq!(second, second_clone);
 
+        Ok(())
+    }
+}
+
+mod ssl {
+    use alloc::boxed::Box;
+
+    use alloc::string::String;
+    use alloc::vec::Vec;
+    use core::error::Error;
+    use fandango_core::generation::DefaultGenerated;
+    use fandango_core::typing::{AsNodeMut, Node};
+    use fandango_core::visitor::assignment::AssignmentVisitor;
+
+    use fandango_core::visitor::write::WriteVisitor;
+    use fandango_core::visitor::Visitor;
+    use fandango_derive::Fandango;
+    use rand::rng;
+
+    #[allow(dead_code)]
+    #[derive(Fandango)]
+    #[fandango(grammar = "tests/grammars/ssl.fan", parse = false)]
+    pub struct Ssl;
+
+    #[test]
+    fn generate() -> Result<(), Box<dyn Error>> {
+        let mut rng = rng();
+        let mut start = nonterminal_start::generate_default(&mut rng, &mut ());
+
+        let serialized = WriteVisitor::caching(Vec::new())
+            .visit(&mut start, 0)?
+            .continue_value()
+            .unwrap()
+            .output();
+
+        extern crate std;
+
+        std::println!("{:?}", serialized);
         Ok(())
     }
 }

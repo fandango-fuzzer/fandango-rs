@@ -68,7 +68,7 @@ mod xml {
 
     #[allow(dead_code)]
     #[derive(Fandango)]
-    #[grammar = "tests/grammars/xml.fan"]
+    #[fandango(grammar = "tests/grammars/xml.fan")]
     pub struct Xml;
 
     pub fn nowrite(c: &mut Criterion) {
@@ -167,10 +167,10 @@ mod xml {
 
 criterion_group!(
     benches,
-    urandom_throughput,
-    chacha_throughput,
-    xoshiro_throughput,
+    // urandom_throughput,
+    // chacha_throughput,
+    // xoshiro_throughput,
     xml::nowrite,
-    xml::throughput
+    // xml::throughput
 );
 criterion_main!(benches);

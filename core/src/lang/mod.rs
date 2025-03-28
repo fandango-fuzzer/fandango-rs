@@ -2,7 +2,7 @@
 
 pub mod constraints;
 
-use crate::lang::py_literal::parse_string;
+use crate::lang::py_literal::{parse_bytes, parse_string};
 use alloc::borrow::Cow;
 use alloc::boxed::Box;
 use alloc::string::{String, ToString};
@@ -483,7 +483,7 @@ pub enum Symbol<'a> {
     /// A single non-terminal.
     Nonterminal(Tagged<'a, Nonterminal<'a>>),
     /// A string-like terminal.
-    String(Tagged<'a, Cow<'a, str>>),
+    String(Tagged<'a, Cow<'a, [u8]>>),
     /// A list of [`Alternative`]s.
     Alternative(Tagged<'a, Alternative<'a>>),
 }
@@ -495,10 +495,12 @@ impl<'a> TryFrom<Pair<'a, Rule>> for Symbol<'a> {
         debug_assert_eq!(value.as_rule(), Rule::symbol);
 
         let inner = value.into_inner().next().unwrap();
+        let rule = inner.as_rule();
 
-        Ok(match inner.as_rule() {
+        Ok(match rule {
             Rule::nonterminal => Symbol::Nonterminal(inner.try_into()?),
             Rule::string => Symbol::String(parse_string(inner)?),
+            Rule::bytes => Symbol::String(parse_bytes(inner)?),
             Rule::alternative => Symbol::Alternative(inner.try_into()?),
             _ => unreachable!("This case is not represented within the grammar."),
         })
@@ -512,7 +514,7 @@ mod py_literal {
     use alloc::borrow::Cow;
     use alloc::boxed::Box;
     use alloc::format;
-    use alloc::string::String;
+    use alloc::vec::Vec;
     use pest::error::{Error as PestError, ErrorVariant};
     use pest::iterators::Pair;
 
@@ -565,25 +567,89 @@ mod py_literal {
         }
     }
 
-    pub fn parse_string(string: Pair<Rule>) -> Result<Tagged<Cow<str>>, ParseError> {
+    pub fn parse_string(string: Pair<Rule>) -> Result<Tagged<Cow<[u8]>>, ParseError> {
         debug_assert_eq!(string.as_rule(), Rule::string);
         let (string_body,) = parse_pairs_as!(string.into_inner(), (_,));
         match string_body.as_rule() {
             Rule::short_string_body | Rule::long_string_body => {
-                let mut out = String::new();
+                let mut out = Vec::new();
                 let orig = string_body.as_str();
                 let span = string_body.as_span();
                 for item in string_body.into_inner() {
                     match item.as_rule() {
                         Rule::short_string_non_escape
                         | Rule::long_string_non_escape
-                        | Rule::string_unknown_escape => out.push_str(item.as_str()),
+                        | Rule::string_unknown_escape => out.extend(item.as_str().as_bytes()),
                         Rule::line_continuation_seq => (),
-                        Rule::string_escape_seq => out.push(parse_string_escape_seq(item)?),
+                        Rule::string_escape_seq => out.extend(
+                            parse_string_escape_seq(item)?
+                                .encode_utf8(&mut [0u8; 4])
+                                .as_bytes(),
+                        ),
                         _ => unreachable!(),
                     }
                 }
                 // escapes always increase length
+                if orig.len() == out.len() {
+                    Ok(Tagged::new(Cow::Borrowed(orig.as_bytes()), span))
+                } else {
+                    Ok(Tagged::new(Cow::Owned(out), span))
+                }
+            }
+            _ => unreachable!(),
+        }
+    }
+
+    fn parse_bytes_escape_seq(escape_seq: Pair<'_, Rule>) -> Result<u8, ParseError> {
+        debug_assert_eq!(escape_seq.as_rule(), Rule::bytes_escape_seq);
+        let (seq,) = parse_pairs_as!(escape_seq.into_inner(), (_,));
+        match seq.as_rule() {
+            Rule::char_escape => Ok(match seq.as_str() {
+                "\\" => b'\\',
+                "'" => b'\'',
+                "\"" => b'"',
+                "a" => b'\x07',
+                "b" => b'\x08',
+                "f" => b'\x0C',
+                "n" => b'\n',
+                "r" => b'\r',
+                "t" => b'\t',
+                "v" => b'\x0B',
+                _ => unreachable!(),
+            }),
+            Rule::octal_escape => u8::from_str_radix(seq.as_str(), 8).map_err(|err| {
+                Box::new(PestError::new_from_span(
+                    ErrorVariant::CustomError {
+                        message: format!("failed to parse \\{} as u8: {}", seq.as_str(), err,),
+                    },
+                    seq.as_span(),
+                ))
+            }),
+            Rule::hex_escape => Ok(u8::from_str_radix(&seq.as_str()[1..], 16).unwrap()),
+            _ => unreachable!(),
+        }
+    }
+
+    pub fn parse_bytes(bytes: Pair<Rule>) -> Result<Tagged<Cow<[u8]>>, ParseError> {
+        debug_assert_eq!(bytes.as_rule(), Rule::bytes);
+        let (bytes_body,) = parse_pairs_as!(bytes.into_inner(), (_,));
+        match bytes_body.as_rule() {
+            Rule::short_bytes_body | Rule::long_bytes_body => {
+                let mut out = Vec::new();
+                let orig = bytes_body.as_str().as_bytes();
+                let span = bytes_body.as_span();
+                for item in bytes_body.into_inner() {
+                    match item.as_rule() {
+                        Rule::short_bytes_non_escape
+                        | Rule::long_bytes_non_escape
+                        | Rule::bytes_unknown_escape => {
+                            out.extend_from_slice(item.as_str().as_bytes())
+                        }
+                        Rule::line_continuation_seq => (),
+                        Rule::bytes_escape_seq => out.push(parse_bytes_escape_seq(item)?),
+                        _ => unreachable!(),
+                    }
+                }
                 if orig.len() == out.len() {
                     Ok(Tagged::new(Cow::Borrowed(orig), span))
                 } else {
@@ -615,13 +681,13 @@ pub(crate) mod test {
         let (string,) = parse_pairs_as!(symbol.into_inner(), (Rule::string,));
         let actual = parse_string(string).expect("Expected valid string");
         assert_eq!(matches!(actual.inner(), Cow::Borrowed(_)), BORROW);
-        assert_eq!(actual.inner(), expected);
+        assert_eq!(actual.inner(), expected.as_bytes());
     }
 
     fn check_nonterminal_symbol(symbol: Pair<'_, Rule>, expected: &str) {
         let (nonterminal,) = parse_pairs_as!(symbol.into_inner(), (Rule::nonterminal,));
         let (name,) = parse_pairs_as!(nonterminal.into_inner(), (Rule::name,));
-        assert_eq!(name.as_str(), expected);
+        assert_eq!(name.as_str(), expected.as_bytes());
     }
 
     fn check_nonterminal_operator(operator: Pair<'_, Rule>, expected: &str) {
@@ -823,7 +889,7 @@ pub(crate) mod test {
 
         let sym = untag_or_die!(op2, Operator::Symbol(nt));
         let value = untag_or_die!(sym, Symbol::String(sym));
-        assert_eq!(value.inner, "+");
+        assert_eq!(value.inner, b"+");
 
         let sym = untag_or_die!(op3, Operator::Symbol(nt));
         let nt = untag_or_die!(sym, Symbol::Nonterminal(sym));
@@ -959,7 +1025,7 @@ pub enum FandangoNode<'program, 'source> {
     Concatenation(&'program Concatenation<'source>),
     Operator(&'program Operator<'source>),
     Symbol(&'program Symbol<'source>),
-    String(&'program Tagged<'source, Cow<'source, str>>),
+    String(&'program Tagged<'source, Cow<'source, [u8]>>),
     // Constraint components
     Constraint(&'program Constraint<'source>),
     Implies(&'program Implies<'source>),
@@ -1041,10 +1107,10 @@ impl Display for FandangoNode<'_, '_> {
     }
 }
 
-impl<'program, 'source> From<&'program Tagged<'source, Cow<'source, str>>>
+impl<'program, 'source> From<&'program Tagged<'source, Cow<'source, [u8]>>>
     for FandangoNode<'program, 'source>
 {
-    fn from(value: &'program Tagged<'source, Cow<'source, str>>) -> Self {
+    fn from(value: &'program Tagged<'source, Cow<'source, [u8]>>) -> Self {
         Self::String(value)
     }
 }

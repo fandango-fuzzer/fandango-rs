@@ -36,7 +36,12 @@ impl<'source> IntoPestSource<()> for DiGraph<FandangoNode<'_, 'source>, Span<'so
             let hash = hasher.finish();
             if hashes.insert(hash) {
                 let actual = string.inner();
-                writeln!(output, "lit_{hash} = {{ {actual:?} }}")?;
+                if let Ok(actual) = str::from_utf8(actual) {
+                    let actual = actual.replace('\\', "\\\\").replace('"', "\\\"");
+                    writeln!(output, "lit_{hash} = {{ \"{actual}\" }}")?;
+                } else {
+                    writeln!(output, "lit_{hash} = {{ \"UNIMPLEMENTED\" }}")?;
+                }
             }
         }
 

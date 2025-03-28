@@ -6,7 +6,7 @@ use proc_macro::TokenStream;
 use syn::parse_macro_input;
 
 /// Perform the `#[derive]`!
-#[proc_macro_derive(Fandango, attributes(grammar))]
+#[proc_macro_derive(Fandango, attributes(fandango))]
 pub fn derive_fandango(item: TokenStream) -> TokenStream {
     let source = parse_macro_input!(item as FandangoDerivation);
     match derive_fandango_or_emit_error(source) {
