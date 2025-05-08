@@ -49,7 +49,7 @@ impl<const DFS: bool> FindVisitor<DFS> {
                 None => Either::Right(target as *const N as usize),
                 Some(s) => Either::Left((s.start(), s.end())),
             },
-            discriminant: N::DISCRIMINANT,
+            discriminant: target.discriminant(),
             from,
         }
     }
@@ -110,7 +110,7 @@ where
     {
         let span = node.span().map(|s| (s.start(), s.end()));
         let actual_ptr = node as *const N as usize;
-        if N::DISCRIMINANT == self.discriminant {
+        if node.discriminant() == self.discriminant {
             match (&self.reference, span) {
                 (&Either::Left((s1, e1)), Some((s2, e2))) if s1 == s2 && e1 == e2 => {
                     let mut path = VecDeque::new();
@@ -175,8 +175,9 @@ where
             {
                 let span = node.span().map(|s| (s.start(), s.end()));
                 let actual_ptr = node as *const N as usize;
+                let discriminant = node.discriminant();
                 let t = T::from(node);
-                if N::DISCRIMINANT == self.discriminant {
+                if discriminant == self.discriminant {
                     match (&self.reference, span) {
                         (&Either::Left((s1, e1)), Some((s2, e2))) if s1 == s2 && e1 == e2 => {
                             return Ok(ControlFlow::Break(idx));

@@ -15,14 +15,17 @@ mod simple {
     use alloc::vec::Vec;
     use core::error::Error;
     use fandango::Fandango;
+    use fandango_core::dynamic::{DynamicNode, DynamicSampler};
     use fandango_core::generation::util::Flattener;
     use fandango_core::generation::{Generated, InPlaceGenerated};
+    use fandango_core::typing::{AsStaticNode, Structured};
     use fandango_core::visitor::navigation::{Advance, CountNodes, CountNodesWith, FindVisitor};
     use fandango_core::visitor::write::WriteVisitor;
     use fandango_core::visitor::Visitor;
     use fandango_core::visitor_chain;
-    use rand::rng;
+    use rand::rngs::StdRng;
     use rand::Rng;
+    use rand::{rng, SeedableRng};
     use tuple_list::tuple_list;
 
     #[derive(Fandango)]
@@ -224,6 +227,39 @@ mod simple {
 
         Ok(())
     }
+
+    #[test]
+    fn static_vs_dynamic() -> Result<(), Box<dyn Error>> {
+        let mut rng = StdRng::seed_from_u64(0);
+        let nonterminals = nonterminal_start::ROOT.inner().nonterminals();
+        let mut dynrng = rng.clone();
+        let mut dyn_sampler = DynamicSampler::new(
+            nonterminal_start::static_root(),
+            nonterminal_start::static_definition(),
+            &nonterminals,
+            &mut dynrng,
+        );
+
+        for _ in 0..1_000 {
+            let mut static_start = nonterminal_start::generate(&mut rng, &mut ());
+            let mut dyn_start = DynamicNode::generate(&mut dyn_sampler, &mut ());
+
+            let static_start = WriteVisitor::cacheless(Vec::new())
+                .visit(&mut static_start, 0)?
+                .continue_value()
+                .unwrap()
+                .output();
+            let dyn_start = WriteVisitor::cacheless(Vec::new())
+                .visit(&mut dyn_start, 0)?
+                .continue_value()
+                .unwrap()
+                .output();
+
+            assert_eq!(static_start, dyn_start);
+        }
+
+        Ok(())
+    }
 }
 
 mod pest_renamed {
@@ -258,14 +294,16 @@ mod xml {
     use alloc::string::String;
     use alloc::vec::Vec;
     use core::error::Error;
-    use fandango_core::generation::DefaultGenerated;
-    use fandango_core::typing::{AsNodeMut, Node};
+    use fandango_core::generation::{DefaultGenerated, Generated};
+    use fandango_core::typing::{AsNodeMut, AsStaticNode, Node, Structured};
     use fandango_core::visitor::assignment::AssignmentVisitor;
 
+    use fandango_core::dynamic::{DynamicNode, DynamicSampler};
     use fandango_core::visitor::write::WriteVisitor;
     use fandango_core::visitor::Visitor;
     use fandango_derive::Fandango;
-    use rand::rng;
+    use rand::rngs::StdRng;
+    use rand::{rng, SeedableRng};
 
     #[allow(dead_code)]
     #[derive(Fandango)]
@@ -324,6 +362,39 @@ mod xml {
             .is_break());
 
         assert_eq!(second, second_clone);
+
+        Ok(())
+    }
+
+    #[test]
+    fn static_vs_dynamic() -> Result<(), Box<dyn Error>> {
+        let mut rng = StdRng::seed_from_u64(0);
+        let nonterminals = nonterminal_start::ROOT.inner().nonterminals();
+        let mut dynrng = rng.clone();
+        let mut dyn_sampler = DynamicSampler::new(
+            nonterminal_start::static_root(),
+            nonterminal_start::static_definition(),
+            &nonterminals,
+            &mut dynrng,
+        );
+
+        for _ in 0..1_000 {
+            let mut static_start = nonterminal_start::generate(&mut rng, &mut ());
+            let mut dyn_start = DynamicNode::generate(&mut dyn_sampler, &mut ());
+
+            let static_start = WriteVisitor::cacheless(Vec::new())
+                .visit(&mut static_start, 0)?
+                .continue_value()
+                .unwrap()
+                .output();
+            let dyn_start = WriteVisitor::cacheless(Vec::new())
+                .visit(&mut dyn_start, 0)?
+                .continue_value()
+                .unwrap()
+                .output();
+
+            assert_eq!(static_start, dyn_start);
+        }
 
         Ok(())
     }

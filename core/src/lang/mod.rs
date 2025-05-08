@@ -20,6 +20,7 @@ use core::hash::SipHasher;
 
 use alloc::format;
 use core::fmt;
+use hashbrown::HashMap;
 pub use pest::Span;
 
 mod parser {
@@ -198,6 +199,27 @@ impl Program<'static> {
         Self {
             statements: Cow::Borrowed(statements),
         }
+    }
+}
+
+impl Program<'static> {
+    /// Construct a known [`Program`] at compile-time -- for use in generated code only.
+    pub fn nonterminals(
+        &'static self,
+    ) -> HashMap<FandangoNode<'static, 'static>, FandangoNode<'static, 'static>> {
+        self.statements()
+            .iter()
+            .filter_map(|s| match s.inner() {
+                Statement::Production(p) => Some(p.inner()),
+                _ => None,
+            })
+            .map(|p| {
+                (
+                    FandangoNode::from(p.nonterminal()),
+                    FandangoNode::from(p.alternative()),
+                )
+            })
+            .collect::<HashMap<_, _>>()
     }
 }
 

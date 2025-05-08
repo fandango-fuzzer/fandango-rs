@@ -13,7 +13,7 @@ pest_derive.workspace = true
 tuple_list.workspace = true
 
 [dev-dependencies]
-fandango-core = { path = "core", features = ["std"] }
+fandango-core = { path = "core", features = ["std", "dynamic"] }
 
 criterion.workspace = true
 rand = { workspace = true, features = ["default"] }

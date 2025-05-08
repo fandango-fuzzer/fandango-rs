@@ -642,12 +642,12 @@ impl<'program, 'source> IntoRustSource<FandangoGenContext<'_, '_, 'program, 'sou
                 let sampler = match op {
                     Operator::Kleene(_) => {
                         quote! {
-                            (0..=<S as ::fandango::generation::Sampler<Self>>::sample_kleene(sampler)).map(|_| ::fandango::generation::Generated::generate(sampler, with)).collect()
+                            (0..<S as ::fandango::generation::Sampler<Self>>::sample_kleene(sampler)).map(|_| ::fandango::generation::Generated::generate(sampler, with)).collect()
                         }
                     }
                     Operator::Plus(_) => {
                         quote! {
-                            (0..=<S as ::fandango::generation::Sampler<Self>>::sample_plus(sampler)).map(|_| ::fandango::generation::Generated::generate(sampler, with)).collect()
+                            (0..<S as ::fandango::generation::Sampler<Self>>::sample_plus(sampler)).map(|_| ::fandango::generation::Generated::generate(sampler, with)).collect()
                         }
                     }
                     Operator::Option(_) => {
@@ -657,7 +657,7 @@ impl<'program, 'source> IntoRustSource<FandangoGenContext<'_, '_, 'program, 'sou
                     }
                     Operator::Repeat(_, start, end) => {
                         quote! {
-                            (0..=<S as ::fandango::generation::Sampler<Self>>::sample_repetition(sampler, #start, #end)).map(|_| ::fandango::generation::Generated::generate(sampler, with)).collect()
+                            (0..<S as ::fandango::generation::Sampler<Self>>::sample_repetition(sampler, #start, #end)).map(|_| ::fandango::generation::Generated::generate(sampler, with)).collect()
                         }
                     }
                     Operator::Symbol(_) => {

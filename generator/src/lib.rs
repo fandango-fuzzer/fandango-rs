@@ -433,9 +433,16 @@ pub fn derive_fandango_or_emit_error(
         }
 
         #(
-            impl<'source> ::fandango::typing::Discriminable for #node_names<'source>
+            impl<'source> ::fandango::typing::StaticDiscriminable for #node_names<'source>
             {
                 const DISCRIMINANT: usize = #discriminants;
+            }
+
+            impl<'source> ::fandango::typing::Discriminable for #node_names<'source>
+            {
+                fn discriminant(&self) -> usize {
+                    <Self as ::fandango::typing::StaticDiscriminable>::DISCRIMINANT
+                }
             }
         )*
 

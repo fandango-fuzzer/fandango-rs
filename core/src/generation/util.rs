@@ -1,8 +1,8 @@
 //! Utility generators, which perform some common generator routines.
 
 use crate::generation::{Generated, Generator, GeneratorTuple, Sampler};
-use crate::lang::{Nonterminal, Operator, Statement, Symbol, Tagged};
-use crate::typing::{AsNode, Structured};
+use crate::lang::{Nonterminal, Operator, Symbol, Tagged};
+use crate::typing::{AsStaticNode, Structured};
 use alloc::collections::BTreeMap;
 use alloc::vec;
 use alloc::vec::Vec;
@@ -131,21 +131,7 @@ impl Flattener {
         // rust bug: we have to remind the type checker that FandangoNode implements this?
         FandangoNode: From<&'static Tagged<'static, Nonterminal<'static>>>,
     {
-        let nonterminals = N::ROOT
-            .inner()
-            .statements()
-            .iter()
-            .filter_map(|s| match s.inner() {
-                Statement::Production(p) => Some(p.inner()),
-                _ => None,
-            })
-            .map(|p| {
-                (
-                    FandangoNode::from(p.nonterminal()),
-                    FandangoNode::from(p.alternative()),
-                )
-            })
-            .collect::<HashMap<_, _>>();
+        let nonterminals = N::ROOT.inner().nonterminals();
 
         let node = FandangoNode::from(N::STRUCTURE);
         flatten(&nonterminals, node, &mut vec![], &mut self.flattened)?;
@@ -163,7 +149,7 @@ struct FlattenedSampler<'a, S> {
 
 impl<N, S> Sampler<N> for FlattenedSampler<'_, S>
 where
-    N: AsNode,
+    N: AsStaticNode,
     S: Sampler<N>,
 {
     fn sample_kleene(&mut self) -> usize {
@@ -186,7 +172,7 @@ where
         // we blithely ignore count here; this was already computed!
         let current = self
             .flattened
-            .get(&N::definition())
+            .get(&N::static_definition())
             .expect("Attempted to generate something that wasn't in the graph");
         match current.children.range(..=self.choice).enumerate().last() {
             None => unreachable!("Invalid choice while flattening"),
@@ -200,13 +186,13 @@ where
 
 impl<N, W, S> Generator<N, W, S> for Flattener
 where
-    N: AsNode + for<'a> Generated<FlattenedSampler<'a, S>, W>,
+    N: AsStaticNode + for<'a> Generated<FlattenedSampler<'a, S>, W>,
     W: for<'a> GeneratorTuple<N, FlattenedSampler<'a, S>>,
     S: Sampler<N>,
 {
     fn generate(&mut self, sampler: &mut S, with: &mut W) -> Option<N> {
-        if self.targets.contains(&N::definition()) {
-            let flattened = self.flattened.get(&N::definition()).unwrap();
+        if self.targets.contains(&N::static_definition()) {
+            let flattened = self.flattened.get(&N::static_definition()).unwrap();
             let choice = sampler.sample_alternative(flattened.total);
             let mut sampler = FlattenedSampler {
                 choice,

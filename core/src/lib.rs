@@ -12,6 +12,8 @@ mod parse_macros;
 #[cfg(feature = "petgraph")]
 pub mod graph;
 // pub mod constraint;
+#[cfg(feature = "dynamic")]
+pub mod dynamic;
 pub mod generation;
 pub mod lang;
 pub mod typing;

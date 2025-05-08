@@ -93,7 +93,7 @@ where
                 return Ok(ControlFlow::Continue(self));
             }
         }
-        match N::definition() {
+        match node.definition() {
             FandangoNode::String(s) => {
                 self.output.write_all(s.inner())?;
                 Ok(ControlFlow::Continue(self))
