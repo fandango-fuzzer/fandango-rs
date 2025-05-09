@@ -26,9 +26,10 @@ fn graph_simple(c: &mut Criterion) {
 
 mod simple {
     use criterion::{black_box, BatchSize, BenchmarkId, Criterion, Throughput};
+    use fandango_core::dynamic::{DynamicNode, DynamicSampler};
     use fandango_core::generation::util::Flattener;
     use fandango_core::generation::{Generated, InPlaceGenerated};
-    use fandango_core::typing::Node;
+    use fandango_core::typing::{AsNode, AsStaticNode, Node, Structured};
     use fandango_core::visitor::navigation::{Advance, CountNodes};
     use fandango_core::visitor::write::WriteVisitor;
     use fandango_core::visitor::Visitor;
@@ -61,6 +62,8 @@ mod simple {
         let count = rngs.len() - 1;
         let rngs = rngs.into_iter().step_by(count / 5).collect::<Vec<_>>();
 
+        let nonterminals = nonterminal_start::ROOT.inner().nonterminals();
+
         for (count, mut rng) in rngs {
             group.throughput(Throughput::Elements(count as u64));
 
@@ -72,7 +75,38 @@ mod simple {
                 );
             });
 
+            group.bench_with_input(
+                BenchmarkId::new("generate dynamic", count),
+                &rng,
+                |b, rng| {
+                    b.iter_batched_ref(
+                        || rng.clone(),
+                        |rng| {
+                            DynamicNode::generate(
+                                &mut DynamicSampler::new(
+                                    nonterminal_start::static_root(),
+                                    nonterminal_start::static_definition(),
+                                    &nonterminals,
+                                    black_box(rng),
+                                ),
+                                &mut (),
+                            )
+                        },
+                        BatchSize::SmallInput,
+                    );
+                },
+            );
+
             let mut start = nonterminal_start::generate(&mut rng.clone(), &mut ());
+            let mut dyn_start = DynamicNode::generate(
+                &mut DynamicSampler::new(
+                    nonterminal_start::static_root(),
+                    nonterminal_start::static_definition(),
+                    &nonterminals,
+                    &mut rng.clone(),
+                ),
+                &mut (),
+            );
 
             group.bench_with_input(BenchmarkId::new("visit", count), &start, |b, start| {
                 b.iter_batched_ref(
@@ -89,7 +123,27 @@ mod simple {
                 );
             });
 
+            group.bench_with_input(
+                BenchmarkId::new("visit dynamic", count),
+                &dyn_start,
+                |b, start| {
+                    b.iter_batched_ref(
+                        || start.clone(),
+                        |start| {
+                            WriteVisitor::cacheless(Vec::new())
+                                .visit(black_box(start), 0)
+                                .unwrap()
+                                .continue_value()
+                                .unwrap()
+                                .output()
+                        },
+                        BatchSize::SmallInput,
+                    );
+                },
+            );
+
             let count = start.count_nodes();
+            let dyncount = dyn_start.count_nodes();
 
             group.bench_with_input(BenchmarkId::new("mutate", count), &start, |b, start| {
                 b.iter_batched_ref(
@@ -108,6 +162,35 @@ mod simple {
                     BatchSize::SmallInput,
                 );
             });
+
+            group.bench_with_input(
+                BenchmarkId::new("mutate dynamic", count),
+                &dyn_start,
+                |b, start| {
+                    b.iter_batched_ref(
+                        || start.clone(),
+                        |start| {
+                            let selection = rng.random_range(0..dyncount);
+                            let _: Result<(), Box<dyn Error>> = (|| {
+                                let target = Advance::forward(selection)
+                                    .visit(start, 0)?
+                                    .break_value()
+                                    .unwrap();
+                                let mut rng = rng.clone();
+                                let mut sampler = DynamicSampler::new(
+                                    target.root(),
+                                    target.definition(),
+                                    &nonterminals,
+                                    &mut rng,
+                                );
+                                target.generate_in_place(&mut sampler, &mut ());
+                                Ok(())
+                            })();
+                        },
+                        BatchSize::SmallInput,
+                    );
+                },
+            );
         }
     }
 
@@ -132,6 +215,8 @@ mod simple {
         let count = rngs.len() - 1;
         let rngs = rngs.into_iter().step_by(count / 5).collect::<Vec<_>>();
 
+        let nonterminals = nonterminal_start::ROOT.inner().nonterminals();
+
         for (count, rng) in rngs {
             group.throughput(Throughput::Elements(count as u64));
 
@@ -142,6 +227,28 @@ mod simple {
                     BatchSize::SmallInput,
                 );
             });
+
+            group.bench_with_input(
+                BenchmarkId::new("generate dynamic", count),
+                &rng,
+                |b, rng| {
+                    b.iter_batched_ref(
+                        || rng.clone(),
+                        |rng| {
+                            DynamicSampler::generate(
+                                &mut DynamicSampler::new(
+                                    nonterminal_start::static_root(),
+                                    nonterminal_start::static_definition(),
+                                    &nonterminals,
+                                    black_box(rng),
+                                ),
+                                &mut generators,
+                            )
+                        },
+                        BatchSize::SmallInput,
+                    );
+                },
+            );
         }
     }
 }
@@ -166,7 +273,9 @@ fn graph_xml(c: &mut Criterion) {
 
 mod xml {
     use criterion::{black_box, BatchSize, BenchmarkId, Criterion, Throughput};
+    use fandango_core::dynamic::{DynamicNode, DynamicSampler};
     use fandango_core::generation::{Generated, InPlaceGenerated};
+    use fandango_core::typing::{AsNode, AsStaticNode, Structured};
     use fandango_core::visitor::navigation::{Advance, CountNodes};
     use fandango_core::visitor::write::WriteVisitor;
     use fandango_core::visitor::Visitor;
@@ -198,6 +307,8 @@ mod xml {
         let count = rngs.len() - 1;
         let rngs = rngs.into_iter().step_by(count / 5).collect::<Vec<_>>();
 
+        let nonterminals = nonterminal_start::ROOT.inner().nonterminals();
+
         for (count, mut rng) in rngs {
             group.throughput(Throughput::Elements(count as u64));
 
@@ -209,7 +320,38 @@ mod xml {
                 );
             });
 
+            group.bench_with_input(
+                BenchmarkId::new("generate dynamic", count),
+                &rng,
+                |b, rng| {
+                    b.iter_batched_ref(
+                        || rng.clone(),
+                        |rng| {
+                            DynamicNode::generate(
+                                &mut DynamicSampler::new(
+                                    nonterminal_start::static_root(),
+                                    nonterminal_start::static_definition(),
+                                    &nonterminals,
+                                    black_box(rng),
+                                ),
+                                &mut (),
+                            )
+                        },
+                        BatchSize::SmallInput,
+                    );
+                },
+            );
+
             let mut start = nonterminal_start::generate(&mut rng.clone(), &mut ());
+            let mut dyn_start = DynamicNode::generate(
+                &mut DynamicSampler::new(
+                    nonterminal_start::static_root(),
+                    nonterminal_start::static_definition(),
+                    &nonterminals,
+                    &mut rng.clone(),
+                ),
+                &mut (),
+            );
 
             group.bench_with_input(BenchmarkId::new("visit", count), &start, |b, start| {
                 b.iter_batched_ref(
@@ -226,7 +368,27 @@ mod xml {
                 );
             });
 
+            group.bench_with_input(
+                BenchmarkId::new("visit dynamic", count),
+                &dyn_start,
+                |b, start| {
+                    b.iter_batched_ref(
+                        || start.clone(),
+                        |start| {
+                            WriteVisitor::cacheless(Vec::new())
+                                .visit(black_box(start), 0)
+                                .unwrap()
+                                .continue_value()
+                                .unwrap()
+                                .output()
+                        },
+                        BatchSize::SmallInput,
+                    );
+                },
+            );
+
             let count = start.count_nodes();
+            let dyncount = dyn_start.count_nodes();
 
             group.bench_with_input(BenchmarkId::new("mutate", count), &start, |b, start| {
                 b.iter_batched_ref(
@@ -245,95 +407,124 @@ mod xml {
                     BatchSize::SmallInput,
                 );
             });
+
+            group.bench_with_input(
+                BenchmarkId::new("mutate dynamic", count),
+                &dyn_start,
+                |b, start| {
+                    b.iter_batched_ref(
+                        || start.clone(),
+                        |start| {
+                            let selection = rng.random_range(0..dyncount);
+                            let _: Result<(), Box<dyn Error>> = (|| {
+                                let target = Advance::forward(selection)
+                                    .visit(start, 0)?
+                                    .break_value()
+                                    .unwrap();
+                                let mut rng = rng.clone();
+                                let mut sampler = DynamicSampler::new(
+                                    target.root(),
+                                    target.definition(),
+                                    &nonterminals,
+                                    &mut rng,
+                                );
+                                target.generate_in_place(&mut sampler, &mut ());
+                                Ok(())
+                            })();
+                        },
+                        BatchSize::SmallInput,
+                    );
+                },
+            );
         }
     }
 }
 
-mod ssl {
-    use criterion::{black_box, BatchSize, BenchmarkId, Criterion, Throughput};
-    use fandango_core::generation::{Generated, InPlaceGenerated};
-    use fandango_core::typing::Node;
-    use fandango_core::visitor::navigation::{Advance, CountNodes};
-    use fandango_core::visitor::write::WriteVisitor;
-    use fandango_core::visitor::Visitor;
-    use fandango_derive::Fandango;
-    use rand::{Rng, SeedableRng};
-    use std::collections::BTreeMap;
-    use std::error::Error;
-
-    #[allow(dead_code)]
-    #[derive(Fandango)]
-    #[fandango(grammar = "tests/grammars/ssl.fan", parse = false)]
-    pub struct Ssl;
-
-    pub fn ssl(c: &mut Criterion) {
-        let mut group = c.benchmark_group("ssl");
-
-        let rngs = (0..1000)
-            .map(|i| {
-                let mut rng = rand::rngs::StdRng::seed_from_u64(i);
-                let stashed = rng.clone();
-
-                (
-                    nonterminal_start::generate(&mut rng, &mut ()).count_nodes(),
-                    stashed,
-                )
-            })
-            .collect::<BTreeMap<_, _>>();
-
-        let count = rngs.len() - 1;
-        let rngs = rngs.into_iter().step_by(count / 5).collect::<Vec<_>>();
-
-        for (count, mut rng) in rngs {
-            group.throughput(Throughput::Elements(count as u64));
-
-            group.bench_with_input(BenchmarkId::new("generate", count), &rng, |b, rng| {
-                b.iter_batched_ref(
-                    || rng.clone(),
-                    |rng| nonterminal_start::generate(black_box(rng), &mut ()),
-                    BatchSize::SmallInput,
-                );
-            });
-
-            let mut start = nonterminal_start::generate(&mut rng.clone(), &mut ());
-
-            group.bench_with_input(BenchmarkId::new("visit", count), &start, |b, start| {
-                b.iter_batched_ref(
-                    || start.clone(),
-                    |start| {
-                        WriteVisitor::cacheless(Vec::new())
-                            .visit(black_box(start), 0)
-                            .unwrap()
-                            .continue_value()
-                            .unwrap()
-                            .output()
-                    },
-                    BatchSize::SmallInput,
-                );
-            });
-
-            let count = start.count_nodes();
-
-            group.bench_with_input(BenchmarkId::new("mutate", count), &start, |b, start| {
-                b.iter_batched_ref(
-                    || start.clone(),
-                    |start| {
-                        let selection = rng.random_range(0..count);
-                        let _: Result<(), Box<dyn Error>> = (|| {
-                            let mut target = Advance::forward(selection)
-                                .visit(start, 0)?
-                                .break_value()
-                                .unwrap();
-                            target.generate_in_place(&mut rng, &mut ());
-                            Ok(())
-                        })();
-                    },
-                    BatchSize::SmallInput,
-                );
-            });
-        }
-    }
-}
+// mod ssl {
+//     use criterion::{black_box, BatchSize, BenchmarkId, Criterion, Throughput};
+//     use fandango_core::generation::{Generated, InPlaceGenerated};
+//     use fandango_core::typing::Node;
+//     use fandango_core::visitor::navigation::{Advance, CountNodes};
+//     use fandango_core::visitor::write::WriteVisitor;
+//     use fandango_core::visitor::Visitor;
+//     use fandango_derive::Fandango;
+//     use rand::{Rng, SeedableRng};
+//     use std::collections::BTreeMap;
+//     use std::error::Error;
+//
+//     #[allow(dead_code)]
+//     #[derive(Fandango)]
+//     #[fandango(grammar = "tests/grammars/ssl.fan", parse = false)]
+//     pub struct Ssl;
+//
+//     pub fn ssl(c: &mut Criterion) {
+//         let mut group = c.benchmark_group("ssl");
+//
+//         let rngs = (0..1000)
+//             .map(|i| {
+//                 let mut rng = rand::rngs::StdRng::seed_from_u64(i);
+//                 let stashed = rng.clone();
+//
+//                 (
+//                     nonterminal_start::generate(&mut rng, &mut ()).count_nodes(),
+//                     stashed,
+//                 )
+//             })
+//             .collect::<BTreeMap<_, _>>();
+//
+//         let count = rngs.len() - 1;
+//         let rngs = rngs.into_iter().step_by(count / 5).collect::<Vec<_>>();
+//
+//         for (count, mut rng) in rngs {
+//             group.throughput(Throughput::Elements(count as u64));
+//
+//             group.bench_with_input(BenchmarkId::new("generate", count), &rng, |b, rng| {
+//                 b.iter_batched_ref(
+//                     || rng.clone(),
+//                     |rng| nonterminal_start::generate(black_box(rng), &mut ()),
+//                     BatchSize::SmallInput,
+//                 );
+//             });
+//
+//             let mut start = nonterminal_start::generate(&mut rng.clone(), &mut ());
+//
+//             group.bench_with_input(BenchmarkId::new("visit", count), &start, |b, start| {
+//                 b.iter_batched_ref(
+//                     || start.clone(),
+//                     |start| {
+//                         WriteVisitor::cacheless(Vec::new())
+//                             .visit(black_box(start), 0)
+//                             .unwrap()
+//                             .continue_value()
+//                             .unwrap()
+//                             .output()
+//                     },
+//                     BatchSize::SmallInput,
+//                 );
+//             });
+//
+//             let count = start.count_nodes();
+//
+//             group.bench_with_input(BenchmarkId::new("mutate", count), &start, |b, start| {
+//                 b.iter_batched_ref(
+//                     || start.clone(),
+//                     |start| {
+//                         let selection = rng.random_range(0..count);
+//                         let _: Result<(), Box<dyn Error>> = (|| {
+//                             let mut target = Advance::forward(selection)
+//                                 .visit(start, 0)?
+//                                 .break_value()
+//                                 .unwrap();
+//                             target.generate_in_place(&mut rng, &mut ());
+//                             Ok(())
+//                         })();
+//                     },
+//                     BatchSize::SmallInput,
+//                 );
+//             });
+//         }
+//     }
+// }
 
 criterion_group!(
     benches,
@@ -344,6 +535,6 @@ criterion_group!(
     simple::simple,
     simple::simple_flattened,
     xml::xml,
-    ssl::ssl,
+    // ssl::ssl,
 );
 criterion_main!(benches);

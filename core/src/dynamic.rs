@@ -1,16 +1,21 @@
-use crate::generation::{DefaultGenerated, Generated, GeneratorTuple, Sampler};
+//! Dynamic shims for producing inputs without static typing. For demonstrative purposes only; users
+//! should prefer the use of statically typed (i.e., with `derive`) grammars.
+//!
+//! This is currently not feature complete.
+
+use crate::generation::{DefaultGenerated, Generated, GeneratorTuple, InPlaceGenerated, Sampler};
 use crate::lang::{Operator, Symbol};
 use crate::typing::{AsNode, Discriminable, Node};
 use crate::visitor::{MaybeVisitResult, VisitResult, VisitableChildren, Visitor};
 use alloc::boxed::Box;
 use alloc::vec;
 use alloc::vec::Vec;
-use core::hash::{BuildHasher, Hash};
-use core::ops::ControlFlow;
+use core::hash::BuildHasher;
+use core::ops::{ControlFlow, Deref, DerefMut};
 use hashbrown::{DefaultHashBuilder, HashMap};
 use pest::Span;
 
-pub type FandangoNode = crate::lang::FandangoNode<'static, 'static>;
+type FandangoNode = crate::lang::FandangoNode<'static, 'static>;
 
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub enum DynamicNodeVariant {
@@ -37,26 +42,57 @@ pub struct DynamicSampler<'sampler, S> {
     inner: &'sampler mut S,
 }
 
-impl<'sampler, S> DynamicSampler<'sampler, S> {
-    pub fn root(&self) -> FandangoNode {
+pub trait HasDynamicSampler {
+    fn root(&self) -> FandangoNode;
+    fn definition(&self) -> FandangoNode;
+    fn nonterminal(&self, node: &FandangoNode) -> Option<FandangoNode>;
+    fn with_definition(&mut self, definition: FandangoNode) -> &mut Self;
+}
+
+#[macro_export]
+macro_rules! impl_has_dynamic_sampler {
+    ($inner: ident) => {
+        fn root(&self) -> FandangoNode {
+            self.$inner.root()
+        }
+
+        fn definition(&self) -> FandangoNode {
+            self.$inner.definition()
+        }
+
+        fn nonterminal(&self, node: &FandangoNode) -> Option<FandangoNode> {
+            self.$inner.nonterminal(node)
+        }
+
+        fn with_definition(&mut self, definition: FandangoNode) -> &mut Self {
+            self.$inner.with_definition(definition);
+            self
+        }
+    };
+}
+
+impl<S> HasDynamicSampler for DynamicSampler<'_, S> {
+    fn root(&self) -> FandangoNode {
         self.root
     }
 
-    pub fn definition(&self) -> FandangoNode {
+    fn definition(&self) -> FandangoNode {
         self.definition
     }
 
-    pub fn nonterminal(&self, node: &FandangoNode) -> Option<FandangoNode> {
+    fn nonterminal(&self, node: &FandangoNode) -> Option<FandangoNode> {
         self.nonterminals.get(node).copied()
     }
 
-    pub fn with_definition(&mut self, definition: FandangoNode) -> DynamicSampler<'_, S> {
-        DynamicSampler::<'_, S> {
-            root: self.root,
-            definition,
-            nonterminals: &*self.nonterminals,
-            inner: &mut *self.inner,
-        }
+    fn with_definition(&mut self, definition: FandangoNode) -> &mut Self {
+        self.definition = definition;
+        self
+    }
+}
+
+impl<'sampler, S> DynamicSampler<'sampler, S> {
+    pub fn inner(&mut self) -> &mut S {
+        &mut *self.inner
     }
 
     pub fn new(
@@ -99,19 +135,19 @@ where
     }
 }
 
-impl<S, G> DefaultGenerated<DynamicSampler<'_, S>, G> for DynamicNode
+impl<S, G> DefaultGenerated<S, G> for DynamicNode
 where
-    S: Sampler<DynamicNode>,
-    for<'a> G: GeneratorTuple<DynamicNode, DynamicSampler<'a, S>>,
+    S: Sampler<DynamicNode> + HasDynamicSampler,
+    G: GeneratorTuple<DynamicNode, S>,
 {
-    fn generate_default(sampler: &mut DynamicSampler<'_, S>, with: &mut G) -> Self {
+    fn generate_default(sampler: &mut S, with: &mut G) -> Self {
         let definition = sampler.definition();
-        match definition {
+        let result = (|| match definition {
             FandangoNode::Nonterminal(_) => {
                 let inner = sampler
                     .nonterminal(&definition)
                     .expect("Expected a corresponding inner node for this nonterminal.");
-                let child = DynamicNode::generate(&mut sampler.with_definition(inner), with);
+                let child = DynamicNode::generate(sampler.with_definition(inner), with);
                 Self {
                     root: sampler.root(),
                     definition,
@@ -121,7 +157,7 @@ where
             FandangoNode::Alternative(alt) => {
                 if alt.concatenations().len() == 1 {
                     DynamicNode::generate(
-                        &mut sampler.with_definition(FandangoNode::from(&alt.concatenations()[0])),
+                        sampler.with_definition(FandangoNode::from(&alt.concatenations()[0])),
                         with,
                     )
                 } else {
@@ -132,7 +168,7 @@ where
                         content: DynamicNodeVariant::Alternation {
                             variant,
                             content: Box::new([DynamicNode::generate(
-                                &mut sampler.with_definition(FandangoNode::from(
+                                sampler.with_definition(FandangoNode::from(
                                     &alt.concatenations()[variant],
                                 )),
                                 with,
@@ -144,7 +180,7 @@ where
             FandangoNode::Concatenation(concat) => {
                 if concat.operators().len() == 1 {
                     DynamicNode::generate(
-                        &mut sampler.with_definition(FandangoNode::from(&concat.operators()[0])),
+                        sampler.with_definition(FandangoNode::from(&concat.operators()[0])),
                         with,
                     )
                 } else {
@@ -157,7 +193,7 @@ where
                                 .iter()
                                 .map(|item| {
                                     DynamicNode::generate(
-                                        &mut sampler.with_definition(FandangoNode::from(item)),
+                                        sampler.with_definition(FandangoNode::from(item)),
                                         with,
                                     )
                                 })
@@ -174,37 +210,54 @@ where
                     Operator::Repeat(rpt, lower, upper) => {
                         (sampler.sample_repetition(*lower, *upper), rpt)
                     }
-                    Operator::Symbol(sym) => (1, sym),
+                    Operator::Symbol(sym) => {
+                        return DynamicNode::generate(
+                            sampler.with_definition(FandangoNode::from(sym)),
+                            with,
+                        )
+                    }
                 };
                 let sym = FandangoNode::from(sym);
-                let mut sampler = sampler.with_definition(sym);
                 Self {
                     root: sampler.root(),
                     definition,
                     content: DynamicNodeVariant::Sequence(
                         (0..count)
-                            .map(|_| DynamicNode::generate(&mut sampler, with))
+                            .map(|_| DynamicNode::generate(sampler.with_definition(sym), with))
                             .collect(),
                     ),
                 }
             }
-            FandangoNode::Symbol(sym) => match sym {
-                Symbol::Nonterminal(nt) => DynamicNode::generate(
-                    &mut sampler.with_definition(FandangoNode::from(nt)),
-                    with,
-                ),
-                Symbol::Alternative(alt) => DynamicNode::generate(
-                    &mut sampler.with_definition(FandangoNode::from(alt)),
-                    with,
-                ),
-                Symbol::String(s) => Self {
-                    root: sampler.root(),
-                    definition: FandangoNode::from(s),
-                    content: DynamicNodeVariant::Terminal,
-                },
+            FandangoNode::Symbol(sym) => {
+                let inner = match sym {
+                    Symbol::Nonterminal(nt) => FandangoNode::from(nt),
+                    Symbol::Alternative(alt) => FandangoNode::from(alt),
+                    Symbol::String(s) => FandangoNode::from(s),
+                };
+                DynamicNode::generate(sampler.with_definition(inner), with)
+            }
+            FandangoNode::String(s) => Self {
+                root: sampler.root(),
+                definition: FandangoNode::from(s),
+                content: DynamicNodeVariant::Terminal,
             },
             _ => unreachable!("Cannot generate this case."),
-        }
+        })();
+        sampler.with_definition(definition);
+        result
+    }
+}
+
+impl<'a, S, G> InPlaceGenerated<'a, S, G> for DynamicNode
+where
+    S: Sampler<DynamicNode> + HasDynamicSampler,
+    G: GeneratorTuple<DynamicNode, S>,
+{
+    fn generate_in_place(&'a mut self, sampler: &mut S, with: &mut G) {
+        debug_assert_eq!(self.root, sampler.root());
+        debug_assert_eq!(self.definition, sampler.definition());
+
+        self.content = DynamicNode::generate(sampler, with).content;
     }
 }
 

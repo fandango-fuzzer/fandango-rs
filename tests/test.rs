@@ -15,10 +15,10 @@ mod simple {
     use alloc::vec::Vec;
     use core::error::Error;
     use fandango::Fandango;
-    use fandango_core::dynamic::{DynamicNode, DynamicSampler};
+    use fandango_core::dynamic::{DynamicNode, DynamicSampler, HasDynamicSampler};
     use fandango_core::generation::util::Flattener;
     use fandango_core::generation::{Generated, InPlaceGenerated};
-    use fandango_core::typing::{AsStaticNode, Structured};
+    use fandango_core::typing::{AsNode, AsStaticNode, Structured};
     use fandango_core::visitor::navigation::{Advance, CountNodes, CountNodesWith, FindVisitor};
     use fandango_core::visitor::write::WriteVisitor;
     use fandango_core::visitor::Visitor;
@@ -154,6 +154,46 @@ mod simple {
     }
 
     #[test]
+    fn mutate_dynamic() -> Result<(), Box<dyn Error>> {
+        let mut rng = rng();
+        let nonterminals = nonterminal_start::ROOT.inner().nonterminals();
+        let mut sampler = DynamicSampler::new(
+            nonterminal_start::static_root(),
+            nonterminal_start::static_definition(),
+            &nonterminals,
+            &mut rng,
+        );
+        let mut start = DynamicNode::generate(&mut sampler, &mut ());
+
+        let mut generators = ();
+
+        let mut mutations = 0;
+
+        let mut count = start.count_nodes();
+        for _ in 0..100_000 {
+            let old_start = start.clone();
+            let selection = sampler.inner().random_range(0..count);
+            let target = Advance::forward(selection)
+                .visit(&mut start, 0)?
+                .break_value()
+                .unwrap();
+            let old_count = target.count_nodes();
+            let definition = target.definition();
+            sampler.with_definition(definition);
+            target.generate_in_place(&mut sampler, &mut generators);
+            let new_count = target.count_nodes();
+            count = count - old_count + new_count;
+            if old_start != start {
+                mutations += 1;
+            }
+        }
+
+        assert_ne!(0, mutations);
+
+        Ok(())
+    }
+
+    #[test]
     fn generate() -> Result<(), Box<dyn Error>> {
         let mut rng = rng();
         let mut start = nonterminal_start::generate(&mut rng, &mut ());
@@ -229,6 +269,46 @@ mod simple {
     }
 
     #[test]
+    fn generate_flattened_dynamic() -> Result<(), Box<dyn Error>> {
+        let mut rng = rng();
+        let nonterminals = nonterminal_digit::ROOT.inner().nonterminals();
+        let mut sampler = DynamicSampler::new(
+            nonterminal_digit::static_root(),
+            nonterminal_digit::static_definition(),
+            &nonterminals,
+            &mut rng,
+        );
+
+        let flattener = Flattener::new().flatten_dynamic(
+            nonterminal_digit::static_root(),
+            nonterminal_digit::static_definition(),
+        )?;
+
+        let mut generators = tuple_list!(flattener);
+
+        let mut buf = Vec::new();
+        let mut distribution = [0usize; 10];
+
+        for _ in 0..100_000 {
+            let mut digit = DynamicNode::generate(&mut sampler, &mut generators);
+
+            WriteVisitor::caching(&mut buf)
+                .visit(&mut digit, 0)?
+                .continue_value()
+                .unwrap()
+                .output();
+            distribution[(buf[0] - b'0') as usize] += 1;
+            buf.clear();
+        }
+
+        extern crate std;
+
+        std::println!("{distribution:?}");
+
+        Ok(())
+    }
+
+    #[test]
     fn static_vs_dynamic() -> Result<(), Box<dyn Error>> {
         let mut rng = StdRng::seed_from_u64(0);
         let nonterminals = nonterminal_start::ROOT.inner().nonterminals();
@@ -240,22 +320,23 @@ mod simple {
             &mut dynrng,
         );
 
-        for _ in 0..1_000 {
+        for _ in 0..10_000 {
             let mut static_start = nonterminal_start::generate(&mut rng, &mut ());
             let mut dyn_start = DynamicNode::generate(&mut dyn_sampler, &mut ());
 
-            let static_start = WriteVisitor::cacheless(Vec::new())
+            let static_ser = WriteVisitor::cacheless(Vec::new())
                 .visit(&mut static_start, 0)?
                 .continue_value()
                 .unwrap()
                 .output();
-            let dyn_start = WriteVisitor::cacheless(Vec::new())
+            let dyn_ser = WriteVisitor::cacheless(Vec::new())
                 .visit(&mut dyn_start, 0)?
                 .continue_value()
                 .unwrap()
                 .output();
 
-            assert_eq!(static_start, dyn_start);
+            assert_eq!(static_ser, dyn_ser);
+            assert_eq!(static_start.count_nodes(), dyn_start.count_nodes());
         }
 
         Ok(())
@@ -299,6 +380,7 @@ mod xml {
     use fandango_core::visitor::assignment::AssignmentVisitor;
 
     use fandango_core::dynamic::{DynamicNode, DynamicSampler};
+    use fandango_core::visitor::navigation::CountNodes;
     use fandango_core::visitor::write::WriteVisitor;
     use fandango_core::visitor::Visitor;
     use fandango_derive::Fandango;
@@ -378,22 +460,23 @@ mod xml {
             &mut dynrng,
         );
 
-        for _ in 0..1_000 {
+        for _ in 0..10_000 {
             let mut static_start = nonterminal_start::generate(&mut rng, &mut ());
             let mut dyn_start = DynamicNode::generate(&mut dyn_sampler, &mut ());
 
-            let static_start = WriteVisitor::cacheless(Vec::new())
+            let static_ser = WriteVisitor::cacheless(Vec::new())
                 .visit(&mut static_start, 0)?
                 .continue_value()
                 .unwrap()
                 .output();
-            let dyn_start = WriteVisitor::cacheless(Vec::new())
+            let dyn_ser = WriteVisitor::cacheless(Vec::new())
                 .visit(&mut dyn_start, 0)?
                 .continue_value()
                 .unwrap()
                 .output();
 
-            assert_eq!(static_start, dyn_start);
+            assert_eq!(static_ser, dyn_ser);
+            assert_eq!(static_start.count_nodes(), dyn_start.count_nodes());
         }
 
         Ok(())
