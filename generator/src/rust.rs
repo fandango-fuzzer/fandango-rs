@@ -394,7 +394,7 @@ impl<'program, 'source> IntoRustSource<FandangoGenContext<'_, '_, 'program, 'sou
         match node_weight {
             FandangoNode::String(orig) => {
                 let s = Literal::byte_string(orig.inner());
-                let parse_routine = if let Ok(parsed) = str::from_utf8(orig.inner()) {
+                let parse_routine = if let Ok(parsed) = core::str::from_utf8(orig.inner()) {
                     quote! {
                         let span = value.as_span();
                         debug_assert_eq!(span.as_str(), #parsed);
