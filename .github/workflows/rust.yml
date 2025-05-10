@@ -26,6 +26,19 @@ jobs:
       - name: Run tests
         run: cargo test --verbose --workspace
 
+  fmt:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        toolchain:
+          - stable
+    steps:
+      - uses: actions/checkout@v4
+      - run: rustup update ${{ matrix.toolchain }} && rustup default ${{ matrix.toolchain }}
+      - run: rustup component add rustfmt
+      - name: Format
+        run: cargo fmt --check
+
   check:
     runs-on: ubuntu-latest
     strategy:
@@ -37,8 +50,6 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - run: rustup update ${{ matrix.toolchain }} && rustup default ${{ matrix.toolchain }}
-      - run: rustup component add rustfmt clippy
-      - name: Format
-        run: cargo fmt --check
+      - run: rustup component add clippy
       - name: Clippy
         run: cargo clippy --workspace --tests -- -D warnings

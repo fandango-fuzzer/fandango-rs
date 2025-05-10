@@ -61,15 +61,17 @@ pub trait VisitWith<'a, V>: Sized {
     /// #
     /// # pub struct start<'source>(PhantomData<&'source ()>);
     /// # impl Discriminable for start<'_> {
-    /// #     const DISCRIMINANT: usize = 0;
+    /// #    fn discriminant(&self) -> usize {
+    /// #        0
+    /// #    }
     /// # }
     /// #
     /// # impl AsNode for start<'_> {
-    /// #     fn root() -> FandangoNode<'static, 'static> {
+    /// #     fn root(&self) -> FandangoNode<'static, 'static> {
     /// #         unimplemented!()
     /// #     }
     /// #
-    /// #     fn definition() -> FandangoNode<'static, 'static> {
+    /// #     fn definition(&self) -> FandangoNode<'static, 'static> {
     /// #         unimplemented!()
     /// #     }
     /// # }
