@@ -70,8 +70,7 @@ impl<'source> IntoPestSource<()> for DiGraph<FandangoNode<'_, 'source>, Span<'so
 
         writeln!(
             output,
-            "{pest_name} = {{ SOI ~ {} ~ EOI }}",
-            pest_child_name
+            "{pest_name} = {{ SOI ~ {pest_child_name} ~ EOI }}"
         )?;
 
         child.emit_pest(&mut (self, HashSet::new(), pest_child_name), output)

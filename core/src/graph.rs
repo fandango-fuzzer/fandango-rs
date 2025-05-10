@@ -667,7 +667,7 @@ mod test {
                     match node {
                         FandangoNode::String(s) =>
                             core::str::from_utf8(s.inner()).unwrap().to_string(),
-                        _ => format!("{}", node),
+                        _ => format!("{node}"),
                     }
                 )
             },

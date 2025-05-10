@@ -181,7 +181,7 @@ impl Parse for FandangoDerivation {
             let path = path.to_string_lossy();
             syn::Error::new(
                 proc_macro2::Span::mixed_site(),
-                format!("Invalid UTF-8 byte at {}:{}.", path, invalid),
+                format!("Invalid UTF-8 byte at {path}:{invalid}."),
             )
         })?;
         Ok(Self {

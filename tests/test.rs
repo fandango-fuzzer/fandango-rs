@@ -209,7 +209,7 @@ mod simple {
 
         extern crate std;
 
-        std::println!("{}", serialized);
+        std::println!("{serialized}");
         Ok(())
     }
 
@@ -408,7 +408,7 @@ mod xml {
 
         extern crate std;
 
-        std::println!("{}", serialized);
+        std::println!("{serialized}");
         Ok(())
     }
 

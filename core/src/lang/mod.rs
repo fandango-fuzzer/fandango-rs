@@ -984,7 +984,7 @@ pub(crate) mod test {
                 .unwrap();
             let sym = untag_or_die!(op, Operator::Symbol(nt));
             let value = untag_or_die!(sym, Symbol::String(sym));
-            assert_eq!(value.inner, format!("{}", i).as_bytes());
+            assert_eq!(value.inner, format!("{i}").as_bytes());
         }
 
         let prod = untag_or_die!(digit, Statement::Production(prod));
@@ -1083,7 +1083,7 @@ impl Display for FandangoNode<'_, '_> {
                 Operator::Kleene(_) => f.write_char('*'),
                 Operator::Plus(_) => f.write_char('+'),
                 Operator::Option(_) => f.write_char('?'),
-                Operator::Repeat(_, start, end) => f.write_str(&format!("{{{},{}}}", start, end)),
+                Operator::Repeat(_, start, end) => f.write_str(&format!("{{{start},{end}}}")),
                 Operator::Symbol(_) => f.write_str("OP"),
             },
             FandangoNode::Symbol(_) => f.write_str("SYM"),
