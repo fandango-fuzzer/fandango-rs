@@ -1,14 +1,13 @@
 //! Utility generators, which perform some common generator routines.
 
 use crate::generation::{Generated, Generator, GeneratorTuple, Sampler};
-use crate::lang::{Nonterminal, Operator, Symbol, Tagged};
+use crate::lang::{Operator, Symbol};
 use crate::typing::{AsStaticNode, Structured};
 use alloc::collections::BTreeMap;
 use alloc::vec;
 use alloc::vec::Vec;
 use core::error::Error;
 use core::fmt::{Debug, Display, Formatter};
-use core::ops::{Deref, DerefMut};
 use hashbrown::{HashMap, HashSet};
 
 type FandangoNode = crate::lang::FandangoNode<'static, 'static>;
@@ -214,6 +213,7 @@ where
 }
 
 #[cfg(feature = "dynamic")]
+#[allow(deprecated)]
 mod dynamic_impls {
     use crate::dynamic::{DynamicNode, HasDynamicSampler};
     use crate::generation::util::{

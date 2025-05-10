@@ -1,6 +1,7 @@
 //! Build tests for FANDANGO, to ensure that we are generating code as expected.
 
 #![no_std]
+#![allow(deprecated)] // for DynamicNode
 
 use fandango::parse_pairs_as;
 use fandango::Parser;

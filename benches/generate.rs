@@ -1,4 +1,5 @@
 #![allow(missing_docs)]
+#![allow(deprecated)] // for DynamicNode
 
 use criterion::{black_box, criterion_group, criterion_main, Criterion};
 use fandango_core::graph::IntoGraph;
@@ -191,14 +192,9 @@ mod simple {
                 },
             );
         }
-    }
 
-    pub fn simple_flattened(c: &mut Criterion) {
         let flattener = Flattener::new().flatten::<nonterminal_digit>().unwrap();
         let mut generators = tuple_list!(flattener);
-
-        let mut group = c.benchmark_group("simple");
-
         let rngs = (0..1000)
             .map(|i| {
                 let mut rng = rand::rngs::StdRng::seed_from_u64(i);
@@ -441,13 +437,9 @@ mod xml {
                 },
             );
         }
-    }
 
-    pub fn xml_flattened(c: &mut Criterion) {
         let flattener = Flattener::new().flatten::<nonterminal_id_char>().unwrap();
         let mut generators = tuple_list!(flattener);
-
-        let mut group = c.benchmark_group("xml");
 
         let rngs = (0..1000)
             .map(|i| {
@@ -599,9 +591,7 @@ criterion_group!(
     parse_xml,
     graph_xml,
     simple::simple,
-    simple::simple_flattened,
     xml::xml,
-    xml::xml_flattened,
     // ssl::ssl,
 );
 criterion_main!(benches);

@@ -3,6 +3,8 @@
 //!
 //! This is currently not feature complete.
 
+#![allow(deprecated)]
+
 use crate::generation::{DefaultGenerated, Generated, GeneratorTuple, InPlaceGenerated, Sampler};
 use crate::lang::{Operator, Symbol};
 use crate::typing::{AsNode, Discriminable, Node};
@@ -11,29 +13,73 @@ use alloc::boxed::Box;
 use alloc::vec;
 use alloc::vec::Vec;
 use core::hash::BuildHasher;
-use core::ops::{ControlFlow, Deref, DerefMut};
+use core::ops::ControlFlow;
+use core::slice;
 use hashbrown::{DefaultHashBuilder, HashMap};
 use pest::Span;
 
 type FandangoNode = crate::lang::FandangoNode<'static, 'static>;
 
+/// Content of a [`DynamicNode`], without the typing information.
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub enum DynamicNodeVariant {
+    /// This node is a terminal for which the content is entirely determined by its definition.
     Terminal,
+    /// This node is a sequence, which represents any non-alternation.
     Sequence(Vec<DynamicNode>),
+    /// This node is an alternation.
     Alternation {
+        /// The variation of the alternation, by index according to the definition.
         variant: usize,
+        /// The node content. For consistency in [`DynamicNodeVariant::iter`] and
+        /// [`DynamicNodeVariant::iter_mut`], the item is wrapped in a slice.
         content: Box<[DynamicNode; 1]>,
     },
 }
 
+impl DynamicNodeVariant {
+    /// An immutable iterator over the nodes contained by the [`DynamicNode`].
+    pub fn iter(&self) -> slice::Iter<DynamicNode> {
+        match self {
+            DynamicNodeVariant::Terminal => [].iter(),
+            DynamicNodeVariant::Sequence(seq) => seq.iter(),
+            DynamicNodeVariant::Alternation { content, .. } => content.iter(),
+        }
+    }
+
+    /// A mutable iterator over the nodes contained by the [`DynamicNode`].
+    pub fn iter_mut(&mut self) -> slice::IterMut<DynamicNode> {
+        match self {
+            DynamicNodeVariant::Terminal => [].iter_mut(),
+            DynamicNodeVariant::Sequence(seq) => seq.iter_mut(),
+            DynamicNodeVariant::Alternation { content, .. } => content.iter_mut(),
+        }
+    }
+}
+
+/// A dynamically typed implementation of grammar nodes.
+///
+/// While this allows you to adjust the grammar definition dynamically, it is both less performant
+/// and offers significantly fewer guarantees regarding the correctness of your operations on
+/// derivation trees. As there are exceedingly few use cases which justify the use of dynamic nodes,
+/// this type is marked with `#[deprecated]`.
 #[derive(Debug, PartialEq, Eq, Clone)]
+#[deprecated(
+    note = "DynamicNode was only created for performing an ablation study. It is universally less performant. Unless you are absolutely certain that you need dynamic typing (e.g., with dynamic grammars), do not use this."
+)]
 pub struct DynamicNode {
     root: FandangoNode,
     definition: FandangoNode,
     content: DynamicNodeVariant,
 }
 
+/// A sampler which maintains the correctness of the derivation tree structure during generation by
+/// tracking which node is currently being generated.
+///
+/// The corresponding [`DefaultGenerated`] implementation of [`DynamicNode`] follows the same
+/// structure optimization rules as the static typing (i.e., trivial alternations/concatenations are
+/// elided). Ensure that any custom mutation operations you define over [`DynamicNode`]s are
+/// consistent with the structure optimization rules as seen in [`DynamicNode::generate_default`].
 #[derive(Debug)]
 pub struct DynamicSampler<'sampler, S> {
     root: FandangoNode,
@@ -42,29 +88,62 @@ pub struct DynamicSampler<'sampler, S> {
     inner: &'sampler mut S,
 }
 
+/// Helper trait for wrappers of [`DynamicSampler`]s. See [`Flattener`] for an example.
+///
+/// Sadly, it is not possible to auto-impl this via e.g. [`core::ops::DerefMut`] due to conflicting
+/// trait implementations with [`rand::Rng`].
 pub trait HasDynamicSampler {
+    /// The root node of the grammar (i.e., the [`crate::lang::Program`] node).
     fn root(&self) -> FandangoNode;
+    /// The current node being generated.
+    ///
+    /// Since we cannot infer the node type to be generated from the Rust type, this information
+    /// must be tracked through the generation process.
     fn definition(&self) -> FandangoNode;
+    /// The production rule associated with the provided nonterminal (for resolving a nonterminal).
     fn nonterminal(&self, node: &FandangoNode) -> Option<FandangoNode>;
+    /// Update the definition present in the [`DynamicSampler`]. You can provide your own
+    /// [`DynamicSampler`] instead.
     fn with_definition(&mut self, definition: FandangoNode) -> &mut Self;
 }
 
+/// Helper macro for defining [`HasDynamicSampler`]. Used to generate the content of a
+/// [`HasDynamicSampler`] like so:
+///
+/// ```
+/// use fandango_core::dynamic::HasDynamicSampler;
+/// use fandango_core::impl_has_dynamic_sampler;
+///
+/// struct DynamicSamplerWrapper<S> {
+///     sampler: S,
+/// }
+///
+/// impl<S> HasDynamicSampler for DynamicSamplerWrapper<S> where S: HasDynamicSampler {
+///     impl_has_dynamic_sampler!(sampler);
+/// }
+/// ```
 #[macro_export]
 macro_rules! impl_has_dynamic_sampler {
     ($inner: ident) => {
-        fn root(&self) -> FandangoNode {
+        fn root(&self) -> $crate::lang::FandangoNode<'static, 'static> {
             self.$inner.root()
         }
 
-        fn definition(&self) -> FandangoNode {
+        fn definition(&self) -> $crate::lang::FandangoNode<'static, 'static> {
             self.$inner.definition()
         }
 
-        fn nonterminal(&self, node: &FandangoNode) -> Option<FandangoNode> {
+        fn nonterminal(
+            &self,
+            node: &$crate::lang::FandangoNode<'static, 'static>,
+        ) -> Option<$crate::lang::FandangoNode<'static, 'static>> {
             self.$inner.nonterminal(node)
         }
 
-        fn with_definition(&mut self, definition: FandangoNode) -> &mut Self {
+        fn with_definition(
+            &mut self,
+            definition: $crate::lang::FandangoNode<'static, 'static>,
+        ) -> &mut Self {
             self.$inner.with_definition(definition);
             self
         }
@@ -91,10 +170,14 @@ impl<S> HasDynamicSampler for DynamicSampler<'_, S> {
 }
 
 impl<'sampler, S> DynamicSampler<'sampler, S> {
+    /// The inner sampler upon which this [`DynamicSampler`] relies for actual sampling operations.
     pub fn inner(&mut self) -> &mut S {
         &mut *self.inner
     }
 
+    /// Build a [`DynamicSampler`]. Note that you will first need to produce a mapping for
+    /// nonterminal productions, e.g. with [`crate::lang::Program::nonterminals`], and an existing
+    /// sampler, e.g. [`rand::rngs::StdRng`].
     pub fn new(
         root: FandangoNode,
         definition: FandangoNode,
@@ -287,11 +370,11 @@ impl Node for DynamicNode {
     where
         Self: 'program;
     type ChildrenRef<'program>
-        = &'program [DynamicNode]
+        = &'program DynamicNodeVariant
     where
         Self: 'program;
     type ChildrenRefMut<'program>
-        = &'program mut [DynamicNode]
+        = &'program mut DynamicNodeVariant
     where
         Self: 'program;
 
@@ -302,19 +385,11 @@ impl Node for DynamicNode {
     fn clear_span(&mut self) {}
 
     fn children(&self) -> Self::ChildrenRef<'_> {
-        match &self.content {
-            DynamicNodeVariant::Terminal => &[],
-            DynamicNodeVariant::Sequence(seq) => seq.as_slice(),
-            DynamicNodeVariant::Alternation { content, .. } => content.as_slice(),
-        }
+        &self.content
     }
 
     fn children_mut(&mut self) -> Self::ChildrenRefMut<'_> {
-        match &mut self.content {
-            DynamicNodeVariant::Terminal => &mut [],
-            DynamicNodeVariant::Sequence(seq) => seq.as_mut_slice(),
-            DynamicNodeVariant::Alternation { content, .. } => content.as_mut_slice(),
-        }
+        &mut self.content
     }
 }
 
@@ -397,7 +472,7 @@ impl<'a> VisitableChildren<&'a mut DynamicNode> for &'a mut DynamicNode {
     where
         V: Visitor<&'a mut DynamicNode>,
     {
-        match self.children_mut().get_mut(idx) {
+        match self.children_mut().iter_mut().nth(idx) {
             None => Err(visitor),
             Some(child) => Ok(visitor.visit(child, idx)),
         }
