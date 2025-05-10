@@ -6,7 +6,6 @@ authors.workspace = true
 
 [features]
 std = ["petgraph"]
-dynamic = []
 
 [dependencies]
 either.workspace = true

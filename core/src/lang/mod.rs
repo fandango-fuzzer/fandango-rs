@@ -128,15 +128,20 @@ impl<T> Hash for Tagged<'_, T> {
 
 impl<T> Eq for Tagged<'_, T> {}
 
-impl<T> PartialEq<Self> for Tagged<'_, T> {
-    fn eq(&self, other: &Self) -> bool {
+impl<T, U> PartialEq<Tagged<'_, U>> for Tagged<'_, T> {
+    fn eq(&self, other: &Tagged<'_, U>) -> bool {
         self.span == other.span
     }
 }
 
-impl<T> PartialOrd<Self> for Tagged<'_, T> {
-    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        Some(self.cmp(other))
+impl<T, U> PartialOrd<Tagged<'_, U>> for Tagged<'_, T> {
+    fn partial_cmp(&self, other: &Tagged<'_, U>) -> Option<Ordering> {
+        Some(
+            self.span
+                .0
+                .cmp(&other.span.0)
+                .then(self.span.1.cmp(&other.span.1)),
+        )
     }
 }
 
@@ -167,15 +172,6 @@ where
 {
     fn from(value: &'program Tagged<'source, T>) -> Self {
         (U::from(value), value.span())
-    }
-}
-
-impl<T> PartialEq<T> for Tagged<'_, T>
-where
-    T: PartialEq<T>,
-{
-    fn eq(&self, other: &T) -> bool {
-        self.inner == *other
     }
 }
 

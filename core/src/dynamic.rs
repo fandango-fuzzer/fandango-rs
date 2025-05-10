@@ -1,5 +1,4 @@
-//! Dynamic shims for producing inputs without static typing. For demonstrative purposes only; users
-//! should prefer the use of statically typed (i.e., with `derive`) grammars.
+//! Dynamic shims for producing inputs without static typing.
 //!
 //! This is currently not feature complete.
 

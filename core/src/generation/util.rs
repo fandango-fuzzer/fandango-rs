@@ -26,19 +26,24 @@ impl Display for Unflattenable {
 
 impl Error for Unflattenable {}
 
-pub trait FlattenerTarget {
-    fn flattened(&self) -> FandangoNode;
+/// A target for [`Flattener`]. Generic so we can take advantage of static type information,
+/// wherever available.
+pub trait FlattenerTarget<N> {
+    /// The node to be flattened (i.e., the target).
+    fn flattens(&self, node: &FandangoNode) -> bool;
 }
 
+/// A statically defined target with a corresponding statically typed node `N`.
 #[derive(Debug, Copy, Clone)]
 pub struct StaticTarget<N>(PhantomData<N>);
 
-impl<N> FlattenerTarget for StaticTarget<N>
+impl<N, O> FlattenerTarget<O> for StaticTarget<N>
 where
-    N: AsStaticNode,
+    N: Structured,
+    O: Structured,
 {
-    fn flattened(&self) -> FandangoNode {
-        N::static_definition()
+    fn flattens(&self, _: &FandangoNode) -> bool {
+        N::STRUCTURE == O::STRUCTURE
     }
 }
 
@@ -134,6 +139,7 @@ fn flatten(
 }
 
 impl Flattener<()> {
+    /// Construct the [`Flattener`] with a static target defined by `N`.
     pub fn flatten<N>() -> Result<Flattener<StaticTarget<N>>, Unflattenable>
     where
         N: Structured + AsStaticNode,
@@ -205,10 +211,10 @@ where
     N: AsStaticNode + for<'a> Generated<FlattenedSampler<'a, S>, W>,
     W: for<'a> GeneratorTuple<N, FlattenedSampler<'a, S>>,
     S: Sampler<N>,
-    T: FlattenerTarget,
+    T: FlattenerTarget<N>,
 {
     fn generate(&mut self, sampler: &mut S, with: &mut W) -> Option<N> {
-        if self.target.flattened() == N::static_definition() {
+        if self.target.flattens(&N::static_definition()) {
             let flattened = self.flattened.get(&N::static_definition()).unwrap();
             let choice = sampler.sample_alternative(flattened.total);
             let mut sampler = FlattenedSampler {
@@ -226,24 +232,34 @@ where
     }
 }
 
-#[cfg(feature = "dynamic")]
 #[allow(deprecated)]
 mod dynamic_impls {
     use crate::dynamic::{DynamicNode, HasDynamicSampler};
     use crate::generation::util::{
-        flatten, FandangoNode, FlattenedSampler, Flattener, FlattenerTarget, Unflattenable,
+        flatten, FandangoNode, FlattenedSampler, Flattener, FlattenerTarget, StaticTarget,
+        Unflattenable,
     };
     use crate::generation::{Generated, Generator, GeneratorTuple, Sampler};
     use crate::impl_has_dynamic_sampler;
+    use crate::typing::AsStaticNode;
     use alloc::vec;
     use hashbrown::HashMap;
+
+    impl<N> FlattenerTarget<DynamicNode> for StaticTarget<N>
+    where
+        N: AsStaticNode,
+    {
+        fn flattens(&self, node: &FandangoNode) -> bool {
+            N::static_definition() == *node
+        }
+    }
 
     #[derive(Debug, Copy, Clone)]
     pub struct DynamicTarget(FandangoNode);
 
-    impl FlattenerTarget for DynamicTarget {
-        fn flattened(&self) -> FandangoNode {
-            self.0
+    impl<O> FlattenerTarget<O> for DynamicTarget {
+        fn flattens(&self, node: &FandangoNode) -> bool {
+            self.0 == *node
         }
     }
 
@@ -302,10 +318,10 @@ mod dynamic_impls {
     where
         W: for<'a> GeneratorTuple<DynamicNode, FlattenedSampler<'a, S>>,
         S: Sampler<DynamicNode> + HasDynamicSampler,
-        T: FlattenerTarget,
+        T: FlattenerTarget<DynamicNode>,
     {
         fn generate(&mut self, sampler: &mut S, with: &mut W) -> Option<DynamicNode> {
-            if self.target.flattened() == sampler.definition() {
+            if self.target.flattens(&sampler.definition()) {
                 let flattened = self.flattened.get(&sampler.definition()).unwrap();
                 let choice = sampler.sample_alternative(flattened.total);
                 let mut sampler = FlattenedSampler {
