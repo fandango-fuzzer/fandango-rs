@@ -193,7 +193,7 @@ mod simple {
             );
         }
 
-        let flattener = Flattener::new().flatten::<nonterminal_digit>().unwrap();
+        let flattener = Flattener::flatten::<nonterminal_digit>().unwrap();
         let mut generators = tuple_list!(flattener);
         let rngs = (0..1000)
             .map(|i| {
@@ -438,7 +438,7 @@ mod xml {
             );
         }
 
-        let flattener = Flattener::new().flatten::<nonterminal_id_char>().unwrap();
+        let flattener = Flattener::flatten::<nonterminal_id_char>().unwrap();
         let mut generators = tuple_list!(flattener);
 
         let rngs = (0..1000)

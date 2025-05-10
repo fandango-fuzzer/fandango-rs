@@ -243,7 +243,7 @@ mod simple {
     fn generate_flattened() -> Result<(), Box<dyn Error>> {
         let mut rng = rng();
 
-        let flattener = Flattener::new().flatten::<nonterminal_digit>()?;
+        let flattener = Flattener::flatten::<nonterminal_digit>()?;
 
         let mut generators = tuple_list!(flattener);
 
@@ -280,7 +280,7 @@ mod simple {
             &mut rng,
         );
 
-        let flattener = Flattener::new().flatten_dynamic(
+        let flattener = Flattener::flatten_dynamic(
             nonterminal_digit::static_root(),
             nonterminal_digit::static_definition(),
         )?;

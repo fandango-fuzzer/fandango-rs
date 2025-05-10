@@ -8,7 +8,8 @@ use alloc::vec;
 use alloc::vec::Vec;
 use core::error::Error;
 use core::fmt::{Debug, Display, Formatter};
-use hashbrown::{HashMap, HashSet};
+use core::marker::PhantomData;
+use hashbrown::HashMap;
 
 type FandangoNode = crate::lang::FandangoNode<'static, 'static>;
 
@@ -24,6 +25,22 @@ impl Display for Unflattenable {
 }
 
 impl Error for Unflattenable {}
+
+pub trait FlattenerTarget {
+    fn flattened(&self) -> FandangoNode;
+}
+
+#[derive(Debug, Copy, Clone)]
+pub struct StaticTarget<N>(PhantomData<N>);
+
+impl<N> FlattenerTarget for StaticTarget<N>
+where
+    N: AsStaticNode,
+{
+    fn flattened(&self) -> FandangoNode {
+        N::static_definition()
+    }
+}
 
 /// Flattens nested alternatives (including via non-terminals) and makes their derivations of equal
 /// weight. Considers [`FandangoNode::String`]s as points to consider as a "single" derivation.
@@ -46,8 +63,8 @@ impl Error for Unflattenable {}
 ///
 /// When generating `digit` without flattening, approximately 50% of the generated digits will be 0.
 #[derive(Debug, Default)]
-pub struct Flattener {
-    targets: HashSet<FandangoNode>,
+pub struct Flattener<T> {
+    target: T,
     flattened: HashMap<FandangoNode, Flattened>,
 }
 
@@ -116,25 +133,21 @@ fn flatten(
     result
 }
 
-impl Flattener {
-    /// Create a new [`Flattener`]. It will not flatten anything until you call
-    /// [`Flattener::flatten`].
-    pub fn new() -> Self {
-        Self::default()
-    }
-
-    /// Adds a node to the flattening list. If a node is not listed here, it will not be flattened.
-    pub fn flatten<N>(mut self) -> Result<Self, Unflattenable>
+impl Flattener<()> {
+    pub fn flatten<N>() -> Result<Flattener<StaticTarget<N>>, Unflattenable>
     where
         N: Structured + AsStaticNode,
     {
+        let mut this = Flattener::<StaticTarget<N>> {
+            target: StaticTarget::<N>(PhantomData),
+            flattened: HashMap::new(),
+        };
         let nonterminals = N::ROOT.inner().nonterminals();
 
         let node = N::static_definition();
-        flatten(&nonterminals, node, &mut vec![], &mut self.flattened)?;
+        flatten(&nonterminals, node, &mut vec![], &mut this.flattened)?;
 
-        self.targets.insert(node);
-        Ok(self)
+        Ok(this)
     }
 }
 
@@ -187,14 +200,15 @@ where
     }
 }
 
-impl<N, W, S> Generator<N, W, S> for Flattener
+impl<N, W, S, T> Generator<N, W, S> for Flattener<T>
 where
     N: AsStaticNode + for<'a> Generated<FlattenedSampler<'a, S>, W>,
     W: for<'a> GeneratorTuple<N, FlattenedSampler<'a, S>>,
     S: Sampler<N>,
+    T: FlattenerTarget,
 {
     fn generate(&mut self, sampler: &mut S, with: &mut W) -> Option<N> {
-        if self.targets.contains(&N::static_definition()) {
+        if self.target.flattened() == N::static_definition() {
             let flattened = self.flattened.get(&N::static_definition()).unwrap();
             let choice = sampler.sample_alternative(flattened.total);
             let mut sampler = FlattenedSampler {
@@ -217,28 +231,40 @@ where
 mod dynamic_impls {
     use crate::dynamic::{DynamicNode, HasDynamicSampler};
     use crate::generation::util::{
-        flatten, FandangoNode, FlattenedSampler, Flattener, Unflattenable,
+        flatten, FandangoNode, FlattenedSampler, Flattener, FlattenerTarget, Unflattenable,
     };
     use crate::generation::{Generated, Generator, GeneratorTuple, Sampler};
     use crate::impl_has_dynamic_sampler;
     use alloc::vec;
+    use hashbrown::HashMap;
 
-    impl Flattener {
+    #[derive(Debug, Copy, Clone)]
+    pub struct DynamicTarget(FandangoNode);
+
+    impl FlattenerTarget for DynamicTarget {
+        fn flattened(&self) -> FandangoNode {
+            self.0
+        }
+    }
+
+    impl Flattener<()> {
         /// Adds a node to the flattening list by root and definition.
         pub fn flatten_dynamic(
-            mut self,
             root: FandangoNode,
             definition: FandangoNode,
-        ) -> Result<Self, Unflattenable> {
+        ) -> Result<Flattener<DynamicTarget>, Unflattenable> {
+            let mut this = Flattener::<DynamicTarget> {
+                target: DynamicTarget(definition),
+                flattened: HashMap::new(),
+            };
             let nonterminals = match root {
                 FandangoNode::Program(p) => p.nonterminals(),
                 _ => panic!("Invalid root provided."),
             };
 
-            flatten(&nonterminals, definition, &mut vec![], &mut self.flattened)?;
+            flatten(&nonterminals, definition, &mut vec![], &mut this.flattened)?;
 
-            self.targets.insert(definition);
-            Ok(self)
+            Ok(this)
         }
     }
 
@@ -272,13 +298,14 @@ mod dynamic_impls {
         }
     }
 
-    impl<W, S> Generator<DynamicNode, W, S> for Flattener
+    impl<W, S, T> Generator<DynamicNode, W, S> for Flattener<T>
     where
         W: for<'a> GeneratorTuple<DynamicNode, FlattenedSampler<'a, S>>,
         S: Sampler<DynamicNode> + HasDynamicSampler,
+        T: FlattenerTarget,
     {
         fn generate(&mut self, sampler: &mut S, with: &mut W) -> Option<DynamicNode> {
-            if self.targets.contains(&sampler.definition()) {
+            if self.target.flattened() == sampler.definition() {
                 let flattened = self.flattened.get(&sampler.definition()).unwrap();
                 let choice = sampler.sample_alternative(flattened.total);
                 let mut sampler = FlattenedSampler {
