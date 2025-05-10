@@ -98,7 +98,7 @@ mod simple {
             );
 
             let mut start = nonterminal_start::generate(&mut rng.clone(), &mut ());
-            let mut dyn_start = DynamicNode::generate(
+            let dyn_start = DynamicNode::generate(
                 &mut DynamicSampler::new(
                     nonterminal_start::static_root(),
                     nonterminal_start::static_definition(),
@@ -143,7 +143,6 @@ mod simple {
             );
 
             let count = start.count_nodes();
-            let dyncount = dyn_start.count_nodes();
 
             group.bench_with_input(BenchmarkId::new("mutate", count), &start, |b, start| {
                 b.iter_batched_ref(
@@ -170,7 +169,7 @@ mod simple {
                     b.iter_batched_ref(
                         || start.clone(),
                         |start| {
-                            let selection = rng.random_range(0..dyncount);
+                            let selection = rng.random_range(0..count);
                             let _: Result<(), Box<dyn Error>> = (|| {
                                 let target = Advance::forward(selection)
                                     .visit(start, 0)?
@@ -198,7 +197,7 @@ mod simple {
         let flattener = Flattener::new().flatten::<nonterminal_digit>().unwrap();
         let mut generators = tuple_list!(flattener);
 
-        let mut group = c.benchmark_group("simple flattened");
+        let mut group = c.benchmark_group("simple");
 
         let rngs = (0..1000)
             .map(|i| {
@@ -220,22 +219,26 @@ mod simple {
         for (count, rng) in rngs {
             group.throughput(Throughput::Elements(count as u64));
 
-            group.bench_with_input(BenchmarkId::new("generate", count), &rng, |b, rng| {
-                b.iter_batched_ref(
-                    || rng.clone(),
-                    |rng| nonterminal_start::generate(black_box(rng), &mut generators),
-                    BatchSize::SmallInput,
-                );
-            });
+            group.bench_with_input(
+                BenchmarkId::new("generate flattened", count),
+                &rng,
+                |b, rng| {
+                    b.iter_batched_ref(
+                        || rng.clone(),
+                        |rng| nonterminal_start::generate(black_box(rng), &mut generators),
+                        BatchSize::SmallInput,
+                    );
+                },
+            );
 
             group.bench_with_input(
-                BenchmarkId::new("generate dynamic", count),
+                BenchmarkId::new("generate flattened dynamic", count),
                 &rng,
                 |b, rng| {
                     b.iter_batched_ref(
                         || rng.clone(),
                         |rng| {
-                            DynamicSampler::generate(
+                            DynamicNode::generate(
                                 &mut DynamicSampler::new(
                                     nonterminal_start::static_root(),
                                     nonterminal_start::static_definition(),
@@ -274,6 +277,7 @@ fn graph_xml(c: &mut Criterion) {
 mod xml {
     use criterion::{black_box, BatchSize, BenchmarkId, Criterion, Throughput};
     use fandango_core::dynamic::{DynamicNode, DynamicSampler};
+    use fandango_core::generation::util::Flattener;
     use fandango_core::generation::{Generated, InPlaceGenerated};
     use fandango_core::typing::{AsNode, AsStaticNode, Structured};
     use fandango_core::visitor::navigation::{Advance, CountNodes};
@@ -283,6 +287,7 @@ mod xml {
     use rand::{Rng, SeedableRng};
     use std::collections::BTreeMap;
     use std::error::Error;
+    use tuple_list::tuple_list;
 
     #[allow(dead_code)]
     #[derive(Fandango)]
@@ -343,7 +348,7 @@ mod xml {
             );
 
             let mut start = nonterminal_start::generate(&mut rng.clone(), &mut ());
-            let mut dyn_start = DynamicNode::generate(
+            let dyn_start = DynamicNode::generate(
                 &mut DynamicSampler::new(
                     nonterminal_start::static_root(),
                     nonterminal_start::static_definition(),
@@ -388,7 +393,6 @@ mod xml {
             );
 
             let count = start.count_nodes();
-            let dyncount = dyn_start.count_nodes();
 
             group.bench_with_input(BenchmarkId::new("mutate", count), &start, |b, start| {
                 b.iter_batched_ref(
@@ -415,7 +419,7 @@ mod xml {
                     b.iter_batched_ref(
                         || start.clone(),
                         |start| {
-                            let selection = rng.random_range(0..dyncount);
+                            let selection = rng.random_range(0..count);
                             let _: Result<(), Box<dyn Error>> = (|| {
                                 let target = Advance::forward(selection)
                                     .visit(start, 0)?
@@ -431,6 +435,68 @@ mod xml {
                                 target.generate_in_place(&mut sampler, &mut ());
                                 Ok(())
                             })();
+                        },
+                        BatchSize::SmallInput,
+                    );
+                },
+            );
+        }
+    }
+
+    pub fn xml_flattened(c: &mut Criterion) {
+        let flattener = Flattener::new().flatten::<nonterminal_id_char>().unwrap();
+        let mut generators = tuple_list!(flattener);
+
+        let mut group = c.benchmark_group("xml");
+
+        let rngs = (0..1000)
+            .map(|i| {
+                let mut rng = rand::rngs::StdRng::seed_from_u64(i);
+                let stashed = rng.clone();
+
+                (
+                    nonterminal_start::generate(&mut rng, &mut generators).count_nodes(),
+                    stashed,
+                )
+            })
+            .collect::<BTreeMap<_, _>>();
+
+        let count = rngs.len() - 1;
+        let rngs = rngs.into_iter().step_by(count / 5).collect::<Vec<_>>();
+
+        let nonterminals = nonterminal_start::ROOT.inner().nonterminals();
+
+        for (count, rng) in rngs {
+            group.throughput(Throughput::Elements(count as u64));
+
+            group.bench_with_input(
+                BenchmarkId::new("generate flattened", count),
+                &rng,
+                |b, rng| {
+                    b.iter_batched_ref(
+                        || rng.clone(),
+                        |rng| nonterminal_start::generate(black_box(rng), &mut generators),
+                        BatchSize::SmallInput,
+                    );
+                },
+            );
+
+            group.bench_with_input(
+                BenchmarkId::new("generate flattened dynamic", count),
+                &rng,
+                |b, rng| {
+                    b.iter_batched_ref(
+                        || rng.clone(),
+                        |rng| {
+                            DynamicNode::generate(
+                                &mut DynamicSampler::new(
+                                    nonterminal_start::static_root(),
+                                    nonterminal_start::static_definition(),
+                                    &nonterminals,
+                                    black_box(rng),
+                                ),
+                                &mut generators,
+                            )
                         },
                         BatchSize::SmallInput,
                     );
@@ -535,6 +601,7 @@ criterion_group!(
     simple::simple,
     simple::simple_flattened,
     xml::xml,
+    xml::xml_flattened,
     // ssl::ssl,
 );
 criterion_main!(benches);
