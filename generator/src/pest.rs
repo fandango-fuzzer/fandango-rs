@@ -68,10 +68,7 @@ impl<'source> IntoPestSource<()> for DiGraph<FandangoNode<'_, 'source>, Span<'so
             Cow::Owned(format!("{pest_name}_0"))
         };
 
-        writeln!(
-            output,
-            "{pest_name} = {{ SOI ~ {pest_child_name} ~ EOI }}"
-        )?;
+        writeln!(output, "{pest_name} = {{ SOI ~ {pest_child_name} ~ EOI }}")?;
 
         child.emit_pest(&mut (self, HashSet::new(), pest_child_name), output)
     }
