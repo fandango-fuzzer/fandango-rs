@@ -28,6 +28,12 @@ lto = true
 [profile.bench]
 inherits = "release"
 debug = true
+opt-level = 3
+
+[profile.bench-noopt]
+inherits = "dev"
+debug-assertions = false
+overflow-checks = false
 
 [lints]
 workspace = true
