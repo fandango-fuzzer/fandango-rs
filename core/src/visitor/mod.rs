@@ -13,7 +13,7 @@ use core::fmt::{Debug, Display, Formatter};
 use core::ops::ControlFlow;
 use either::Either;
 
-type NodeTrace<T> = Vec<(T, usize, Option<((usize, usize), (usize, usize))>)>;
+type NodeTrace<T> = Vec<(T, usize)>;
 
 /// Visitor pattern over nodes.
 pub trait Visitor<T> {

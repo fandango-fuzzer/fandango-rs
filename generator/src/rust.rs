@@ -21,63 +21,41 @@ pub trait IntoRustSource<C> {
 
 fn from_boilerplate(name: &Ident) -> TokenStream {
     quote! {
-        impl<'program, 'source> ::core::convert::From<&'program #name<'source>> for Type<'program, 'source> where 'source: 'program {
-            fn from(node: &'program #name<'source>) -> Type<'program, 'source> {
+        impl<'program> ::core::convert::From<&'program #name> for Type<'program> {
+            fn from(node: &'program #name) -> Type<'program> {
                 Type::#name(node)
             }
         }
 
-        impl<'program, 'source> ::core::convert::From<&'program mut #name<'source>> for Type<'program, 'source> where 'source: 'program {
-            fn from(node: &'program mut #name<'source>) -> Type<'program, 'source> {
+        impl<'program> ::core::convert::From<&'program mut #name> for Type<'program> {
+            fn from(node: &'program mut #name) -> Type<'program> {
                 Type::#name(node)
             }
         }
 
-        impl<'program, 'source> ::core::convert::From<&'program mut #name<'source>> for TypeMut<'program, 'source> where 'source: 'program {
-            fn from(node: &'program mut #name<'source>) -> TypeMut<'program, 'source> {
+        impl<'program> ::core::convert::From<&'program mut #name> for TypeMut<'program> {
+            fn from(node: &'program mut #name) -> TypeMut<'program> {
                 TypeMut::#name(node)
             }
         }
 
-        impl<'program, 'source> ::core::convert::From<&'program ::alloc::boxed::Box<#name<'source>>> for Type<'program, 'source> where 'source: 'program {
-            fn from(node: &'program ::alloc::boxed::Box<#name<'source>>) -> Type<'program, 'source> {
+        impl<'program> ::core::convert::From<&'program ::alloc::boxed::Box<#name>> for Type<'program> {
+            fn from(node: &'program ::alloc::boxed::Box<#name>) -> Type<'program> {
                 Type::#name(&**node)
             }
         }
 
-        impl<'program, 'source> ::core::convert::From<&'program mut ::alloc::boxed::Box<#name<'source>>> for Type<'program, 'source> where 'source: 'program {
-            fn from(node: &'program mut ::alloc::boxed::Box<#name<'source>>) -> Type<'program, 'source> {
+        impl<'program> ::core::convert::From<&'program mut ::alloc::boxed::Box<#name>> for Type<'program> {
+            fn from(node: &'program mut ::alloc::boxed::Box<#name>) -> Type<'program> {
                 Type::#name(&**node)
             }
         }
 
-        impl<'program, 'source> ::core::convert::From<&'program mut ::alloc::boxed::Box<#name<'source>>> for TypeMut<'program, 'source> where 'source: 'program {
-            fn from(node: &'program mut ::alloc::boxed::Box<#name<'source>>) -> TypeMut<'program, 'source> {
+        impl<'program> ::core::convert::From<&'program mut ::alloc::boxed::Box<#name>> for TypeMut<'program> {
+            fn from(node: &'program mut ::alloc::boxed::Box<#name>) -> TypeMut<'program> {
                 TypeMut::#name(&mut **node)
             }
         }
-    }
-}
-
-fn parse_glue(emit_parse_glue: bool) -> (TokenStream, TokenStream, TokenStream) {
-    if emit_parse_glue {
-        (
-            quote! { ::core::option::Option<(::alloc::rc::Rc<::alloc::borrow::Cow<'source, str>>, usize, usize)> },
-            quote! {
-                fn span(&self) -> ::core::option::Option<::fandango::Span<'_>> { ::fandango::typing::maybe_owned_span(&self.span) }
-                fn clear_span(&mut self) { self.span = None; }
-            },
-            quote! { None },
-        )
-    } else {
-        (
-            quote! { ::core::marker::PhantomData<&'source ()> },
-            quote! {
-                fn span(&self) -> ::core::option::Option<::fandango::Span<'_>> { None }
-                fn clear_span(&mut self) { }
-            },
-            quote! { ::core::marker::PhantomData },
-        )
     }
 }
 
@@ -164,58 +142,55 @@ where
             format_ident!("{name}_0")
         };
         let child_type = if needs_indirection.contains(&(node_weight, child_weight)) {
-            quote! { ::alloc::boxed::Box<#child_name<'source>> }
+            quote! { ::alloc::boxed::Box<#child_name> }
         } else {
-            quote! { #child_name<'source> }
+            quote! { #child_name }
         };
 
         let from = from_boilerplate(&name);
 
-        let (pest_glue_field, span_call, span_value) = parse_glue(emit_parse_glue);
         output.extend(quote! {
             #[derive(Clone, Debug, Eq, PartialEq)]
-            pub struct #name<'source> {
-                span: #pest_glue_field,
+            pub struct #name {
                 child_0: #child_type,
             }
 
-            impl<'source> ::fandango::typing::Node for #name<'source> {
-                type Type<'program> = Type<'program, 'source> where 'source: 'program;
-                type TypeMut<'program> = TypeMut<'program, 'source> where 'source: 'program;
-                type ChildrenRef<'program> = (&'program #child_name<'source>, ()) where 'source: 'program;
-                type ChildrenRefMut<'program> = (&'program mut #child_name<'source>, ()) where 'source: 'program;
+            impl ::fandango::typing::Node for #name {
+                type Type<'program> = Type<'program>;
+                type TypeMut<'program> = TypeMut<'program>;
+                type ChildrenRef<'program> = (&'program #child_name, ());
+                type ChildrenRefMut<'program> = (&'program mut #child_name, ());
 
-                #span_call
                 fn children<'program>(&'program self) -> Self::ChildrenRef<'program> {{ (&self.child_0, ()) }}
                 fn children_mut<'program>(&'program mut self) -> Self::ChildrenRefMut<'program> {{ (&mut self.child_0, ()) }}
             }
 
-            impl<'program, 'source> ::fandango::visitor::VisitableChildren<TypeMut<'program, 'source>> for &'program mut #name<'source> where 'source: 'program
+            impl<'program> ::fandango::visitor::VisitableChildren<TypeMut<'program>> for &'program mut #name
             {
-                fn visit_each<V>(self, visitor: V) -> ::fandango::visitor::VisitResult<V, TypeMut<'program, 'source>>
+                fn visit_each<V>(self, visitor: V) -> ::fandango::visitor::VisitResult<V, TypeMut<'program>>
                 where
-                    V: ::fandango::visitor::Visitor<TypeMut<'program, 'source>, Continue = V>
+                    V: ::fandango::visitor::Visitor<TypeMut<'program>, Continue = V>
                 {
                     visitor.visit(&mut self.child_0, 0)
                 }
 
-                fn visit_each_reverse<V>(self, visitor: V) -> ::fandango::visitor::VisitResult<V, TypeMut<'program, 'source>>
+                fn visit_each_reverse<V>(self, visitor: V) -> ::fandango::visitor::VisitResult<V, TypeMut<'program>>
                 where
-                    V: ::fandango::visitor::Visitor<TypeMut<'program, 'source>, Continue = V>
+                    V: ::fandango::visitor::Visitor<TypeMut<'program>, Continue = V>
                 {
                     self.visit_each(visitor)
                 }
 
-                fn visit_each_reverse_from<V>(self, visitor: V, idx: usize) -> ::fandango::visitor::VisitResult<V, TypeMut<'program, 'source>>
+                fn visit_each_reverse_from<V>(self, visitor: V, idx: usize) -> ::fandango::visitor::VisitResult<V, TypeMut<'program>>
                 where
-                    V: ::fandango::visitor::Visitor<TypeMut<'program, 'source>, Continue=V>
+                    V: ::fandango::visitor::Visitor<TypeMut<'program>, Continue=V>
                 {
                     self.visit_nth(visitor, idx).unwrap_or_else(|c| Ok(::core::ops::ControlFlow::Continue(c)))
                 }
 
-                fn visit_each_from<V>(self, visitor: V, idx: usize) -> ::fandango::visitor::VisitResult<V, TypeMut<'program, 'source>>
+                fn visit_each_from<V>(self, visitor: V, idx: usize) -> ::fandango::visitor::VisitResult<V, TypeMut<'program>>
                 where
-                    V: ::fandango::visitor::Visitor<TypeMut<'program, 'source>, Continue=V>
+                    V: ::fandango::visitor::Visitor<TypeMut<'program>, Continue=V>
                 {
                     self.visit_nth(visitor, idx).unwrap_or_else(|c| Ok(::core::ops::ControlFlow::Continue(c)))
                 }
@@ -224,9 +199,9 @@ where
                     self,
                     visitor: V,
                     idx: usize,
-                ) -> ::fandango::visitor::MaybeVisitResult<V, TypeMut<'program, 'source>>
+                ) -> ::fandango::visitor::MaybeVisitResult<V, TypeMut<'program>>
                 where
-                    V: ::fandango::visitor::Visitor<TypeMut<'program, 'source>>
+                    V: ::fandango::visitor::Visitor<TypeMut<'program>>
                 {
                     if idx == 0 {
                         Ok(visitor.visit(&mut self.child_0, 0))
@@ -236,15 +211,14 @@ where
                 }
             }
 
-            impl<'source, S, G> ::fandango::generation::DefaultGenerated<S, G> for #name<'source>
+            impl<S, G> ::fandango::generation::DefaultGenerated<S, G> for #name
             where
-                S: TypeSampler<'source>,
-                G: TypeGenerator<'source, S>,
+                S: TypeSampler,
+                G: TypeGenerator<S>,
             {
                 fn generate_default(sampler: &mut S, with: &mut G) -> Self {
                     Self {
                         child_0: ::fandango::generation::Generated::generate(sampler, with),
-                        span: #span_value,
                     }
                 }
             }
@@ -255,10 +229,10 @@ where
             output.extend(quote! {
                 pub type ParseError = ::alloc::boxed::Box<::fandango::error::Error<Rule>>;
 
-                impl<'source> ::core::convert::TryFrom<(::alloc::rc::Rc<::alloc::borrow::Cow<'source, str>>, ::fandango::iterators::Pair<'source, Rule>)> for #name<'source> {
+                impl ::core::convert::TryFrom<(::alloc::rc::Rc<::alloc::borrow::Cow<'_, str>>, ::fandango::iterators::Pair<'_, Rule>)> for #name {
                     type Error = ParseError;
 
-                    fn try_from((source, value): (::alloc::rc::Rc<::alloc::borrow::Cow<'source, str>>, ::fandango::iterators::Pair<'source, Rule>)) -> Result<Self, Self::Error> {
+                    fn try_from((source, value): (::alloc::rc::Rc<::alloc::borrow::Cow<'_, str>>, ::fandango::iterators::Pair<'_, Rule>)) -> Result<Self, Self::Error> {
                         debug_assert_eq!(value.as_rule(), Rule::#pest_name);
 
                         let span = value.as_span();
@@ -266,7 +240,6 @@ where
 
                         Ok(Self {
                             child_0: #child_name::try_from((source.clone(), inner))?.into(),
-                            span: Some((source, span.start(), span.end())),
                         })
                     }
                 }
@@ -362,7 +335,7 @@ impl<'program, 'source> IntoRustSource<FandangoGenContext<'_, '_, 'program, 'sou
             .iter()
             .zip(&child_types)
             .map(|((_, _, child, _), name)| {
-                let base = quote! { #name<'source> };
+                let base = quote! { #name };
                 match node_weight {
                     FandangoNode::Operator(op) => match op {
                         Operator::Kleene(_) | Operator::Plus(_) | Operator::Repeat(_, _, _) => {
@@ -390,7 +363,6 @@ impl<'program, 'source> IntoRustSource<FandangoGenContext<'_, '_, 'program, 'sou
             })
             .collect::<Vec<_>>();
 
-        let (pest_glue_field, span_call, span_value) = parse_glue(emit_parse_glue);
         match node_weight {
             FandangoNode::String(orig) => {
                 let s = Literal::byte_string(orig.inner());
@@ -399,53 +371,50 @@ impl<'program, 'source> IntoRustSource<FandangoGenContext<'_, '_, 'program, 'sou
                         let span = value.as_span();
                         debug_assert_eq!(span.as_str(), #parsed);
 
-                        Ok(Self { span: Some((source, span.start(), span.end())), })
+                        Ok(Self)
                     }
                 } else {
                     quote! { unimplemented!("Pest currently does not support byte-like grammars: https://github.com/pest-parser/pest/issues/244") }
                 };
                 output.extend(quote! {
                     #[derive(Clone, Debug, Eq, PartialEq)]
-                    pub struct #name<'source> {
-                        span: #pest_glue_field,
-                    }
+                    pub struct #name;
 
-                    impl<'source> ::fandango::typing::Node for #name<'source> {
-                        type Type<'program> = Type<'program, 'source> where 'source: 'program;
-                        type TypeMut<'program> = TypeMut<'program, 'source> where 'source: 'program;
-                        type ChildrenRef<'program> = (&'static [u8],) where 'source: 'program;
-                        type ChildrenRefMut<'program> = (&'static [u8],) where 'source: 'program;
+                    impl ::fandango::typing::Node for #name {
+                        type Type<'program> = Type<'program>;
+                        type TypeMut<'program> = TypeMut<'program>;
+                        type ChildrenRef<'program> = (&'static [u8],);
+                        type ChildrenRefMut<'program> = (&'static [u8],);
 
-                        #span_call
                         fn children<'program>(&'program self) -> Self::ChildrenRef<'program> { (#s.as_slice(),) }
                         fn children_mut<'program>(&'program mut self) -> Self::ChildrenRefMut<'program> { (#s.as_slice(),) }
                     }
 
-                    impl<'program, 'source> ::fandango::visitor::VisitableChildren<TypeMut<'program, 'source>> for &'program mut #name<'source> where 'source: 'program
+                    impl<'program> ::fandango::visitor::VisitableChildren<TypeMut<'program>> for &'program mut #name
                     {
-                        fn visit_each<V>(self, visitor: V) -> ::fandango::visitor::VisitResult<V, TypeMut<'program, 'source>>
+                        fn visit_each<V>(self, visitor: V) -> ::fandango::visitor::VisitResult<V, TypeMut<'program>>
                         where
-                            V: ::fandango::visitor::Visitor<TypeMut<'program, 'source>, Continue = V> {
+                            V: ::fandango::visitor::Visitor<TypeMut<'program>, Continue = V> {
                             Ok(::core::ops::ControlFlow::Continue(visitor))
                         }
 
-                        fn visit_each_reverse<V>(self, visitor: V) -> ::fandango::visitor::VisitResult<V, TypeMut<'program, 'source>>
+                        fn visit_each_reverse<V>(self, visitor: V) -> ::fandango::visitor::VisitResult<V, TypeMut<'program>>
                         where
-                            V: ::fandango::visitor::Visitor<TypeMut<'program, 'source>, Continue = V>
+                            V: ::fandango::visitor::Visitor<TypeMut<'program>, Continue = V>
                         {
                             self.visit_each(visitor)
                         }
 
-                        fn visit_each_reverse_from<V>(self, visitor: V, idx: usize) -> ::fandango::visitor::VisitResult<V, TypeMut<'program, 'source>>
+                        fn visit_each_reverse_from<V>(self, visitor: V, idx: usize) -> ::fandango::visitor::VisitResult<V, TypeMut<'program>>
                         where
-                            V: ::fandango::visitor::Visitor<TypeMut<'program, 'source>, Continue = V>
+                            V: ::fandango::visitor::Visitor<TypeMut<'program>, Continue = V>
                         {
                             self.visit_nth(visitor, idx).unwrap_or_else(|c| Ok(::core::ops::ControlFlow::Continue(c)))
                         }
 
-                        fn visit_each_from<V>(self, visitor: V, idx: usize) -> ::fandango::visitor::VisitResult<V, TypeMut<'program, 'source>>
+                        fn visit_each_from<V>(self, visitor: V, idx: usize) -> ::fandango::visitor::VisitResult<V, TypeMut<'program>>
                         where
-                            V: ::fandango::visitor::Visitor<TypeMut<'program, 'source>, Continue = V>
+                            V: ::fandango::visitor::Visitor<TypeMut<'program>, Continue = V>
                         {
                             self.visit_nth(visitor, idx).unwrap_or_else(|c| Ok(::core::ops::ControlFlow::Continue(c)))
                         }
@@ -454,18 +423,16 @@ impl<'program, 'source> IntoRustSource<FandangoGenContext<'_, '_, 'program, 'sou
                             self,
                             visitor: V,
                             idx: usize,
-                        ) -> ::fandango::visitor::MaybeVisitResult<V, TypeMut<'program, 'source>>
+                        ) -> ::fandango::visitor::MaybeVisitResult<V, TypeMut<'program>>
                         where
-                            V: ::fandango::visitor::Visitor<TypeMut<'program, 'source>> {
+                            V: ::fandango::visitor::Visitor<TypeMut<'program>> {
                             Err(visitor)
                         }
                     }
 
-                    impl<'source, S, G> ::fandango::generation::DefaultGenerated<S, G> for #name<'source> {
+                    impl<S, G> ::fandango::generation::DefaultGenerated<S, G> for #name {
                         fn generate_default(sampler: &mut S, with: &mut G) -> Self {
-                            Self {
-                                span: #span_value,
-                            }
+                            Self
                         }
                     }
 
@@ -473,10 +440,10 @@ impl<'program, 'source> IntoRustSource<FandangoGenContext<'_, '_, 'program, 'sou
                 });
                 if emit_parse_glue {
                     output.extend(quote! {
-                        impl<'source> ::core::convert::TryFrom<(::alloc::rc::Rc<::alloc::borrow::Cow<'source, str>>, ::fandango::iterators::Pair<'source, Rule>)> for #name<'source> {
+                        impl ::core::convert::TryFrom<(::alloc::rc::Rc<::alloc::borrow::Cow<'_, str>>, ::fandango::iterators::Pair<'_, Rule>)> for #name {
                             type Error = ParseError;
 
-                            fn try_from((source, value): (::alloc::rc::Rc<::alloc::borrow::Cow<'source, str>>, ::fandango::iterators::Pair<'source, Rule>)) -> Result<Self, Self::Error> {
+                            fn try_from((source, value): (::alloc::rc::Rc<::alloc::borrow::Cow<'_, str>>, ::fandango::iterators::Pair<'_, Rule>)) -> Result<Self, Self::Error> {
                                 #parse_routine
                             }
                         }
@@ -491,27 +458,15 @@ impl<'program, 'source> IntoRustSource<FandangoGenContext<'_, '_, 'program, 'sou
                 let count = children.len();
                 output.extend(quote! {
                     #[derive(Clone, Debug, Eq, PartialEq)]
-                    pub enum #name<'source> {
+                    pub enum #name {
                         #( #child_variants ( #child_field_types ) ),*
                     }
 
-                    impl<'source> ::fandango::typing::Node for #name<'source> {
-                        type Type<'program> = Type<'program, 'source> where 'source: 'program;
-                        type TypeMut<'program> = TypeMut<'program, 'source> where 'source: 'program;
-                        type ChildrenRef<'program> = &'program Self where 'source: 'program;
-                        type ChildrenRefMut<'program> = &'program mut Self where 'source: 'program;
-
-                        fn span(&self) -> ::core::option::Option<::fandango::Span<'_>> {
-                            match self {
-                                #( Self::#child_variants ( inner ) => inner.span() ),*
-                            }
-                        }
-
-                        fn clear_span(&mut self) {
-                            match self {
-                                #( Self::#child_variants ( inner ) => inner.clear_span() ),*
-                            }
-                        }
+                    impl ::fandango::typing::Node for #name {
+                        type Type<'program> = Type<'program>;
+                        type TypeMut<'program> = TypeMut<'program>;
+                        type ChildrenRef<'program> = &'program Self;
+                        type ChildrenRefMut<'program> = &'program mut Self;
 
                         fn children<'program>(&'program self) -> Self::ChildrenRef<'program> {
                             self
@@ -521,26 +476,26 @@ impl<'program, 'source> IntoRustSource<FandangoGenContext<'_, '_, 'program, 'sou
                         }
                     }
 
-                    impl<'program, 'source> ::fandango::visitor::VisitableChildren<TypeMut<'program, 'source>> for &'program mut #name<'source> where 'source: 'program
+                    impl<'program> ::fandango::visitor::VisitableChildren<TypeMut<'program>> for &'program mut #name
                     {
-                        fn visit_each<V>(self, visitor: V) -> ::fandango::visitor::VisitResult<V, TypeMut<'program, 'source>>
+                        fn visit_each<V>(self, visitor: V) -> ::fandango::visitor::VisitResult<V, TypeMut<'program>>
                         where
-                            V: ::fandango::visitor::Visitor<TypeMut<'program, 'source>, Continue = V> {
+                            V: ::fandango::visitor::Visitor<TypeMut<'program>, Continue = V> {
                             match self {
                                 #(#name::#child_variants(n) => visitor.visit(n, #indices)),*
                             }
                         }
 
-                        fn visit_each_reverse<V>(self, visitor: V) -> ::fandango::visitor::VisitResult<V, TypeMut<'program, 'source>>
+                        fn visit_each_reverse<V>(self, visitor: V) -> ::fandango::visitor::VisitResult<V, TypeMut<'program>>
                         where
-                            V: ::fandango::visitor::Visitor<TypeMut<'program, 'source>, Continue = V>
+                            V: ::fandango::visitor::Visitor<TypeMut<'program>, Continue = V>
                         {
                             self.visit_each(visitor)
                         }
 
-                        fn visit_each_reverse_from<V>(self, visitor: V, idx: usize) -> ::fandango::visitor::VisitResult<V, TypeMut<'program, 'source>>
+                        fn visit_each_reverse_from<V>(self, visitor: V, idx: usize) -> ::fandango::visitor::VisitResult<V, TypeMut<'program>>
                         where
-                            V: ::fandango::visitor::Visitor<TypeMut<'program, 'source>, Continue = V>
+                            V: ::fandango::visitor::Visitor<TypeMut<'program>, Continue = V>
                         {
                             match self {
                                 #(#name::#child_variants(n) if idx >= #indices => visitor.visit(n, idx)),*,
@@ -548,9 +503,9 @@ impl<'program, 'source> IntoRustSource<FandangoGenContext<'_, '_, 'program, 'sou
                             }
                         }
 
-                        fn visit_each_from<V>(self, visitor: V, idx: usize) -> ::fandango::visitor::VisitResult<V, TypeMut<'program, 'source>>
+                        fn visit_each_from<V>(self, visitor: V, idx: usize) -> ::fandango::visitor::VisitResult<V, TypeMut<'program>>
                         where
-                            V: ::fandango::visitor::Visitor<TypeMut<'program, 'source>, Continue = V>
+                            V: ::fandango::visitor::Visitor<TypeMut<'program>, Continue = V>
                         {
                             match self {
                                 #(#name::#child_variants(n) if idx <= #indices => visitor.visit(n, idx)),*,
@@ -562,9 +517,9 @@ impl<'program, 'source> IntoRustSource<FandangoGenContext<'_, '_, 'program, 'sou
                             self,
                             visitor: V,
                             idx: usize,
-                        ) -> ::fandango::visitor::MaybeVisitResult<V, TypeMut<'program, 'source>>
+                        ) -> ::fandango::visitor::MaybeVisitResult<V, TypeMut<'program>>
                         where
-                            V: ::fandango::visitor::Visitor<TypeMut<'program, 'source>> {
+                            V: ::fandango::visitor::Visitor<TypeMut<'program>> {
                             match self {
                                 #(#name::#child_variants(n) if idx == #indices => Ok(visitor.visit(n, idx))),*,
                                 _ => Err(visitor)
@@ -572,10 +527,10 @@ impl<'program, 'source> IntoRustSource<FandangoGenContext<'_, '_, 'program, 'sou
                         }
                     }
 
-                    impl<'source, S, G> ::fandango::generation::DefaultGenerated<S, G> for #name<'source>
+                    impl<S, G> ::fandango::generation::DefaultGenerated<S, G> for #name
                     where
-                        S: TypeSampler<'source>,
-                        G: TypeGenerator<'source, S>,
+                        S: TypeSampler,
+                        G: TypeGenerator<S>,
                     {
                         fn generate_default(sampler: &mut S, with: &mut G) -> Self {
                             match <S as ::fandango::generation::Sampler<Self>>::sample_alternative(sampler, #count) {
@@ -589,10 +544,10 @@ impl<'program, 'source> IntoRustSource<FandangoGenContext<'_, '_, 'program, 'sou
                 });
                 if emit_parse_glue {
                     output.extend(quote! {
-                        impl<'source> ::core::convert::TryFrom<(::alloc::rc::Rc<::alloc::borrow::Cow<'source, str>>, ::fandango::iterators::Pair<'source, Rule>)> for #name<'source> {
+                        impl ::core::convert::TryFrom<(::alloc::rc::Rc<::alloc::borrow::Cow<'_, str>>, ::fandango::iterators::Pair<'_, Rule>)> for #name {
                             type Error = ParseError;
 
-                            fn try_from((source, value): (::alloc::rc::Rc<::alloc::borrow::Cow<'source, str>>, ::fandango::iterators::Pair<'source, Rule>)) -> Result<Self, Self::Error> {
+                            fn try_from((source, value): (::alloc::rc::Rc<::alloc::borrow::Cow<'_, str>>, ::fandango::iterators::Pair<'_, Rule>)) -> Result<Self, Self::Error> {
                                 debug_assert_eq!(value.as_rule(), Rule::#pest_name);
 
                                 let mut children = value.into_inner();
@@ -630,10 +585,10 @@ impl<'program, 'source> IntoRustSource<FandangoGenContext<'_, '_, 'program, 'sou
                 };
                 let child_type = match op {
                     Operator::Repeat(_, _, _) | Operator::Kleene(_) | Operator::Plus(_) => {
-                        quote! { Vec<#(#child_types<'source>),*> }
+                        quote! { Vec<#(#child_types),*> }
                     }
                     Operator::Option(_) => {
-                        quote! { Option<#(#child_types<'source>),*> }
+                        quote! { Option<#(#child_types),*> }
                     }
                     Operator::Symbol(_) => {
                         unimplemented!("Unexpected symbol; should be elided.")
@@ -667,27 +622,25 @@ impl<'program, 'source> IntoRustSource<FandangoGenContext<'_, '_, 'program, 'sou
 
                 output.extend(quote! {
                     #[derive(Clone, Debug, Eq, PartialEq)]
-                    pub struct #name<'source> {
-                        span: #pest_glue_field,
+                    pub struct #name {
                         child_0: #(#child_field_types)*
                     }
 
-                    impl<'source> ::fandango::typing::Node for #name<'source> {
-                        type Type<'program> = Type<'program, 'source> where 'source: 'program;
-                        type TypeMut<'program> = TypeMut<'program, 'source> where 'source: 'program;
-                        type ChildrenRef<'program> = &'program #child_type where 'source: 'program;
-                        type ChildrenRefMut<'program> = &'program mut #child_type where 'source: 'program;
+                    impl ::fandango::typing::Node for #name {
+                        type Type<'program> = Type<'program>;
+                        type TypeMut<'program> = TypeMut<'program>;
+                        type ChildrenRef<'program> = &'program #child_type;
+                        type ChildrenRefMut<'program> = &'program mut #child_type;
 
-                        #span_call
                         fn children<'program>(&'program self) -> Self::ChildrenRef<'program> { &self.child_0 }
                         fn children_mut<'program>(&'program mut self) -> Self::ChildrenRefMut<'program> { &mut self.child_0 }
                     }
 
-                    impl<'program, 'source> ::fandango::visitor::VisitableChildren<TypeMut<'program, 'source>> for &'program mut #name<'source> where 'source: 'program
+                    impl<'program> ::fandango::visitor::VisitableChildren<TypeMut<'program>> for &'program mut #name
                     {
-                        fn visit_each<V>(self, mut visitor: V) -> ::fandango::visitor::VisitResult<V, TypeMut<'program, 'source>>
+                        fn visit_each<V>(self, mut visitor: V) -> ::fandango::visitor::VisitResult<V, TypeMut<'program>>
                         where
-                            V: ::fandango::visitor::Visitor<TypeMut<'program, 'source>, Continue = V>
+                            V: ::fandango::visitor::Visitor<TypeMut<'program>, Continue = V>
                         {
                             for (i, child) in self.children_mut().iter_mut().enumerate() {
                                 visitor = match visitor.visit(child, i)? {
@@ -698,9 +651,9 @@ impl<'program, 'source> IntoRustSource<FandangoGenContext<'_, '_, 'program, 'sou
                             Ok(::core::ops::ControlFlow::Continue(visitor))
                         }
 
-                        fn visit_each_reverse<V>(self, mut visitor: V) -> ::fandango::visitor::VisitResult<V, TypeMut<'program, 'source>>
+                        fn visit_each_reverse<V>(self, mut visitor: V) -> ::fandango::visitor::VisitResult<V, TypeMut<'program>>
                         where
-                            V: ::fandango::visitor::Visitor<TypeMut<'program, 'source>, Continue = V>
+                            V: ::fandango::visitor::Visitor<TypeMut<'program>, Continue = V>
                         {
                             for (i, child) in self.children_mut().iter_mut().enumerate().rev() {
                                 visitor = match visitor.visit(child, i)? {
@@ -711,9 +664,9 @@ impl<'program, 'source> IntoRustSource<FandangoGenContext<'_, '_, 'program, 'sou
                             Ok(::core::ops::ControlFlow::Continue(visitor))
                         }
 
-                        fn visit_each_reverse_from<V>(self, mut visitor: V, idx: usize) -> ::fandango::visitor::VisitResult<V, TypeMut<'program, 'source>>
+                        fn visit_each_reverse_from<V>(self, mut visitor: V, idx: usize) -> ::fandango::visitor::VisitResult<V, TypeMut<'program>>
                         where
-                            V: ::fandango::visitor::Visitor<TypeMut<'program, 'source>, Continue=V>
+                            V: ::fandango::visitor::Visitor<TypeMut<'program>, Continue=V>
                         {
                             for (i, child) in self.children_mut().iter_mut().skip(idx).enumerate().rev() {
                                 visitor = match visitor.visit(child, i)? {
@@ -724,9 +677,9 @@ impl<'program, 'source> IntoRustSource<FandangoGenContext<'_, '_, 'program, 'sou
                             Ok(::core::ops::ControlFlow::Continue(visitor))
                         }
 
-                        fn visit_each_from<V>(self, mut visitor: V, idx: usize) -> ::fandango::visitor::VisitResult<V, TypeMut<'program, 'source>>
+                        fn visit_each_from<V>(self, mut visitor: V, idx: usize) -> ::fandango::visitor::VisitResult<V, TypeMut<'program>>
                         where
-                            V: ::fandango::visitor::Visitor<TypeMut<'program, 'source>, Continue=V>
+                            V: ::fandango::visitor::Visitor<TypeMut<'program>, Continue=V>
                         {
                             for (i, child) in self.children_mut().iter_mut().skip(idx).enumerate() {
                                 visitor = match visitor.visit(child, i)? {
@@ -741,9 +694,9 @@ impl<'program, 'source> IntoRustSource<FandangoGenContext<'_, '_, 'program, 'sou
                             self,
                             visitor: V,
                             idx: usize,
-                        ) -> ::fandango::visitor::MaybeVisitResult<V, TypeMut<'program, 'source>>
+                        ) -> ::fandango::visitor::MaybeVisitResult<V, TypeMut<'program>>
                         where
-                            V: ::fandango::visitor::Visitor<TypeMut<'program, 'source>>
+                            V: ::fandango::visitor::Visitor<TypeMut<'program>>
                         {
                             if let Some(node) = self.children_mut().iter_mut().nth(idx) {
                                 Ok(visitor.visit(node, idx))
@@ -753,15 +706,14 @@ impl<'program, 'source> IntoRustSource<FandangoGenContext<'_, '_, 'program, 'sou
                         }
                     }
 
-                    impl<'source, S, G> ::fandango::generation::DefaultGenerated<S, G> for #name<'source>
+                    impl<S, G> ::fandango::generation::DefaultGenerated<S, G> for #name
                     where
-                        S: TypeSampler<'source>,
-                        G: TypeGenerator<'source, S>,
+                        S: TypeSampler,
+                        G: TypeGenerator<S>,
                     {
                         fn generate_default(sampler: &mut S, with: &mut G) -> Self {
                             Self {
                                 child_0: #sampler,
-                                span: #span_value,
                             }
                         }
                     }
@@ -770,10 +722,10 @@ impl<'program, 'source> IntoRustSource<FandangoGenContext<'_, '_, 'program, 'sou
                 });
                 if emit_parse_glue {
                     output.extend(quote! {
-                        impl<'source> ::core::convert::TryFrom<(::alloc::rc::Rc<::alloc::borrow::Cow<'source, str>>, ::fandango::iterators::Pair<'source, Rule>)> for #name<'source> {
+                        impl ::core::convert::TryFrom<(::alloc::rc::Rc<::alloc::borrow::Cow<'_, str>>, ::fandango::iterators::Pair<'_, Rule>)> for #name {
                             type Error = ParseError;
 
-                            fn try_from((source, value): (::alloc::rc::Rc<::alloc::borrow::Cow<'source, str>>, ::fandango::iterators::Pair<'source, Rule>)) -> Result<Self, Self::Error> {
+                            fn try_from((source, value): (::alloc::rc::Rc<::alloc::borrow::Cow<'_, str>>, ::fandango::iterators::Pair<'_, Rule>)) -> Result<Self, Self::Error> {
                                 debug_assert_eq!(value.as_rule(), Rule::#pest_name);
 
                                 let span = value.as_span();
@@ -787,7 +739,6 @@ impl<'program, 'source> IntoRustSource<FandangoGenContext<'_, '_, 'program, 'sou
 
                                 Ok(Self {
                                     child_0,
-                                    span: Some((source, span.start(), span.end())),
                                 })
                             }
                         }
@@ -808,27 +759,25 @@ impl<'program, 'source> IntoRustSource<FandangoGenContext<'_, '_, 'program, 'sou
 
                 output.extend(quote! {
                     #[derive(Clone, Debug, Eq, PartialEq)]
-                    pub struct #name<'source> {
-                        span: #pest_glue_field,
+                    pub struct #name {
                         #( #child_names: #child_field_types ),*
                     }
 
-                    impl<'source> ::fandango::typing::Node for #name<'source> {
-                        type Type<'program> = Type<'program, 'source> where 'source: 'program;
-                        type TypeMut<'program> = TypeMut<'program, 'source> where 'source: 'program;
-                        type ChildrenRef<'program> = ( #( &'program #child_field_types ),*, ) where 'source: 'program;
-                        type ChildrenRefMut<'program> = ( #( &'program mut #child_field_types ),*, ) where 'source: 'program;
+                    impl ::fandango::typing::Node for #name {
+                        type Type<'program> = Type<'program>;
+                        type TypeMut<'program> = TypeMut<'program>;
+                        type ChildrenRef<'program> = ( #( &'program #child_field_types ),*, );
+                        type ChildrenRefMut<'program> = ( #( &'program mut #child_field_types ),*, );
 
-                        #span_call
                         fn children<'program>(&'program self) -> Self::ChildrenRef<'program> { (#(&self.#child_names),*,) }
                         fn children_mut<'program>(&'program mut self) -> Self::ChildrenRefMut<'program> { (#(&mut self.#child_names),*,) }
                     }
 
-                    impl<'program, 'source> ::fandango::visitor::VisitableChildren<TypeMut<'program, 'source>> for &'program mut #name<'source> where 'source: 'program
+                    impl<'program> ::fandango::visitor::VisitableChildren<TypeMut<'program>> for &'program mut #name
                     {
-                        fn visit_each<V>(self, visitor: V) -> ::fandango::visitor::VisitResult<V, TypeMut<'program, 'source>>
+                        fn visit_each<V>(self, visitor: V) -> ::fandango::visitor::VisitResult<V, TypeMut<'program>>
                         where
-                            V: ::fandango::visitor::Visitor<TypeMut<'program, 'source>, Continue = V>,
+                            V: ::fandango::visitor::Visitor<TypeMut<'program>, Continue = V>,
                         {
                             #(
                             let visitor = match visitor.visit(&mut self.#child_names, #indices)? {
@@ -839,9 +788,9 @@ impl<'program, 'source> IntoRustSource<FandangoGenContext<'_, '_, 'program, 'sou
                             Ok(::core::ops::ControlFlow::Continue(visitor))
                         }
 
-                        fn visit_each_reverse<V>(self, visitor: V) -> ::fandango::visitor::VisitResult<V, TypeMut<'program, 'source>>
+                        fn visit_each_reverse<V>(self, visitor: V) -> ::fandango::visitor::VisitResult<V, TypeMut<'program>>
                         where
-                            V: ::fandango::visitor::Visitor<TypeMut<'program, 'source>, Continue = V>
+                            V: ::fandango::visitor::Visitor<TypeMut<'program>, Continue = V>
                         {
                             #(
                             let visitor = match visitor.visit(&mut self.#child_names_rev, #indices_rev)? {
@@ -852,9 +801,9 @@ impl<'program, 'source> IntoRustSource<FandangoGenContext<'_, '_, 'program, 'sou
                             Ok(::core::ops::ControlFlow::Continue(visitor))
                         }
 
-                        fn visit_each_reverse_from<V>(self, visitor: V, idx: usize) -> ::fandango::visitor::VisitResult<V, TypeMut<'program, 'source>>
+                        fn visit_each_reverse_from<V>(self, visitor: V, idx: usize) -> ::fandango::visitor::VisitResult<V, TypeMut<'program>>
                         where
-                            V: ::fandango::visitor::Visitor<TypeMut<'program, 'source>, Continue=V>
+                            V: ::fandango::visitor::Visitor<TypeMut<'program>, Continue=V>
                         {
                             #(
                             let visitor = if #indices_rev <= idx {
@@ -869,9 +818,9 @@ impl<'program, 'source> IntoRustSource<FandangoGenContext<'_, '_, 'program, 'sou
                             Ok(::core::ops::ControlFlow::Continue(visitor))
                         }
 
-                        fn visit_each_from<V>(self, visitor: V, idx: usize) -> ::fandango::visitor::VisitResult<V, TypeMut<'program, 'source>>
+                        fn visit_each_from<V>(self, visitor: V, idx: usize) -> ::fandango::visitor::VisitResult<V, TypeMut<'program>>
                         where
-                            V: ::fandango::visitor::Visitor<TypeMut<'program, 'source>, Continue=V>
+                            V: ::fandango::visitor::Visitor<TypeMut<'program>, Continue=V>
                         {
                             #(
                             let visitor = if idx <= #indices {
@@ -886,9 +835,9 @@ impl<'program, 'source> IntoRustSource<FandangoGenContext<'_, '_, 'program, 'sou
                             Ok(::core::ops::ControlFlow::Continue(visitor))
                         }
 
-                        fn visit_nth<V>(self, visitor: V, idx: usize) -> ::fandango::visitor::MaybeVisitResult<V, TypeMut<'program, 'source>>
+                        fn visit_nth<V>(self, visitor: V, idx: usize) -> ::fandango::visitor::MaybeVisitResult<V, TypeMut<'program>>
                         where
-                            V: ::fandango::visitor::Visitor<TypeMut<'program, 'source>>,
+                            V: ::fandango::visitor::Visitor<TypeMut<'program>>,
                         {
                             match idx {
                                 #(#indices => Ok(visitor.visit(&mut self.#child_names, #indices))),*,
@@ -897,15 +846,14 @@ impl<'program, 'source> IntoRustSource<FandangoGenContext<'_, '_, 'program, 'sou
                         }
                     }
 
-                    impl<'source, S, G> ::fandango::generation::DefaultGenerated<S, G> for #name<'source>
+                    impl<S, G> ::fandango::generation::DefaultGenerated<S, G> for #name
                     where
-                        S: TypeSampler<'source>,
-                        G: TypeGenerator<'source, S>,
+                        S: TypeSampler,
+                        G: TypeGenerator<S>,
                     {
                         fn generate_default(sampler: &mut S, with: &mut G) -> Self {
                             Self {
                                 #( #child_names: ::fandango::generation::Generated::generate(sampler, with) ),*,
-                                span: #span_value,
                             }
                         }
                     }
@@ -914,10 +862,10 @@ impl<'program, 'source> IntoRustSource<FandangoGenContext<'_, '_, 'program, 'sou
                 });
                 if emit_parse_glue {
                     output.extend(quote! {
-                        impl<'source> ::core::convert::TryFrom<(::alloc::rc::Rc<::alloc::borrow::Cow<'source, str>>, ::fandango::iterators::Pair<'source, Rule>)> for #name<'source> {
+                        impl ::core::convert::TryFrom<(::alloc::rc::Rc<::alloc::borrow::Cow<'_, str>>, ::fandango::iterators::Pair<'_, Rule>)> for #name {
                             type Error = ParseError;
 
-                            fn try_from((source, value): (::alloc::rc::Rc<::alloc::borrow::Cow<'source, str>>, ::fandango::iterators::Pair<'source, Rule>)) -> Result<Self, Self::Error> {
+                            fn try_from((source, value): (::alloc::rc::Rc<::alloc::borrow::Cow<'_, str>>, ::fandango::iterators::Pair<'_, Rule>)) -> Result<Self, Self::Error> {
                                 debug_assert_eq!(value.as_rule(), Rule::#pest_name);
 
                                 let span = value.as_span();
@@ -925,7 +873,6 @@ impl<'program, 'source> IntoRustSource<FandangoGenContext<'_, '_, 'program, 'sou
 
                                 Ok(Self {
                                     #(#child_names: #child_types::try_from((source.clone(), #child_names))?.into()),*,
-                                    span: Some((source, span.start(), span.end())),
                                 })
                             }
                         }

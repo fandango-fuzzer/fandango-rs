@@ -113,7 +113,7 @@ mod simple {
                 b.iter_batched_ref(
                     || start.clone(),
                     |start| {
-                        WriteVisitor::cacheless(Vec::new())
+                        WriteVisitor::new(Vec::new())
                             .visit(black_box(start), 0)
                             .unwrap()
                             .continue_value()
@@ -131,7 +131,7 @@ mod simple {
                     b.iter_batched_ref(
                         || start.clone(),
                         |start| {
-                            WriteVisitor::cacheless(Vec::new())
+                            WriteVisitor::new(Vec::new())
                                 .visit(black_box(start), 0)
                                 .unwrap()
                                 .continue_value()
@@ -358,7 +358,7 @@ mod xml {
                 b.iter_batched_ref(
                     || start.clone(),
                     |start| {
-                        WriteVisitor::cacheless(Vec::new())
+                        WriteVisitor::new(Vec::new())
                             .visit(black_box(start), 0)
                             .unwrap()
                             .continue_value()
@@ -376,7 +376,7 @@ mod xml {
                     b.iter_batched_ref(
                         || start.clone(),
                         |start| {
-                            WriteVisitor::cacheless(Vec::new())
+                            WriteVisitor::new(Vec::new())
                                 .visit(black_box(start), 0)
                                 .unwrap()
                                 .continue_value()
@@ -550,7 +550,7 @@ mod xml {
 //                 b.iter_batched_ref(
 //                     || start.clone(),
 //                     |start| {
-//                         WriteVisitor::cacheless(Vec::new())
+//                         WriteVisitor::new(Vec::new())
 //                             .visit(black_box(start), 0)
 //                             .unwrap()
 //                             .continue_value()

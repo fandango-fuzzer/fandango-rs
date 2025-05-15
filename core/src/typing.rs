@@ -117,11 +117,6 @@ pub trait Node: Sized + AsNode + Discriminable {
     where
         Self: 'program;
 
-    /// The span, or [`None`] if the node was generated or mutated without concretisation.
-    fn span(&self) -> Option<Span<'_>>;
-    /// Clears the span (e.g. if a node was mutated)
-    fn clear_span(&mut self);
-
     /// Immutable accessors to children nodes.
     fn children(&self) -> Self::ChildrenRef<'_>;
     /// Mutable accessors to children nodes.
@@ -174,14 +169,6 @@ where
         = T::ChildrenRefMut<'program>
     where
         T: 'program;
-
-    fn span(&self) -> Option<Span<'_>> {
-        self.deref().span()
-    }
-
-    fn clear_span(&mut self) {
-        (**self).clear_span()
-    }
 
     fn children(&self) -> Self::ChildrenRef<'_> {
         (**self).children()

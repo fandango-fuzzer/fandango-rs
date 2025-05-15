@@ -248,9 +248,9 @@ pub fn derive_fandango_or_emit_error(
             .collect::<TokenStream>();
         grammar.extend(quote! {
             impl #ident {
-                pub fn extract<'source>(
-                    source: &'source str
-                ) -> ::core::result::Result<nonterminal_start<'_>, ParseError> {
+                pub fn extract(
+                    source: &str
+                ) -> ::core::result::Result<nonterminal_start, ParseError> {
                     use ::fandango::Parser;
 
                     let (grammar,) = ::fandango::parse_pairs_as!(#ident::parse(Rule::start, source)?, (Rule::start,));
@@ -274,36 +274,36 @@ pub fn derive_fandango_or_emit_error(
 
         #(#referenced)*
 
-        trait TypeSampler<'source>
+        trait TypeSampler
         where
-            #(Self: ::fandango::generation::Sampler<#node_names<'source>>),*
+            #(Self: ::fandango::generation::Sampler<#node_names>),*
         {}
 
-        impl<'source, S> TypeSampler<'source> for S
+        impl<S> TypeSampler for S
         where
-            #(S: ::fandango::generation::Sampler<#node_names<'source>>),*
+            #(S: ::fandango::generation::Sampler<#node_names>),*
         {}
 
-        trait TypeGenerator<'source, S>
+        trait TypeGenerator<S>
         where
-            #(Self: ::fandango::generation::GeneratorTuple<#node_names<'source>, S>),*,
-            #(Self: ::fandango::generation::GeneratorTuple<::alloc::boxed::Box<#node_names<'source>>, S>),*
+            #(Self: ::fandango::generation::GeneratorTuple<#node_names, S>),*,
+            #(Self: ::fandango::generation::GeneratorTuple<::alloc::boxed::Box<#node_names>, S>),*
         {}
 
-        impl<'source, S, G> TypeGenerator<'source, S> for G
+        impl<S, G> TypeGenerator<S> for G
         where
-            #(G: ::fandango::generation::GeneratorTuple<#node_names<'source>, S>),*,
-            #(G: ::fandango::generation::GeneratorTuple<::alloc::boxed::Box<#node_names<'source>>, S>),*
+            #(G: ::fandango::generation::GeneratorTuple<#node_names, S>),*,
+            #(G: ::fandango::generation::GeneratorTuple<::alloc::boxed::Box<#node_names>, S>),*
         {}
 
         #[derive(Clone, Debug)]
-        pub enum Type<'program, 'source> {
-            #(#node_names(&'program #node_names<'source>)),*
+        pub enum Type<'program> {
+            #(#node_names(&'program #node_names)),*
         }
 
         #(
-            impl<'program, 'source> ::fandango::typing::AsNodeRef<#node_names<'source>> for Type<'program, 'source> {
-                fn as_node(&self) -> Option<&#node_names<'source>> {
+            impl<'program> ::fandango::typing::AsNodeRef<#node_names> for Type<'program> {
+                fn as_node(&self) -> Option<&#node_names> {
                     match self {
                         Self::#node_names(n) => Some(n),
                         _ => None,
@@ -313,13 +313,13 @@ pub fn derive_fandango_or_emit_error(
         )*
 
         #[derive(Debug)]
-        pub enum TypeMut<'program, 'source> {
-            #(#node_names(&'program mut #node_names<'source>)),*
+        pub enum TypeMut<'program> {
+            #(#node_names(&'program mut #node_names)),*
         }
 
         #(
-            impl<'program, 'source> ::fandango::typing::AsNodeRef<#node_names<'source>> for TypeMut<'program, 'source> {
-                fn as_node(&self) -> Option<&#node_names<'source>> {
+            impl<'program> ::fandango::typing::AsNodeRef<#node_names> for TypeMut<'program> {
+                fn as_node(&self) -> Option<&#node_names> {
                     match self {
                         Self::#node_names(n) => Some(n),
                         _ => None,
@@ -327,8 +327,8 @@ pub fn derive_fandango_or_emit_error(
                 }
             }
 
-            impl<'program, 'source> ::fandango::typing::AsNodeMut<#node_names<'source>> for TypeMut<'program, 'source> {
-                fn as_node_mut(&mut self) -> Option<&mut #node_names<'source>> {
+            impl<'program> ::fandango::typing::AsNodeMut<#node_names> for TypeMut<'program> {
+                fn as_node_mut(&mut self) -> Option<&mut #node_names> {
                     match self {
                         Self::#node_names(n) => Some(n),
                         _ => None,
@@ -337,44 +337,42 @@ pub fn derive_fandango_or_emit_error(
             }
         )*
 
-        impl<'program, 'source> TypeMut<'program, 'source> {
-            fn reborrow<'a>(&'a mut self) -> TypeMut<'a, 'source> where 'source: 'a {
+        impl<'program> TypeMut<'program> {
+            fn reborrow<'a>(&'a mut self) -> TypeMut<'a> {
                 match self {
                     #(TypeMut::#node_names(n) => TypeMut::#node_names(&mut *n)),*
                 }
             }
         }
 
-        impl<'program, 'source> From<TypeMut<'program, 'source>> for Type<'program, 'source> {
-            fn from(mutable: TypeMut<'program, 'source>) -> Type<'program, 'source> {
+        impl<'program> From<TypeMut<'program>> for Type<'program> {
+            fn from(mutable: TypeMut<'program>) -> Type<'program> {
                 match mutable {
                     #(TypeMut::#node_names(n) => Type::#node_names(n)),*
                 }
             }
         }
 
-        impl<'a, 'program, 'source, V> ::fandango::visitor::VisitWith<'a, V> for TypeMut<'program, 'source>
+        impl<'a, 'program, V> ::fandango::visitor::VisitWith<'a, V> for TypeMut<'program>
         where
             'program: 'a,
-            'source: 'program,
         {
-            type Visited = TypeMut<'a, 'source>;
+            type Visited = TypeMut<'a>;
 
             fn visit_with(&'a mut self, visitor: V, idx: usize) -> ::fandango::visitor::VisitResult<V, Self::Visited>
             where
-                V: ::fandango::visitor::Visitor<TypeMut<'a, 'source>>, {
+                V: ::fandango::visitor::Visitor<TypeMut<'a>>, {
                 match self.reborrow() {
                     #(TypeMut::#node_names(n) => visitor.visit(n, idx)),*
                 }
             }
         }
 
-        impl<'a, 'program, 'source, S, G> ::fandango::generation::InPlaceGenerated<'a, S, G> for TypeMut<'program, 'source>
+        impl<'a, 'program, S, G> ::fandango::generation::InPlaceGenerated<'a, S, G> for TypeMut<'program>
         where
-            #(#node_names<'source>: ::fandango::generation::Generated<S, G>),*,
-            #(::alloc::boxed::Box<#node_names<'source>>: ::fandango::generation::Generated<S, G>),*,
+            #(#node_names: ::fandango::generation::Generated<S, G>),*,
+            #(::alloc::boxed::Box<#node_names>: ::fandango::generation::Generated<S, G>),*,
             'program: 'a,
-            'source: 'program,
         {
             fn generate_in_place(&'a mut self, sampler: &mut S, with: &mut G) {
                 match self.reborrow() {
@@ -385,46 +383,46 @@ pub fn derive_fandango_or_emit_error(
             }
         }
 
-        impl<'program, 'source> ::fandango::visitor::VisitableChildren<TypeMut<'program, 'source>> for TypeMut<'program, 'source> {
-            fn visit_each<V>(self, visitor: V) -> ::fandango::visitor::VisitResult<V, TypeMut<'program, 'source>>
+        impl<'program> ::fandango::visitor::VisitableChildren<TypeMut<'program>> for TypeMut<'program> {
+            fn visit_each<V>(self, visitor: V) -> ::fandango::visitor::VisitResult<V, TypeMut<'program>>
             where
-                V: ::fandango::visitor::Visitor<TypeMut<'program, 'source>, Continue = V>
+                V: ::fandango::visitor::Visitor<TypeMut<'program>, Continue = V>
             {
                 match self {
                     #(TypeMut::#node_names(n) => n.visit_each(visitor)),*
                 }
             }
 
-            fn visit_each_reverse<V>(self, visitor: V) -> ::fandango::visitor::VisitResult<V, TypeMut<'program, 'source>>
+            fn visit_each_reverse<V>(self, visitor: V) -> ::fandango::visitor::VisitResult<V, TypeMut<'program>>
             where
-                V: ::fandango::visitor::Visitor<TypeMut<'program, 'source>, Continue = V>
+                V: ::fandango::visitor::Visitor<TypeMut<'program>, Continue = V>
             {
                 match self {
                     #(TypeMut::#node_names(n) => n.visit_each_reverse(visitor)),*
                 }
             }
 
-            fn visit_each_reverse_from<V>(self, visitor: V, idx: usize) -> ::fandango::visitor::VisitResult<V, TypeMut<'program, 'source>>
+            fn visit_each_reverse_from<V>(self, visitor: V, idx: usize) -> ::fandango::visitor::VisitResult<V, TypeMut<'program>>
             where
-                V: ::fandango::visitor::Visitor<TypeMut<'program, 'source>, Continue=V>
+                V: ::fandango::visitor::Visitor<TypeMut<'program>, Continue=V>
             {
                 match self {
                     #(TypeMut::#node_names(n) => n.visit_each_reverse_from(visitor, idx)),*
                 }
             }
 
-            fn visit_each_from<V>(self, visitor: V, idx: usize) -> ::fandango::visitor::VisitResult<V, TypeMut<'program, 'source>>
+            fn visit_each_from<V>(self, visitor: V, idx: usize) -> ::fandango::visitor::VisitResult<V, TypeMut<'program>>
             where
-                V: ::fandango::visitor::Visitor<TypeMut<'program, 'source>, Continue=V>
+                V: ::fandango::visitor::Visitor<TypeMut<'program>, Continue=V>
             {
                 match self {
                     #(TypeMut::#node_names(n) => n.visit_each_from(visitor, idx)),*
                 }
             }
 
-            fn visit_nth<V>(self, visitor: V, idx: usize) -> ::fandango::visitor::MaybeVisitResult<V, TypeMut<'program, 'source>>
+            fn visit_nth<V>(self, visitor: V, idx: usize) -> ::fandango::visitor::MaybeVisitResult<V, TypeMut<'program>>
             where
-                V: ::fandango::visitor::Visitor<TypeMut<'program, 'source>>
+                V: ::fandango::visitor::Visitor<TypeMut<'program>>
             {
                 match self {
                     #(TypeMut::#node_names(n) => n.visit_nth(visitor, idx)),*
@@ -433,12 +431,12 @@ pub fn derive_fandango_or_emit_error(
         }
 
         #(
-            impl<'source> ::fandango::typing::StaticDiscriminable for #node_names<'source>
+            impl ::fandango::typing::StaticDiscriminable for #node_names
             {
                 const DISCRIMINANT: usize = #discriminants;
             }
 
-            impl<'source> ::fandango::typing::Discriminable for #node_names<'source>
+            impl ::fandango::typing::Discriminable for #node_names
             {
                 fn discriminant(&self) -> usize {
                     <Self as ::fandango::typing::StaticDiscriminable>::DISCRIMINANT

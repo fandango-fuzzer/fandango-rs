@@ -15,7 +15,6 @@ use core::hash::BuildHasher;
 use core::ops::ControlFlow;
 use core::slice;
 use hashbrown::{DefaultHashBuilder, HashMap};
-use pest::Span;
 
 type FandangoNode = crate::lang::FandangoNode<'static, 'static>;
 
@@ -376,12 +375,6 @@ impl Node for DynamicNode {
         = &'program mut DynamicNodeVariant
     where
         Self: 'program;
-
-    fn span(&self) -> Option<Span<'_>> {
-        None
-    }
-
-    fn clear_span(&mut self) {}
 
     fn children(&self) -> Self::ChildrenRef<'_> {
         &self.content

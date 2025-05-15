@@ -46,24 +46,13 @@ mod simple {
         {
             let expr = start.children_mut().0;
             if let nonterminal_expr_0::variant_0(expr) = expr.children_mut().0 {
-                let (number, plus, expr) = expr.children_mut();
-                assert_eq!(number.span().unwrap().as_str(), "1");
-                assert_eq!(plus.span().unwrap().as_str(), "+");
-
+                let (_number, plus, expr) = expr.children_mut();
                 dfs = Some(FindVisitor::dfs(plus));
                 bfs = Some(FindVisitor::bfs(plus));
 
                 assert_eq!(
                     "+".as_bytes(),
-                    WriteVisitor::caching(Vec::new())
-                        .visit(plus, 1)?
-                        .continue_value()
-                        .unwrap()
-                        .output()
-                );
-                assert_eq!(
-                    "+".as_bytes(),
-                    WriteVisitor::cacheless(Vec::new())
+                    WriteVisitor::new(Vec::new())
                         .visit(plus, 1)?
                         .continue_value()
                         .unwrap()
@@ -71,7 +60,14 @@ mod simple {
                 );
 
                 if let nonterminal_expr_0::variant_1(number) = expr.children_mut().0 {
-                    assert_eq!(number.span().unwrap().as_str(), "2");
+                    assert_eq!(
+                        "2".as_bytes(),
+                        WriteVisitor::new(Vec::new())
+                            .visit(number, 1)?
+                            .continue_value()
+                            .unwrap()
+                            .output()
+                    );
 
                     valid = true;
                 }
@@ -97,22 +93,17 @@ mod simple {
         assert_eq!(
             "+2",
             String::from_utf8(
-                visitor_chain!(
-                    &mut start,
-                    0,
-                    dfs.clone(),
-                    WriteVisitor::caching(Vec::new())
-                )
-                .continue_value()
-                .unwrap()
-                .output()
+                visitor_chain!(&mut start, 0, dfs.clone(), WriteVisitor::new(Vec::new()))
+                    .continue_value()
+                    .unwrap()
+                    .output()
             )
             .unwrap()
         );
         assert_eq!(
             "+2",
             String::from_utf8(
-                visitor_chain!(&mut start, 0, dfs, WriteVisitor::caching(Vec::new()))
+                visitor_chain!(&mut start, 0, dfs, WriteVisitor::new(Vec::new()))
                     .continue_value()
                     .unwrap()
                     .output()
@@ -200,7 +191,7 @@ mod simple {
         let mut start = nonterminal_start::generate(&mut rng, &mut ());
 
         let serialized = String::from_utf8(
-            WriteVisitor::caching(Vec::new())
+            WriteVisitor::new(Vec::new())
                 .visit(&mut start, 0)?
                 .continue_value()
                 .unwrap()
@@ -223,7 +214,7 @@ mod simple {
         for _ in 0..100_000 {
             let mut digit = nonterminal_digit::generate(&mut rng, &mut ());
 
-            WriteVisitor::caching(&mut buf)
+            WriteVisitor::new(&mut buf)
                 .visit(&mut digit, 0)?
                 .continue_value()
                 .unwrap()
@@ -253,7 +244,7 @@ mod simple {
         for _ in 0..100_000 {
             let mut digit = nonterminal_digit::generate(&mut rng, &mut generators);
 
-            WriteVisitor::caching(&mut buf)
+            WriteVisitor::new(&mut buf)
                 .visit(&mut digit, 0)?
                 .continue_value()
                 .unwrap()
@@ -293,7 +284,7 @@ mod simple {
         for _ in 0..100_000 {
             let mut digit = DynamicNode::generate(&mut sampler, &mut generators);
 
-            WriteVisitor::caching(&mut buf)
+            WriteVisitor::new(&mut buf)
                 .visit(&mut digit, 0)?
                 .continue_value()
                 .unwrap()
@@ -325,12 +316,12 @@ mod simple {
             let mut static_start = nonterminal_start::generate(&mut rng, &mut ());
             let mut dyn_start = DynamicNode::generate(&mut dyn_sampler, &mut ());
 
-            let static_ser = WriteVisitor::cacheless(Vec::new())
+            let static_ser = WriteVisitor::new(Vec::new())
                 .visit(&mut static_start, 0)?
                 .continue_value()
                 .unwrap()
                 .output();
-            let dyn_ser = WriteVisitor::cacheless(Vec::new())
+            let dyn_ser = WriteVisitor::new(Vec::new())
                 .visit(&mut dyn_start, 0)?
                 .continue_value()
                 .unwrap()
@@ -399,7 +390,7 @@ mod xml {
         let mut start = nonterminal_start::generate_default(&mut rng, &mut ());
 
         let serialized = String::from_utf8(
-            WriteVisitor::caching(Vec::new())
+            WriteVisitor::new(Vec::new())
                 .visit(&mut start, 0)?
                 .continue_value()
                 .unwrap()
@@ -465,12 +456,12 @@ mod xml {
             let mut static_start = nonterminal_start::generate(&mut rng, &mut ());
             let mut dyn_start = DynamicNode::generate(&mut dyn_sampler, &mut ());
 
-            let static_ser = WriteVisitor::cacheless(Vec::new())
+            let static_ser = WriteVisitor::new(Vec::new())
                 .visit(&mut static_start, 0)?
                 .continue_value()
                 .unwrap()
                 .output();
-            let dyn_ser = WriteVisitor::cacheless(Vec::new())
+            let dyn_ser = WriteVisitor::new(Vec::new())
                 .visit(&mut dyn_start, 0)?
                 .continue_value()
                 .unwrap()

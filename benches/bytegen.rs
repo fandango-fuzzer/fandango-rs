@@ -152,7 +152,7 @@ mod xml {
                 b.iter_batched_ref(
                     || rngs.choose(&mut picker).copied().unwrap().clone(),
                     |rng| {
-                        WriteVisitor::cacheless(black_box(&mut scratch))
+                        WriteVisitor::new(black_box(&mut scratch))
                             .visit(&mut nonterminal_start::generate(black_box(rng), &mut ()), 0)
                             .unwrap()
                             .continue_value()

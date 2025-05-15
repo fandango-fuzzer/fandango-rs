@@ -7,7 +7,6 @@ use alloc::collections::VecDeque;
 use alloc::vec::Vec;
 use core::convert::Infallible;
 use core::ops::ControlFlow;
-use either::Either;
 
 /// Trait which enables chaining of visitors by returning paths between them (e.g. with
 /// [`crate::visitor_chain`]). One would choose this over simply traversing a given node if the
@@ -27,7 +26,7 @@ pub trait StartingFrom {
 /// Find a given node, by DFS or BFS.
 #[derive(Clone, Debug)]
 pub struct FindVisitor<const DFS: bool> {
-    reference: Either<(usize, usize), usize>,
+    reference: usize,
     discriminant: usize,
     from: VecDeque<usize>,
 }
@@ -45,10 +44,7 @@ impl<const DFS: bool> FindVisitor<DFS> {
         N: Node,
     {
         Self {
-            reference: match target.span() {
-                None => Either::Right(target as *const N as usize),
-                Some(s) => Either::Left((s.start(), s.end())),
-            },
+            reference: target as *const N as usize,
             discriminant: target.discriminant(),
             from,
         }
@@ -108,32 +104,22 @@ where
         N: Node<TypeMut<'program> = T>,
         T: From<&'program mut N>,
     {
-        let span = node.span().map(|s| (s.start(), s.end()));
         let actual_ptr = node as *const N as usize;
-        if node.discriminant() == self.discriminant {
-            match (&self.reference, span) {
-                (&Either::Left((s1, e1)), Some((s2, e2))) if s1 == s2 && e1 == e2 => {
-                    let mut path = VecDeque::new();
+        if node.discriminant() == self.discriminant && actual_ptr == self.reference {
+            let mut path = VecDeque::new();
+            path.push_front(idx);
+            Ok(ControlFlow::Break(path))
+        } else {
+            match {
+                let from = self.from.pop_front().unwrap_or(0);
+                T::from(node).visit_each_from(self, from)
+            }? {
+                ControlFlow::Break(mut path) => {
                     path.push_front(idx);
-                    return Ok(ControlFlow::Break(path));
+                    Ok(ControlFlow::Break(path))
                 }
-                (&Either::Right(ptr), _) if ptr == actual_ptr => {
-                    let mut path = VecDeque::new();
-                    path.push_front(idx);
-                    return Ok(ControlFlow::Break(path));
-                }
-                _ => {}
+                c => Ok(c),
             }
-        }
-        match {
-            let from = self.from.pop_front().unwrap_or(0);
-            T::from(node).visit_each_from(self, from)
-        }? {
-            ControlFlow::Break(mut path) => {
-                path.push_front(idx);
-                Ok(ControlFlow::Break(path))
-            }
-            c => Ok(c),
         }
     }
 }
@@ -157,7 +143,7 @@ where
         work.push_back((usize::MAX, idx, T::from(node)));
 
         struct ChildCollector<'a, T> {
-            reference: Either<(usize, usize), usize>,
+            reference: usize,
             discriminant: usize,
             parent: usize,
             work: &'a mut VecDeque<(usize, usize, T)>,
@@ -173,23 +159,15 @@ where
                 N: Node,
                 T: From<&'program mut N>,
             {
-                let span = node.span().map(|s| (s.start(), s.end()));
                 let actual_ptr = node as *const N as usize;
                 let discriminant = node.discriminant();
                 let t = T::from(node);
-                if discriminant == self.discriminant {
-                    match (&self.reference, span) {
-                        (&Either::Left((s1, e1)), Some((s2, e2))) if s1 == s2 && e1 == e2 => {
-                            return Ok(ControlFlow::Break(idx));
-                        }
-                        (&Either::Right(ptr), _) if ptr == actual_ptr => {
-                            return Ok(ControlFlow::Break(idx));
-                        }
-                        _ => {}
-                    }
+                if discriminant == self.discriminant && actual_ptr == self.reference {
+                    Ok(ControlFlow::Break(idx))
+                } else {
+                    self.work.push_back((self.parent, idx, t));
+                    Ok(ControlFlow::Continue(self))
                 }
-                self.work.push_back((self.parent, idx, t));
-                Ok(ControlFlow::Continue(self))
             }
         }
 

@@ -350,7 +350,7 @@ pub(crate) fn tokenize_metadata<'p, 's>(
 
     if let Some(name) = name {
         referenced.push(quote! {
-            impl ::fandango::typing::Structured for #name<'_> {
+            impl ::fandango::typing::Structured for #name {
                 type FandangoType = #ftype;
                 const STRUCTURE: &'static ::fandango::lang::Tagged<'static, Self::FandangoType> = #accessor;
                 const ROOT: &'static ::fandango::lang::Tagged<'static, ::fandango::lang::Program<'static>> = STRUCTURE;

@@ -19,12 +19,7 @@ impl<E, T> VisitErrorTrace<E, T> {
     where
         N::Type<'node>: From<&'node N>,
     {
-        self.trace.push((
-            T::from(node),
-            idx,
-            node.span()
-                .map(|s| (s.start_pos().line_col(), s.end_pos().line_col())),
-        ));
+        self.trace.push((T::from(node), idx));
         self
     }
 }
@@ -39,15 +34,12 @@ where
         let largest_idx = self
             .trace
             .iter()
-            .map(|(_, idx, _)| idx)
+            .map(|(_, idx)| idx)
             .max()
             .expect("Cannot construct error traces without a single entry");
         let max_padding = largest_idx.checked_ilog10().unwrap_or(0) as usize + 1;
-        for (i, (node, idx, span)) in self.trace.iter().enumerate() {
+        for (i, (node, idx)) in self.trace.iter().enumerate() {
             f.write_fmt(format_args!("  {}[{idx: >max_padding$}]: {node}", i + 1))?;
-            if let Some(((l1, c1), (l2, c2))) = span {
-                f.write_fmt(format_args!(" ({l1}:{c1}-{l2}:{c2})"))?;
-            }
             f.write_char('\n')?;
         }
         Ok(())
