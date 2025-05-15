@@ -82,14 +82,6 @@ pub trait VisitWith<'a, V>: Sized {
     /// #     type ChildrenRef<'program> = () where Self: 'program;
     /// #     type ChildrenRefMut<'program> = () where Self: 'program;
     /// #
-    /// #     fn span(&self) -> Option<pest::Span<'_>> {
-    /// #         unimplemented!()
-    /// #     }
-    /// #
-    /// #     fn clear_span(&mut self) {
-    /// #         unimplemented!()
-    /// #     }
-    /// #
     /// #     fn children(&self) -> Self::ChildrenRef<'_> {
     /// #         unimplemented!()
     /// #     }
