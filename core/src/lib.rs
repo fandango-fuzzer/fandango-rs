@@ -11,7 +11,6 @@ mod parse_macros;
 #[macro_use]
 #[cfg(feature = "petgraph")]
 pub mod graph;
-// pub mod constraint;
 pub mod dynamic;
 pub mod generation;
 pub mod lang;

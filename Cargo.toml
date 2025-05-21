@@ -39,7 +39,7 @@ overflow-checks = false
 workspace = true
 
 [workspace]
-members = [".", "core", "derive", "generator"]
+members = [".", "core", "derive", "eval", "generator"]
 resolver = "2"
 
 [workspace.package]
@@ -48,14 +48,14 @@ edition = "2021"
 authors = ["Addison Crump <addison.crump@cispa.de>"]
 
 [workspace.dependencies]
-criterion = { version = "0.5.1", features = ["html_reports"] }
+criterion = { version = "0.6.0", features = ["html_reports"] }
 either = { version = "1.13", default-features = false }
 embedded-io = { version = "0.6.1", features = ["alloc"] }
 hashbrown = "0.15.2"
 pest = { version = "2.7", default-features = false }
 pest_derive = { version = "2.7", default-features = false }
 pest_generator = { version = "2.7", default-features = false }
-petgraph = "0.7.1"
+petgraph = "0.8.1"
 proc-macro2 = "1.0"
 quote = "1.0"
 rand = { version = "0.9.0", default-features = false }

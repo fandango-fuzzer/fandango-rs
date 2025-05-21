@@ -1,0 +1,14 @@
+[package]
+name = "eval"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+
+[dev-dependencies]
+rand = { workspace = true, features = ["default"] }
+
+[dependencies]
+fandango = { path = ".." }
+
+[lints]
+workspace = true

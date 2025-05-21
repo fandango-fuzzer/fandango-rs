@@ -68,7 +68,7 @@ mod xml {
 
     #[allow(dead_code)]
     #[derive(Fandango)]
-    #[fandango(grammar = "tests/grammars/xml.fan")]
+    #[fandango(grammar = "eval/grammars/xml.fan")]
     pub struct Xml;
 
     pub fn nowrite(c: &mut Criterion) {

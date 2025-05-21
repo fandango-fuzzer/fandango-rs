@@ -12,6 +12,7 @@ use pest::error::{InputLocation, LineColLocation};
 use quote::quote;
 use std::borrow::Cow;
 use std::collections::{BTreeMap, HashMap};
+use std::env;
 use std::fs::File;
 use std::io::Read;
 use std::path::{Path, PathBuf};
@@ -109,6 +110,7 @@ impl FandangoDerivation {
 
 impl Parse for FandangoDerivation {
     fn parse(input: ParseStream) -> syn::Result<Self> {
+        let root = PathBuf::from(env::var("CARGO_MANIFEST_DIR").unwrap_or_else(|_| ".".into()));
         let derived: DeriveInput = input.parse()?;
         let ident = derived.ident;
         let mut merged = Vec::new();
@@ -129,7 +131,7 @@ impl Parse for FandangoDerivation {
                                         lit: Lit::Str(s), ..
                                     }) = arg.value
                                     {
-                                        let path = PathBuf::from(s.value());
+                                        let path = root.join(s.value());
                                         let mut file = File::open(&path).map_err(|e| {
                                             syn::Error::new(
                                                 span,

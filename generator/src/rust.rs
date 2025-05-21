@@ -150,7 +150,7 @@ where
         let from = from_boilerplate(&name);
 
         output.extend(quote! {
-            #[derive(Clone, Debug, Eq, PartialEq)]
+            #[derive(Clone, Debug, Eq, PartialEq, Ord, PartialOrd)]
             pub struct #name {
                 child_0: #child_type,
             }
@@ -377,7 +377,7 @@ impl<'program, 'source> IntoRustSource<FandangoGenContext<'_, '_, 'program, 'sou
                     quote! { unimplemented!("Pest currently does not support byte-like grammars: https://github.com/pest-parser/pest/issues/244") }
                 };
                 output.extend(quote! {
-                    #[derive(Clone, Debug, Eq, PartialEq)]
+                    #[derive(Clone, Debug, Eq, PartialEq, Ord, PartialOrd)]
                     pub struct #name;
 
                     impl ::fandango::typing::Node for #name {
@@ -457,7 +457,7 @@ impl<'program, 'source> IntoRustSource<FandangoGenContext<'_, '_, 'program, 'sou
                 let indices = (0..children.len()).collect::<Vec<_>>();
                 let count = children.len();
                 output.extend(quote! {
-                    #[derive(Clone, Debug, Eq, PartialEq)]
+                    #[derive(Clone, Debug, Eq, PartialEq, Ord, PartialOrd)]
                     pub enum #name {
                         #( #child_variants ( #child_field_types ) ),*
                     }
@@ -621,7 +621,7 @@ impl<'program, 'source> IntoRustSource<FandangoGenContext<'_, '_, 'program, 'sou
                 };
 
                 output.extend(quote! {
-                    #[derive(Clone, Debug, Eq, PartialEq)]
+                    #[derive(Clone, Debug, Eq, PartialEq, Ord, PartialOrd)]
                     pub struct #name {
                         child_0: #(#child_field_types)*
                     }
@@ -758,7 +758,7 @@ impl<'program, 'source> IntoRustSource<FandangoGenContext<'_, '_, 'program, 'sou
                 indices_rev.reverse();
 
                 output.extend(quote! {
-                    #[derive(Clone, Debug, Eq, PartialEq)]
+                    #[derive(Clone, Debug, Eq, PartialEq, Ord, PartialOrd)]
                     pub struct #name {
                         #( #child_names: #child_field_types ),*
                     }

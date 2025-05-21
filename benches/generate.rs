@@ -252,7 +252,7 @@ mod simple {
     }
 }
 
-pub const XML_GRAMMAR: &str = include_str!("../tests/grammars/xml.fan");
+pub const XML_GRAMMAR: &str = include_str!("../eval/grammars/xml.fan");
 
 fn parse_xml(c: &mut Criterion) {
     c.bench_function("parse xml grammar", |b| {
@@ -287,7 +287,7 @@ mod xml {
 
     #[allow(dead_code)]
     #[derive(Fandango)]
-    #[fandango(grammar = "tests/grammars/xml.fan")]
+    #[fandango(grammar = "eval/grammars/xml.fan")]
     pub struct Xml;
 
     pub fn xml(c: &mut Criterion) {
@@ -498,92 +498,6 @@ mod xml {
     }
 }
 
-// mod ssl {
-//     use criterion::{black_box, BatchSize, BenchmarkId, Criterion, Throughput};
-//     use fandango_core::generation::{Generated, InPlaceGenerated};
-//     use fandango_core::typing::Node;
-//     use fandango_core::visitor::navigation::{Advance, CountNodes};
-//     use fandango_core::visitor::write::WriteVisitor;
-//     use fandango_core::visitor::Visitor;
-//     use fandango_derive::Fandango;
-//     use rand::{Rng, SeedableRng};
-//     use std::collections::BTreeMap;
-//     use std::error::Error;
-//
-//     #[allow(dead_code)]
-//     #[derive(Fandango)]
-//     #[fandango(grammar = "tests/grammars/ssl.fan", parse = false)]
-//     pub struct Ssl;
-//
-//     pub fn ssl(c: &mut Criterion) {
-//         let mut group = c.benchmark_group("ssl");
-//
-//         let rngs = (0..1000)
-//             .map(|i| {
-//                 let mut rng = rand::rngs::StdRng::seed_from_u64(i);
-//                 let stashed = rng.clone();
-//
-//                 (
-//                     nonterminal_start::generate(&mut rng, &mut ()).count_nodes(),
-//                     stashed,
-//                 )
-//             })
-//             .collect::<BTreeMap<_, _>>();
-//
-//         let count = rngs.len() - 1;
-//         let rngs = rngs.into_iter().step_by(count / 5).collect::<Vec<_>>();
-//
-//         for (count, mut rng) in rngs {
-//             group.throughput(Throughput::Elements(count as u64));
-//
-//             group.bench_with_input(BenchmarkId::new("generate", count), &rng, |b, rng| {
-//                 b.iter_batched_ref(
-//                     || rng.clone(),
-//                     |rng| nonterminal_start::generate(black_box(rng), &mut ()),
-//                     BatchSize::SmallInput,
-//                 );
-//             });
-//
-//             let mut start = nonterminal_start::generate(&mut rng.clone(), &mut ());
-//
-//             group.bench_with_input(BenchmarkId::new("visit", count), &start, |b, start| {
-//                 b.iter_batched_ref(
-//                     || start.clone(),
-//                     |start| {
-//                         WriteVisitor::new(Vec::new())
-//                             .visit(black_box(start), 0)
-//                             .unwrap()
-//                             .continue_value()
-//                             .unwrap()
-//                             .output()
-//                     },
-//                     BatchSize::SmallInput,
-//                 );
-//             });
-//
-//             let count = start.count_nodes();
-//
-//             group.bench_with_input(BenchmarkId::new("mutate", count), &start, |b, start| {
-//                 b.iter_batched_ref(
-//                     || start.clone(),
-//                     |start| {
-//                         let selection = rng.random_range(0..count);
-//                         let _: Result<(), Box<dyn Error>> = (|| {
-//                             let mut target = Advance::forward(selection)
-//                                 .visit(start, 0)?
-//                                 .break_value()
-//                                 .unwrap();
-//                             target.generate_in_place(&mut rng, &mut ());
-//                             Ok(())
-//                         })();
-//                     },
-//                     BatchSize::SmallInput,
-//                 );
-//             });
-//         }
-//     }
-// }
-
 criterion_group!(
     benches,
     parse_simple,
@@ -592,6 +506,5 @@ criterion_group!(
     graph_xml,
     simple::simple,
     xml::xml,
-    // ssl::ssl,
 );
 criterion_main!(benches);
