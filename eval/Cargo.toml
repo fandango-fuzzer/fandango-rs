@@ -1,14 +1,18 @@
 [package]
-name = "eval"
+name = "fandango-eval"
 version.workspace = true
 edition.workspace = true
 authors.workspace = true
+publish = false
 
 [dev-dependencies]
 rand = { workspace = true, features = ["default"] }
 
 [dependencies]
 fandango = { path = ".." }
+
+hashbrown.workspace = true
+petgraph.workspace = true
 
 [lints]
 workspace = true

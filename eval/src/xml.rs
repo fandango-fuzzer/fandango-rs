@@ -1,6 +1,19 @@
+//! Here, we define the constraints for the scriptsizec.fan grammar, namely:
+//! ```text,ignore
+//! forall <tree> in <xml_tree>:
+//!     <tree>.<xml_open_tag>.<id> == <tree>.<xml_close_tag>.<id>
+//! ;
+//!
+//! forall <open_tag> in <xml_tree>.<xml_open_tag>:
+//!     forall <xml_attribute_1> in <open_tag>..<xml_attribute>:
+//!         forall <xml_attribute_2> in <open_tag>..<xml_attribute>:
+//!             (<xml_attribute_1> != <xml_attribute_2> -> str(<xml_attribute_1>.<id>) != str(<xml_attribute_2>.<id>))
+//! ;
+//! ```
+
 use alloc::borrow::ToOwned;
-use alloc::collections::VecDeque;
-use alloc::vec;
+use alloc::collections::{BTreeSet, VecDeque};
+use alloc::vec::Vec;
 use core::convert::Infallible;
 use core::ops::ControlFlow;
 use fandango::generation::Generated;
@@ -13,15 +26,19 @@ use fandango::Fandango;
 pub struct Xml;
 
 #[derive(Debug, Default)]
-pub struct XmlConstraintVisitor;
+pub struct XmlConstraintVisitor {
+    path: VecDeque<usize>,
+    violations: Vec<VecDeque<usize>>,
+}
 
 impl<T> Visitor<T> for XmlConstraintVisitor
 where
-    T: VisitableChildren<T>,
-    T: AsNodeRef<nonterminal_xml_tree> + AsNodeRef<nonterminal_xml_attributes>,
+    T: VisitableChildren<T>
+        + AsNodeRef<nonterminal_xml_tree>
+        + AsNodeRef<nonterminal_xml_attributes>,
 {
     type Continue = Self;
-    type Break = VecDeque<usize>;
+    type Break = Infallible;
     type Error = Infallible;
 
     fn visit<'program, N>(mut self, node: &'program mut N, idx: usize) -> VisitResult<Self, T>
@@ -29,6 +46,7 @@ where
         N: Node<TypeMut<'program> = T>,
         T: From<&'program mut N>,
     {
+        self.path.push_back(idx);
         let mut visited = T::from(node);
         if let Some(tree) = AsNodeRef::<nonterminal_xml_tree>::as_node(&mut visited) {
             let (open, _, close) = tree.child_0.children();
@@ -37,9 +55,9 @@ where
                 nonterminal_xml_open_tag_0::variant_1(n) => &n.child_1,
             };
             if id != &close.child_0.child_1 {
-                let mut path = VecDeque::new();
-                path.push_front(idx);
-                return Ok(ControlFlow::Break(path));
+                let mut violation = self.path.clone();
+                violation.extend([0, 2, 0, 1]); // interior path to actual node
+                self.violations.push(violation);
             }
         } else if let Some(tree) = AsNodeRef::<nonterminal_xml_attributes>::as_node(&mut visited) {
             if let nonterminal_xml_attributes_0::variant_1(seq) = &tree.child_0 {
@@ -53,9 +71,9 @@ where
                         }
                     };
                     if base == cmp {
-                        let mut path = VecDeque::new();
-                        path.push_front(idx);
-                        return Ok(ControlFlow::Break(path));
+                        let mut violation = self.path.clone();
+                        violation.extend([0, 1, 0, 0, 0]); // interior path to actual node
+                        self.violations.push(violation);
                     }
                     if let Some(actual) = maybe_rest {
                         rest = actual;
@@ -65,39 +83,37 @@ where
                 }
             }
         }
-        match visited.visit_each(self) {
-            Ok(ControlFlow::Break(mut path)) => {
-                path.push_front(idx);
-                Ok(ControlFlow::Break(path))
-            }
-            v => v,
-        }
+        let result = visited.visit_each(self);
+        let Ok(ControlFlow::Continue(mut visitor)) = result;
+        visitor.path.pop_back();
+        Ok(ControlFlow::Continue(visitor))
     }
 }
 
 #[derive(Debug)]
-pub struct XmlConstraintFixer<'a, S, G> {
+pub struct XmlConstraintFixer<'a, S, G, const CORRECT: bool> {
     sampler: &'a mut S,
     generator: &'a mut G,
 }
 
-impl<'a, S, G> XmlConstraintFixer<'a, S, G> {
-    pub fn new(sampler: &'a mut S, generator: &'a mut G) -> Self {
+impl<'a, S, G> XmlConstraintFixer<'a, S, G, true> {
+    pub fn corrected(sampler: &'a mut S, generator: &'a mut G) -> Self {
         Self { sampler, generator }
     }
 }
 
-impl<S, G, T> Visitor<T> for XmlConstraintFixer<'_, S, G>
+impl<S, G, T> Visitor<T> for XmlConstraintFixer<'_, S, G, true>
 where
     nonterminal_id: Generated<S, G>,
-    T: VisitableChildren<T>,
-    T: AsNodeMut<nonterminal_xml_tree> + AsNodeMut<nonterminal_xml_attributes>,
+    T: VisitableChildren<T>
+        + AsNodeMut<nonterminal_xml_tree>
+        + AsNodeMut<nonterminal_xml_attributes>,
 {
     type Continue = Self;
     type Break = Infallible;
     type Error = Infallible;
 
-    fn visit<'program, N>(mut self, node: &'program mut N, _idx: usize) -> VisitResult<Self, T>
+    fn visit<'program, N>(self, node: &'program mut N, _idx: usize) -> VisitResult<Self, T>
     where
         N: Node<TypeMut<'program> = T>,
         T: From<&'program mut N>,
@@ -115,7 +131,8 @@ where
         {
             if let nonterminal_xml_attributes_0::variant_1(seq) = &mut tree.child_0 {
                 let (base, _, mut rest) = seq.children_mut();
-                let mut ids = vec![&mut base.child_0.child_0];
+                let mut ids = BTreeSet::new();
+                ids.insert(&mut base.child_0.child_0);
                 loop {
                     let (cmp, maybe_rest) = match &mut rest.child_0 {
                         nonterminal_xml_attributes_0::variant_0(cmp) => (cmp, None),
@@ -124,22 +141,17 @@ where
                             (cmp, Some(rest))
                         }
                     };
-                    ids.push(&mut cmp.child_0.child_0);
+
+                    let cmp = &mut cmp.child_0.child_0;
+                    while ids.contains(cmp) {
+                        *cmp = nonterminal_id::generate(self.sampler, self.generator, 0);
+                    }
+                    ids.insert(cmp);
+
                     if let Some(actual) = maybe_rest {
                         rest = actual;
                     } else {
                         break;
-                    }
-                }
-                let mut needs_mutation = true;
-                while needs_mutation {
-                    needs_mutation = false;
-                    ids.sort_unstable();
-                    for i in 0..(ids.len() - 1) {
-                        if ids[i] == ids[i + 1] {
-                            *ids[i] = nonterminal_id::generate(self.sampler, self.generator);
-                            needs_mutation = true;
-                        }
                     }
                 }
             }
@@ -149,82 +161,95 @@ where
     }
 }
 
+impl<'a, S, G> XmlConstraintFixer<'a, S, G, false> {
+    #[deprecated(note = "This is an incomplete fixer, used for evaluation purposes.")]
+    pub fn evaluated(sampler: &'a mut S, generator: &'a mut G) -> Self {
+        Self { sampler, generator }
+    }
+}
+
+impl<S, G, T> Visitor<T> for XmlConstraintFixer<'_, S, G, false>
+where
+    nonterminal_id: Generated<S, G>,
+    T: VisitableChildren<T>
+        + AsNodeMut<nonterminal_xml_tree>
+        + AsNodeMut<nonterminal_xml_attributes>,
+{
+    type Continue = Self;
+    type Break = Infallible;
+    type Error = Infallible;
+
+    fn visit<'program, N>(self, node: &'program mut N, _idx: usize) -> VisitResult<Self, T>
+    where
+        N: Node<TypeMut<'program> = T>,
+        T: From<&'program mut N>,
+    {
+        let mut visited = T::from(node);
+        if let Some(tree) = AsNodeMut::<nonterminal_xml_tree>::as_node_mut(&mut visited) {
+            let (open, _, close) = tree.child_0.children_mut();
+            let id = match &open.child_0 {
+                nonterminal_xml_open_tag_0::variant_0(n) => &n.child_1,
+                nonterminal_xml_open_tag_0::variant_1(n) => &n.child_1,
+            };
+            id.clone_into(&mut close.child_0.child_1);
+        }
+        visited.visit_each(self)
+    }
+}
+
 #[cfg(test)]
 mod test {
+    use crate::operators::DepthLimiter;
+    use crate::xml;
     use crate::xml::{
-        nonterminal_xml_attributes, nonterminal_xml_attributes_0, nonterminal_xml_open_tag_0,
-        nonterminal_xml_tree, TypeMut, XmlConstraintFixer, XmlConstraintVisitor,
+        nonterminal_xml_attributes_0, nonterminal_xml_open_tag_0, nonterminal_xml_tree,
+        XmlConstraintFixer, XmlConstraintVisitor,
     };
     use alloc::boxed::Box;
-    use alloc::string::String;
-    use alloc::vec::Vec;
     use core::error::Error;
     use core::ops::ControlFlow;
     use fandango::generation::Generated;
+    use fandango::tuple_list::tuple_list;
     use fandango::typing::Node;
     use fandango::visitor::navigation::GoTo;
-    use fandango::visitor::write::WriteVisitor;
-    use fandango::visitor::{VisitWith, Visitor};
+    use fandango::visitor::Visitor;
     use rand::rngs::StdRng;
     use rand::SeedableRng;
 
     #[test]
     fn check_constraint() -> Result<(), Box<dyn Error>> {
         let mut rng = StdRng::seed_from_u64(0);
+        let mut generators = tuple_list!(DepthLimiter::new::<xml::Type<'static>>(50));
         let mut tag_diff_count = 0;
         let mut attr_diff_count = 0;
-        for _ in 0..1000 {
-            let mut tree = nonterminal_xml_tree::generate(&mut rng, &mut ());
-            let invalid = match XmlConstraintVisitor::default().visit(&mut tree, 0)? {
-                ControlFlow::Continue(_) => continue,
-                ControlFlow::Break(mut path) => {
-                    path.pop_front();
-                    tree.go_to(0, path).unwrap()
-                }
-            };
+        for _ in 0..100_000 {
+            let mut tree = nonterminal_xml_tree::generate(&mut rng, &mut generators, 0);
+            let Ok(ControlFlow::Continue(XmlConstraintVisitor { violations, .. })) =
+                XmlConstraintVisitor::default().visit(&mut tree, 0);
 
-            if let TypeMut::nonterminal_xml_tree(ref inner) = invalid {
-                tag_diff_count += 1;
-                let inner = inner.child_0.as_ref();
-                let id = match &inner.child_0.child_0 {
-                    nonterminal_xml_open_tag_0::variant_0(n) => &n.child_1,
-                    nonterminal_xml_open_tag_0::variant_1(n) => &n.child_1,
-                };
-                assert_ne!(id, &inner.child_2.child_0.child_1);
+            for mut violation in violations {
+                violation.pop_front();
+                assert!(matches!(
+                    tree.go_to(0, violation.clone())?,
+                    xml::TypeMut::nonterminal_id(_)
+                ));
+                let len = violation.len();
 
-                drop(invalid);
-
-                let _ = XmlConstraintFixer::new(&mut rng, &mut ()).visit(&mut tree, 0)?;
-                if let ControlFlow::Break(mut path) =
-                    XmlConstraintVisitor::default().visit(&mut tree, 0)?
+                if let xml::TypeMut::nonterminal_xml_tree(ref inner) =
+                    tree.go_to(0, violation.iter().take(len - 4).copied().collect())?
                 {
-                    path.pop_front();
-                    let ser = String::from_utf8(
-                        tree.go_to(0, path)
-                            .unwrap()
-                            .visit_with(WriteVisitor::new(Vec::new()), 0)?
-                            .continue_value()
-                            .unwrap()
-                            .output(),
-                    )?;
-                    panic!("Did not successfully correct: {ser}");
-                }
-            }
-        }
-        for _ in 0..100000 {
-            let mut tree = nonterminal_xml_attributes::generate(&mut rng, &mut ());
-            let invalid = match XmlConstraintVisitor::default().visit(&mut tree, 0)? {
-                ControlFlow::Continue(_) => continue,
-                ControlFlow::Break(mut path) => {
-                    path.pop_front();
-                    tree.go_to(0, path).unwrap()
-                }
-            };
-            attr_diff_count += 1;
-
-            if let TypeMut::nonterminal_xml_attributes(ref attrs) = invalid {
-                match &attrs.child_0 {
-                    nonterminal_xml_attributes_0::variant_1(seq) => {
+                    tag_diff_count += 1;
+                    let inner = inner.child_0.as_ref();
+                    let id = match &inner.child_0.child_0 {
+                        nonterminal_xml_open_tag_0::variant_0(n) => &n.child_1,
+                        nonterminal_xml_open_tag_0::variant_1(n) => &n.child_1,
+                    };
+                    assert_ne!(id, &inner.child_2.child_0.child_1);
+                } else if let xml::TypeMut::nonterminal_xml_attributes(ref attrs) =
+                    tree.go_to(0, violation.into_iter().take(len - 5).collect())?
+                {
+                    attr_diff_count += 1;
+                    if let nonterminal_xml_attributes_0::variant_1(seq) = &attrs.child_0 {
                         let (base, _, mut rest) = seq.children();
                         let diff_found = loop {
                             rest = match &rest.child_0 {
@@ -244,34 +269,16 @@ mod test {
                             };
                         };
                         assert!(diff_found);
+                    } else {
+                        unreachable!("This would need to be a sequence.")
                     }
-                    _ => unreachable!("This would need to be a sequence."),
                 }
             }
-            drop(invalid);
 
-            let _ = XmlConstraintFixer::new(&mut rng, &mut ()).visit(&mut tree, 0)?;
-            let ser = String::from_utf8(
-                WriteVisitor::new(Vec::new())
-                    .visit(&mut tree, 0)?
-                    .continue_value()
-                    .unwrap()
-                    .output(),
-            )?;
-            if let ControlFlow::Break(mut path) =
-                XmlConstraintVisitor::default().visit(&mut tree, 0)?
-            {
-                path.pop_front();
-                let ser = String::from_utf8(
-                    tree.go_to(0, path)
-                        .unwrap()
-                        .visit_with(WriteVisitor::new(Vec::new()), 0)?
-                        .continue_value()
-                        .unwrap()
-                        .output(),
-                )?;
-                panic!("Did not successfully correct: {ser}");
-            }
+            let _ = XmlConstraintFixer::corrected(&mut rng, &mut ()).visit(&mut tree, 0)?;
+            let ControlFlow::Continue(XmlConstraintVisitor { violations, .. }) =
+                XmlConstraintVisitor::default().visit(&mut tree, 0)?;
+            assert_eq!(0, violations.len());
         }
         assert_ne!(0, tag_diff_count);
         assert_ne!(0, attr_diff_count);

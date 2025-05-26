@@ -150,7 +150,7 @@ where
         let from = from_boilerplate(&name);
 
         output.extend(quote! {
-            #[derive(Clone, Debug, Eq, PartialEq, Ord, PartialOrd)]
+            #[derive(Clone, Debug, Eq, PartialEq, Ord, PartialOrd, Hash)]
             pub struct #name {
                 child_0: #child_type,
             }
@@ -216,9 +216,9 @@ where
                 S: TypeSampler,
                 G: TypeGenerator<S>,
             {
-                fn generate_default(sampler: &mut S, with: &mut G) -> Self {
+                fn generate_default(sampler: &mut S, with: &mut G, depth: usize) -> Self {
                     Self {
-                        child_0: ::fandango::generation::Generated::generate(sampler, with),
+                        child_0: ::fandango::generation::Generated::generate(sampler, with, depth + 1),
                     }
                 }
             }
@@ -377,7 +377,7 @@ impl<'program, 'source> IntoRustSource<FandangoGenContext<'_, '_, 'program, 'sou
                     quote! { unimplemented!("Pest currently does not support byte-like grammars: https://github.com/pest-parser/pest/issues/244") }
                 };
                 output.extend(quote! {
-                    #[derive(Clone, Debug, Eq, PartialEq, Ord, PartialOrd)]
+                    #[derive(Clone, Debug, Eq, PartialEq, Ord, PartialOrd, Hash)]
                     pub struct #name;
 
                     impl ::fandango::typing::Node for #name {
@@ -431,7 +431,7 @@ impl<'program, 'source> IntoRustSource<FandangoGenContext<'_, '_, 'program, 'sou
                     }
 
                     impl<S, G> ::fandango::generation::DefaultGenerated<S, G> for #name {
-                        fn generate_default(sampler: &mut S, with: &mut G) -> Self {
+                        fn generate_default(sampler: &mut S, with: &mut G, _: usize) -> Self {
                             Self
                         }
                     }
@@ -457,7 +457,7 @@ impl<'program, 'source> IntoRustSource<FandangoGenContext<'_, '_, 'program, 'sou
                 let indices = (0..children.len()).collect::<Vec<_>>();
                 let count = children.len();
                 output.extend(quote! {
-                    #[derive(Clone, Debug, Eq, PartialEq, Ord, PartialOrd)]
+                    #[derive(Clone, Debug, Eq, PartialEq, Ord, PartialOrd, Hash)]
                     pub enum #name {
                         #( #child_variants ( #child_field_types ) ),*
                     }
@@ -532,9 +532,9 @@ impl<'program, 'source> IntoRustSource<FandangoGenContext<'_, '_, 'program, 'sou
                         S: TypeSampler,
                         G: TypeGenerator<S>,
                     {
-                        fn generate_default(sampler: &mut S, with: &mut G) -> Self {
+                        fn generate_default(sampler: &mut S, with: &mut G, depth: usize) -> Self {
                             match <S as ::fandango::generation::Sampler<Self>>::sample_alternative(sampler, #count) {
-                                #(#indices => Self::#child_variants(::fandango::generation::Generated::generate(sampler, with))),*,
+                                #(#indices => Self::#child_variants(::fandango::generation::Generated::generate(sampler, with, depth + 1))),*,
                                 _ => unreachable!()
                             }
                         }
@@ -597,22 +597,22 @@ impl<'program, 'source> IntoRustSource<FandangoGenContext<'_, '_, 'program, 'sou
                 let sampler = match op {
                     Operator::Kleene(_) => {
                         quote! {
-                            (0..<S as ::fandango::generation::Sampler<Self>>::sample_kleene(sampler)).map(|_| ::fandango::generation::Generated::generate(sampler, with)).collect()
+                            (0..<S as ::fandango::generation::Sampler<Self>>::sample_kleene(sampler)).map(|_| ::fandango::generation::Generated::generate(sampler, with, depth + 1)).collect()
                         }
                     }
                     Operator::Plus(_) => {
                         quote! {
-                            (0..<S as ::fandango::generation::Sampler<Self>>::sample_plus(sampler)).map(|_| ::fandango::generation::Generated::generate(sampler, with)).collect()
+                            (0..<S as ::fandango::generation::Sampler<Self>>::sample_plus(sampler)).map(|_| ::fandango::generation::Generated::generate(sampler, with, depth + 1)).collect()
                         }
                     }
                     Operator::Option(_) => {
                         quote! {
-                            <S as ::fandango::generation::Sampler<Self>>::sample_optional(sampler).then(|| ::fandango::generation::Generated::generate(sampler, with))
+                            <S as ::fandango::generation::Sampler<Self>>::sample_optional(sampler).then(|| ::fandango::generation::Generated::generate(sampler, with, depth + 1))
                         }
                     }
                     Operator::Repeat(_, start, end) => {
                         quote! {
-                            (0..<S as ::fandango::generation::Sampler<Self>>::sample_repetition(sampler, #start, #end)).map(|_| ::fandango::generation::Generated::generate(sampler, with)).collect()
+                            (0..<S as ::fandango::generation::Sampler<Self>>::sample_repetition(sampler, #start, #end)).map(|_| ::fandango::generation::Generated::generate(sampler, with, depth + 1)).collect()
                         }
                     }
                     Operator::Symbol(_) => {
@@ -621,7 +621,7 @@ impl<'program, 'source> IntoRustSource<FandangoGenContext<'_, '_, 'program, 'sou
                 };
 
                 output.extend(quote! {
-                    #[derive(Clone, Debug, Eq, PartialEq, Ord, PartialOrd)]
+                    #[derive(Clone, Debug, Eq, PartialEq, Ord, PartialOrd, Hash)]
                     pub struct #name {
                         child_0: #(#child_field_types)*
                     }
@@ -711,7 +711,7 @@ impl<'program, 'source> IntoRustSource<FandangoGenContext<'_, '_, 'program, 'sou
                         S: TypeSampler,
                         G: TypeGenerator<S>,
                     {
-                        fn generate_default(sampler: &mut S, with: &mut G) -> Self {
+                        fn generate_default(sampler: &mut S, with: &mut G, depth: usize) -> Self {
                             Self {
                                 child_0: #sampler,
                             }
@@ -758,7 +758,7 @@ impl<'program, 'source> IntoRustSource<FandangoGenContext<'_, '_, 'program, 'sou
                 indices_rev.reverse();
 
                 output.extend(quote! {
-                    #[derive(Clone, Debug, Eq, PartialEq, Ord, PartialOrd)]
+                    #[derive(Clone, Debug, Eq, PartialEq, Ord, PartialOrd, Hash)]
                     pub struct #name {
                         #( #child_names: #child_field_types ),*
                     }
@@ -851,9 +851,9 @@ impl<'program, 'source> IntoRustSource<FandangoGenContext<'_, '_, 'program, 'sou
                         S: TypeSampler,
                         G: TypeGenerator<S>,
                     {
-                        fn generate_default(sampler: &mut S, with: &mut G) -> Self {
+                        fn generate_default(sampler: &mut S, with: &mut G, depth: usize) -> Self {
                             Self {
-                                #( #child_names: ::fandango::generation::Generated::generate(sampler, with) ),*,
+                                #( #child_names: ::fandango::generation::Generated::generate(sampler, with, depth + 1) ),*,
                             }
                         }
                     }

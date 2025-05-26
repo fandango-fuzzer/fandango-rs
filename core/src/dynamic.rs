@@ -214,6 +214,10 @@ where
     fn sample_alternative(&mut self, count: usize) -> usize {
         self.inner.sample_alternative(count)
     }
+
+    fn sample(&mut self) -> usize {
+        self.inner.sample()
+    }
 }
 
 impl<S, G> DefaultGenerated<S, G> for DynamicNode
@@ -221,14 +225,14 @@ where
     S: Sampler<DynamicNode> + HasDynamicSampler,
     G: GeneratorTuple<DynamicNode, S>,
 {
-    fn generate_default(sampler: &mut S, with: &mut G) -> Self {
+    fn generate_default(sampler: &mut S, with: &mut G, depth: usize) -> Self {
         let definition = sampler.definition();
         let result = (|| match definition {
             FandangoNode::Nonterminal(_) => {
                 let inner = sampler
                     .nonterminal(&definition)
                     .expect("Expected a corresponding inner node for this nonterminal.");
-                let child = DynamicNode::generate(sampler.with_definition(inner), with);
+                let child = DynamicNode::generate(sampler.with_definition(inner), with, depth + 1);
                 Self {
                     root: sampler.root(),
                     definition,
@@ -240,6 +244,7 @@ where
                     DynamicNode::generate(
                         sampler.with_definition(FandangoNode::from(&alt.concatenations()[0])),
                         with,
+                        depth,
                     )
                 } else {
                     let variant = sampler.sample_alternative(alt.concatenations().len());
@@ -253,6 +258,7 @@ where
                                     &alt.concatenations()[variant],
                                 )),
                                 with,
+                                depth + 1,
                             )]),
                         },
                     }
@@ -263,6 +269,7 @@ where
                     DynamicNode::generate(
                         sampler.with_definition(FandangoNode::from(&concat.operators()[0])),
                         with,
+                        depth,
                     )
                 } else {
                     Self {
@@ -276,6 +283,7 @@ where
                                     DynamicNode::generate(
                                         sampler.with_definition(FandangoNode::from(item)),
                                         with,
+                                        depth + 1,
                                     )
                                 })
                                 .collect(),
@@ -295,6 +303,7 @@ where
                         return DynamicNode::generate(
                             sampler.with_definition(FandangoNode::from(sym)),
                             with,
+                            depth,
                         )
                     }
                 };
@@ -304,7 +313,9 @@ where
                     definition,
                     content: DynamicNodeVariant::Sequence(
                         (0..count)
-                            .map(|_| DynamicNode::generate(sampler.with_definition(sym), with))
+                            .map(|_| {
+                                DynamicNode::generate(sampler.with_definition(sym), with, depth + 1)
+                            })
                             .collect(),
                     ),
                 }
@@ -315,7 +326,7 @@ where
                     Symbol::Alternative(alt) => FandangoNode::from(alt),
                     Symbol::String(s) => FandangoNode::from(s),
                 };
-                DynamicNode::generate(sampler.with_definition(inner), with)
+                DynamicNode::generate(sampler.with_definition(inner), with, depth)
             }
             FandangoNode::String(s) => Self {
                 root: sampler.root(),
@@ -334,11 +345,11 @@ where
     S: Sampler<DynamicNode> + HasDynamicSampler,
     G: GeneratorTuple<DynamicNode, S>,
 {
-    fn generate_in_place(&'a mut self, sampler: &mut S, with: &mut G) {
+    fn generate_in_place(&'a mut self, sampler: &mut S, with: &mut G, depth: usize) {
         debug_assert_eq!(self.root, sampler.root());
         debug_assert_eq!(self.definition, sampler.definition());
 
-        self.content = DynamicNode::generate(sampler, with).content;
+        self.content = DynamicNode::generate(sampler, with, depth).content;
     }
 }
 

@@ -4,9 +4,6 @@ version.workspace = true
 edition.workspace = true
 authors.workspace = true
 
-[features]
-std = ["fandango-core/std"]
-
 [dependencies]
 fandango-core = { path = "core" }
 fandango-derive = { path = "derive" }
@@ -16,8 +13,6 @@ pest_derive.workspace = true
 tuple_list.workspace = true
 
 [dev-dependencies]
-fandango-core = { path = "core", features = ["std"] }
-
 criterion.workspace = true
 rand = { workspace = true, features = ["default"] }
 
@@ -55,7 +50,7 @@ hashbrown = "0.15.2"
 pest = { version = "2.7", default-features = false }
 pest_derive = { version = "2.7", default-features = false }
 pest_generator = { version = "2.7", default-features = false }
-petgraph = "0.8.1"
+petgraph = { version = "0.8.1", default-features = false }
 proc-macro2 = "1.0"
 quote = "1.0"
 rand = { version = "0.9.0", default-features = false }

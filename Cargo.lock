@@ -232,14 +232,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "877a4ace8713b0bcf2a4e7eec82529c029f1d0619886d18145fea96c3ffe5c0f"
 
 [[package]]
-name = "eval"
-version = "0.1.0"
-dependencies = [
- "fandango",
- "rand",
-]
-
-[[package]]
 name = "fandango"
 version = "0.1.0"
 dependencies = [
@@ -272,6 +264,16 @@ version = "0.1.0"
 dependencies = [
  "fandango-generator",
  "syn",
+]
+
+[[package]]
+name = "fandango-eval"
+version = "0.1.0"
+dependencies = [
+ "fandango",
+ "hashbrown",
+ "petgraph",
+ "rand",
 ]
 
 [[package]]
@@ -479,7 +481,6 @@ dependencies = [
  "fixedbitset",
  "hashbrown",
  "indexmap",
- "serde",
 ]
 
 [[package]]
@@ -623,9 +624,9 @@ checksum = "2b15c43186be67a4fd63bee50d0303afffcef381492ebe2c5d87f324e1b8815c"
 
 [[package]]
 name = "rustversion"
-version = "1.0.20"
+version = "1.0.21"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "eded382c5f5f786b989652c49544c4877d9f015cc22e145a5ea8ea66c2921cd2"
+checksum = "8a0d197bd2c9dc6e53b84da9556a69ba4cdfab8619eb41a8bd1cc2027a0f6b1d"
 
 [[package]]
 name = "ryu"

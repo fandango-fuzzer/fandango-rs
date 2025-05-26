@@ -13,27 +13,23 @@ use panic_semihosting as _;
 
 use core::alloc::Layout;
 use embedded_alloc::Heap;
-use fandango::Fandango;
 
 const HEAP_SIZE: usize = 1 << 14;
 
 #[global_allocator]
 static HEAP: Heap = Heap::empty();
 
-#[derive(Fandango)]
-#[fandango(grammar = "../tests/grammars/xml.fan")]
-pub struct Xml;
-
 #[rtic::app(device = lm3s6965, dispatchers = [GPIOA, GPIOB, GPIOC])]
 mod app {
-    use super::nonterminal_start;
     use crate::{HEAP, HEAP_SIZE};
     use alloc::string::String;
     use alloc::vec::Vec;
+    use cortex_m_semihosting::debug::EXIT_SUCCESS;
     use cortex_m_semihosting::heprintln;
     use fandango::generation::DefaultGenerated;
     use fandango::visitor::write::WriteVisitor;
     use fandango::visitor::Visitor;
+    use fandango_eval::xml::{nonterminal_start, XmlConstraintFixer};
     use rand::SeedableRng;
 
     #[shared]
@@ -45,11 +41,12 @@ mod app {
     #[init]
     #[allow(unsafe_code)]
     #[allow(unreachable_code)]
+    #[allow(static_mut_refs)]
     fn init(_: init::Context) -> (Shared, Local, init::Monotonics) {
         {
             use core::mem::MaybeUninit;
             static mut HEAP_MEM: [MaybeUninit<u8>; HEAP_SIZE] = [MaybeUninit::uninit(); HEAP_SIZE];
-            unsafe { HEAP.init(HEAP_MEM.as_ptr() as usize, HEAP_SIZE) }
+            unsafe { HEAP.init(HEAP_MEM.as_mut_ptr() as usize, HEAP_SIZE) }
         }
 
         (Shared {}, Local {}, init::Monotonics())
@@ -58,11 +55,14 @@ mod app {
     #[idle]
     fn idle(_: idle::Context) -> ! {
         let mut rng = rand::rngs::StdRng::from_seed([0u8; 32]);
-        loop {
+        for _ in 0..10_000 {
             let mut start = nonterminal_start::generate_default(&mut rng, &mut ());
+            let _ = XmlConstraintFixer::corrected(&mut rng, &mut ())
+                .visit(&mut start, 0)
+                .unwrap();
 
             let serialized = String::from_utf8(
-                WriteVisitor::caching(Vec::new())
+                WriteVisitor::new(Vec::new())
                     .visit(&mut start, 0)
                     .unwrap()
                     .continue_value()
@@ -72,6 +72,12 @@ mod app {
             .unwrap();
 
             heprintln!("{}", serialized);
+        }
+
+        cortex_m_semihosting::debug::exit(EXIT_SUCCESS);
+
+        loop {
+            cortex_m::asm::wfi();
         }
     }
 }

@@ -4,16 +4,13 @@ version.workspace = true
 edition.workspace = true
 authors.workspace = true
 
-[features]
-std = ["petgraph"]
-
 [dependencies]
-either.workspace = true
+either = { workspace = true }
 embedded-io.workspace = true
 hashbrown.workspace = true
 pest.workspace = true
 pest_derive.workspace = true
-petgraph = { workspace = true, optional = true }
+petgraph = { workspace = true, features = ["graphmap"] }
 rand.workspace = true
 tuple_list.workspace = true
 

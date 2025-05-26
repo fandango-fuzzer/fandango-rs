@@ -9,7 +9,6 @@ extern crate alloc;
 mod parse_macros;
 
 #[macro_use]
-#[cfg(feature = "petgraph")]
 pub mod graph;
 pub mod dynamic;
 pub mod generation;

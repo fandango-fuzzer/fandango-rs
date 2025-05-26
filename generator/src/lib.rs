@@ -211,6 +211,13 @@ pub fn derive_fandango_or_emit_error(
 
     let node_names = mapped_names.values().cloned().collect::<Vec<_>>();
 
+    let mut all_node_names = quote! { () };
+    for node in node_names.iter() {
+        all_node_names = quote! { (#node, #all_node_names) };
+    }
+
+    let first_node = &node_names[0];
+
     let mut arrays = Vec::new();
     let mut referenced = Vec::new();
     let metadata = tokenize_metadata(
@@ -303,6 +310,11 @@ pub fn derive_fandango_or_emit_error(
             #(#node_names(&'program #node_names)),*
         }
 
+        impl ::fandango::typing::NodeTypes for Type<'_> {
+            type Nodes = #all_node_names;
+            const ROOT: &'static ::fandango::lang::Tagged<'static, ::fandango::lang::Program<'static>> = <#first_node as ::fandango::typing::Structured>::ROOT;
+        }
+
         #(
             impl<'program> ::fandango::typing::AsNodeRef<#node_names> for Type<'program> {
                 fn as_node(&self) -> Option<&#node_names> {
@@ -317,6 +329,11 @@ pub fn derive_fandango_or_emit_error(
         #[derive(Debug)]
         pub enum TypeMut<'program> {
             #(#node_names(&'program mut #node_names)),*
+        }
+
+        impl ::fandango::typing::NodeTypes for TypeMut<'_> {
+            type Nodes = #all_node_names;
+            const ROOT: &'static ::fandango::lang::Tagged<'static, ::fandango::lang::Program<'static>> = <#first_node as ::fandango::typing::Structured>::ROOT;
         }
 
         #(
@@ -376,10 +393,10 @@ pub fn derive_fandango_or_emit_error(
             #(::alloc::boxed::Box<#node_names>: ::fandango::generation::Generated<S, G>),*,
             'program: 'a,
         {
-            fn generate_in_place(&'a mut self, sampler: &mut S, with: &mut G) {
+            fn generate_in_place(&'a mut self, sampler: &mut S, with: &mut G, depth: usize) {
                 match self.reborrow() {
                     #(TypeMut::#node_names(n) => {
-                        *n = ::fandango::generation::Generated::generate(sampler, with);
+                        *n = ::fandango::generation::Generated::generate(sampler, with, depth);
                     }),*
                 }
             }

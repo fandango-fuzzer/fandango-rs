@@ -204,6 +204,10 @@ where
             .expect("Attempted to generate something that wasn't in the graph");
         self.sample_alternative_from(current)
     }
+
+    fn sample(&mut self) -> usize {
+        self.sampler.sample()
+    }
 }
 
 impl<N, W, S, T> Generator<N, W, S> for Flattener<T>
@@ -213,19 +217,16 @@ where
     S: Sampler<N>,
     T: FlattenerTarget<N>,
 {
-    fn generate(&mut self, sampler: &mut S, with: &mut W) -> Option<N> {
+    fn generate(&mut self, sampler: &mut S, with: &mut W, depth: usize) -> Option<N> {
         if self.target.flattens(&N::static_definition()) {
             let flattened = self.flattened.get(&N::static_definition()).unwrap();
-            let choice = sampler.sample_alternative(flattened.total);
+            let choice = sampler.sample() % flattened.total;
             let mut sampler = FlattenedSampler {
                 choice,
                 flattened: &self.flattened,
                 sampler,
             };
-            Some(
-                with.generate(&mut sampler)
-                    .unwrap_or_else(|| N::generate(&mut sampler, with)),
-            )
+            Some(N::generate(&mut sampler, with, depth))
         } else {
             None
         }
@@ -312,6 +313,10 @@ mod dynamic_impls {
                 .expect("Attempted to generate something that wasn't in the graph");
             self.sample_alternative_from(current)
         }
+
+        fn sample(&mut self) -> usize {
+            self.sampler.sample()
+        }
     }
 
     impl<W, S, T> Generator<DynamicNode, W, S> for Flattener<T>
@@ -320,19 +325,16 @@ mod dynamic_impls {
         S: Sampler<DynamicNode> + HasDynamicSampler,
         T: FlattenerTarget<DynamicNode>,
     {
-        fn generate(&mut self, sampler: &mut S, with: &mut W) -> Option<DynamicNode> {
+        fn generate(&mut self, sampler: &mut S, with: &mut W, depth: usize) -> Option<DynamicNode> {
             if self.target.flattens(&sampler.definition()) {
                 let flattened = self.flattened.get(&sampler.definition()).unwrap();
-                let choice = sampler.sample_alternative(flattened.total);
+                let choice = sampler.sample() % flattened.total;
                 let mut sampler = FlattenedSampler {
                     choice,
                     flattened: &self.flattened,
                     sampler,
                 };
-                Some(
-                    with.generate(&mut sampler)
-                        .unwrap_or_else(|| DynamicNode::generate(&mut sampler, with)),
-                )
+                Some(DynamicNode::generate(&mut sampler, with, depth))
             } else {
                 None
             }

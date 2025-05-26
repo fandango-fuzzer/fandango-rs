@@ -2,20 +2,8 @@
 
 use crate::lang::FandangoNode;
 use crate::lang::{Program, Tagged};
-use alloc::borrow::Cow;
 use alloc::boxed::Box;
-use alloc::rc::Rc;
 use core::ops::Deref;
-use pest::Span;
-
-/// Convert a maybe owned string span into a span. Only for use with generated code.
-pub fn maybe_owned_span<'program>(
-    source: &'program Option<(Rc<Cow<'_, str>>, usize, usize)>,
-) -> Option<Span<'program>> {
-    source
-        .as_ref()
-        .and_then(|(source, start, end)| Span::new(source, *start, *end))
-}
 
 /// Denotes that this type is structured in a tree shape with an associated [`FandangoNode`]. Only
 /// to be implemented by generated code.
@@ -96,6 +84,7 @@ pub trait Node: Sized + AsNode + Discriminable {
     ///  - `From<&'program mut N>`
     ///  - `From<&'program mut Box<N>>`
     ///  - `From<N::TypeMut<'program>>`
+    ///  - `NodeTypes` (and therefore `NodeTypeIterator`)
     type Type<'program>
     where
         Self: 'program;
@@ -105,6 +94,7 @@ pub trait Node: Sized + AsNode + Discriminable {
     ///  - `From<&'program mut Box<N>>`
     ///  - [`crate::visitor::VisitWith`]
     ///  - [`crate::generation::InPlaceGenerated`]
+    ///  - `NodeTypes` (and therefore `NodeTypeIterator`)
     type TypeMut<'program>
     where
         Self: 'program;
@@ -193,4 +183,11 @@ pub trait AsNodeMut<N> {
     /// Downcast this opaque node into a mutable concrete node reference, if this opaque node
     /// contains that node.
     fn as_node_mut(&mut self) -> Option<&mut N>;
+}
+
+pub trait NodeTypes {
+    type Nodes;
+
+    /// The root node over all types; see [`Structured::ROOT`].
+    const ROOT: &'static Tagged<'static, Program<'static>>;
 }

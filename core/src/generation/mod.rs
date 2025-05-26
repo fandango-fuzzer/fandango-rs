@@ -18,6 +18,8 @@ pub trait Sampler<N> {
     fn sample_repetition(&mut self, lower: usize, upper: usize) -> usize;
     /// Sample over an alternative.
     fn sample_alternative(&mut self, count: usize) -> usize;
+    /// Sample an arbitrary usize, without any tagging information.
+    fn sample(&mut self) -> usize;
 }
 
 /// The default upper bound on the number of repetitions when an unmodified [`Rng`] is used as a
@@ -47,20 +49,24 @@ where
     fn sample_alternative(&mut self, count: usize) -> usize {
         self.random_range(0..count)
     }
+
+    fn sample(&mut self) -> usize {
+        self.next_u64() as usize
+    }
 }
 
 /// Indicates that a node has a default generation strategy.
 pub trait DefaultGenerated<S, G> {
     /// Generate this node using the default strategy, and generate any children with [`G`].
-    fn generate_default(sampler: &mut S, with: &mut G) -> Self;
+    fn generate_default(sampler: &mut S, with: &mut G, depth: usize) -> Self;
 }
 
 impl<N, S, G> DefaultGenerated<S, G> for Box<N>
 where
     N: DefaultGenerated<S, G>,
 {
-    fn generate_default(sampler: &mut S, with: &mut G) -> Self {
-        Box::new(N::generate_default(sampler, with))
+    fn generate_default(sampler: &mut S, with: &mut G, depth: usize) -> Self {
+        Box::new(N::generate_default(sampler, with, depth))
     }
 }
 
@@ -74,7 +80,7 @@ pub trait Generated<S, G> {
     /// with that generator. TODO check if this possible; this currently infinite-loops rustc.
     ///
     /// For similar reasons, this includes when parent generators fail. TODO this should be fixable.
-    fn generate(sampler: &mut S, with: &mut G) -> Self;
+    fn generate(sampler: &mut S, with: &mut G, depth: usize) -> Self;
 }
 
 impl<N, S, G> Generated<S, G> for N
@@ -82,16 +88,16 @@ where
     N: DefaultGenerated<S, G>,
     G: GeneratorTuple<N, S>,
 {
-    fn generate(sampler: &mut S, with: &mut G) -> Self {
-        with.generate(sampler)
-            .unwrap_or_else(|| N::generate_default(sampler, with))
+    fn generate(sampler: &mut S, with: &mut G, depth: usize) -> Self {
+        with.generate(sampler, depth)
+            .unwrap_or_else(|| N::generate_default(sampler, with, depth))
     }
 }
 
 /// Generates a node in place, for use with [`super::visitor::Visitor`]s.
 pub trait InPlaceGenerated<'a, S, G> {
     /// Generates and replaces the contained node in-place, returning the new node.
-    fn generate_in_place(&'a mut self, sampler: &mut S, with: &mut G);
+    fn generate_in_place(&'a mut self, sampler: &mut S, with: &mut G, depth: usize);
 }
 
 /// Primary generator trait, for defining generators. You almost certainly only want to implement
@@ -103,14 +109,14 @@ pub trait Generator<N, W, S> {
     /// you then need to make sure to call [`Generated::generate`] with the remaining generators
     /// provided in [`W`]. Do *NOT* call [`GeneratorTuple::generate`] to do so, as this will not
     /// pass your sampler to the default generator.
-    fn generate(&mut self, sampler: &mut S, with: &mut W) -> Option<N>;
+    fn generate(&mut self, sampler: &mut S, with: &mut W, depth: usize) -> Option<N>;
 }
 
 /// A list of generators, processed in order. Use [`tuple_list::tuple_list`] to create one from a
 /// list of existing generators.
 pub trait GeneratorTuple<N, S> {
     /// Attempt to generate a node [`N`] using the available generators.
-    fn generate(&mut self, sampler: &mut S) -> Option<N>;
+    fn generate(&mut self, sampler: &mut S, depth: usize) -> Option<N>;
 }
 
 impl<Head, Tail, N, S> GeneratorTuple<N, S> for (Head, Tail)
@@ -118,15 +124,15 @@ where
     Head: Generator<N, Tail, S>,
     Tail: GeneratorTuple<N, S>,
 {
-    fn generate(&mut self, sampler: &mut S) -> Option<N> {
+    fn generate(&mut self, sampler: &mut S, depth: usize) -> Option<N> {
         self.0
-            .generate(sampler, &mut self.1)
-            .or_else(|| self.1.generate(sampler))
+            .generate(sampler, &mut self.1, depth)
+            .or_else(|| self.1.generate(sampler, depth))
     }
 }
 
 impl<N, S> GeneratorTuple<N, S> for () {
-    fn generate(&mut self, _: &mut S) -> Option<N> {
+    fn generate(&mut self, _: &mut S, _: usize) -> Option<N> {
         None
     }
 }
