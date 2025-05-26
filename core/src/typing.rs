@@ -84,7 +84,7 @@ pub trait Node: Sized + AsNode + Discriminable {
     ///  - `From<&'program mut N>`
     ///  - `From<&'program mut Box<N>>`
     ///  - `From<N::TypeMut<'program>>`
-    ///  - `NodeTypes` (and therefore `NodeTypeIterator`)
+    ///  - `OpaqueType`
     type Type<'program>
     where
         Self: 'program;
@@ -94,7 +94,7 @@ pub trait Node: Sized + AsNode + Discriminable {
     ///  - `From<&'program mut Box<N>>`
     ///  - [`crate::visitor::VisitWith`]
     ///  - [`crate::generation::InPlaceGenerated`]
-    ///  - `NodeTypes` (and therefore `NodeTypeIterator`)
+    ///  - `OpaqueType`
     type TypeMut<'program>
     where
         Self: 'program;
@@ -115,7 +115,7 @@ pub trait Node: Sized + AsNode + Discriminable {
 
 impl<T> Structured for Box<T>
 where
-    T: Node + Structured,
+    T: Structured,
 {
     type FandangoType = T::FandangoType;
     const STRUCTURE: &'static Tagged<'static, Self::FandangoType> = T::STRUCTURE;
@@ -185,7 +185,9 @@ pub trait AsNodeMut<N> {
     fn as_node_mut(&mut self) -> Option<&mut N>;
 }
 
-pub trait NodeTypes {
+/// An opaque type which represents a node.
+pub trait OpaqueType {
+    /// All the nodes that this type could refer to, in a Haskell-style tuple list.
     type Nodes;
 
     /// The root node over all types; see [`Structured::ROOT`].

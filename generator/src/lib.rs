@@ -257,6 +257,7 @@ pub fn derive_fandango_or_emit_error(
             .collect::<TokenStream>();
         grammar.extend(quote! {
             impl #ident {
+                #[allow(missing_docs)]
                 pub fn extract(
                     source: &str
                 ) -> ::core::result::Result<nonterminal_start, ParseError> {
@@ -306,11 +307,12 @@ pub fn derive_fandango_or_emit_error(
         {}
 
         #[derive(Clone, Debug)]
+        #[allow(missing_docs)]
         pub enum Type<'program> {
             #(#node_names(&'program #node_names)),*
         }
 
-        impl ::fandango::typing::NodeTypes for Type<'_> {
+        impl ::fandango::typing::OpaqueType for Type<'_> {
             type Nodes = #all_node_names;
             const ROOT: &'static ::fandango::lang::Tagged<'static, ::fandango::lang::Program<'static>> = <#first_node as ::fandango::typing::Structured>::ROOT;
         }
@@ -327,11 +329,12 @@ pub fn derive_fandango_or_emit_error(
         )*
 
         #[derive(Debug)]
+        #[allow(missing_docs)]
         pub enum TypeMut<'program> {
             #(#node_names(&'program mut #node_names)),*
         }
 
-        impl ::fandango::typing::NodeTypes for TypeMut<'_> {
+        impl ::fandango::typing::OpaqueType for TypeMut<'_> {
             type Nodes = #all_node_names;
             const ROOT: &'static ::fandango::lang::Tagged<'static, ::fandango::lang::Program<'static>> = <#first_node as ::fandango::typing::Structured>::ROOT;
         }
@@ -463,6 +466,7 @@ pub fn derive_fandango_or_emit_error(
             }
         )*
 
+        #[allow(missing_docs)]
         pub const STRUCTURE: &'static ::fandango::lang::Tagged<
             'static,
             ::fandango::lang::Program

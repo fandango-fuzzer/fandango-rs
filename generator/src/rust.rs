@@ -151,8 +151,9 @@ where
 
         output.extend(quote! {
             #[derive(Clone, Debug, Eq, PartialEq, Ord, PartialOrd, Hash)]
+            #[allow(missing_docs)]
             pub struct #name {
-                child_0: #child_type,
+                pub child_0: #child_type,
             }
 
             impl ::fandango::typing::Node for #name {
@@ -378,6 +379,7 @@ impl<'program, 'source> IntoRustSource<FandangoGenContext<'_, '_, 'program, 'sou
                 };
                 output.extend(quote! {
                     #[derive(Clone, Debug, Eq, PartialEq, Ord, PartialOrd, Hash)]
+                    #[allow(missing_docs)]
                     pub struct #name;
 
                     impl ::fandango::typing::Node for #name {
@@ -458,6 +460,7 @@ impl<'program, 'source> IntoRustSource<FandangoGenContext<'_, '_, 'program, 'sou
                 let count = children.len();
                 output.extend(quote! {
                     #[derive(Clone, Debug, Eq, PartialEq, Ord, PartialOrd, Hash)]
+                    #[allow(missing_docs)]
                     pub enum #name {
                         #( #child_variants ( #child_field_types ) ),*
                     }
@@ -622,8 +625,9 @@ impl<'program, 'source> IntoRustSource<FandangoGenContext<'_, '_, 'program, 'sou
 
                 output.extend(quote! {
                     #[derive(Clone, Debug, Eq, PartialEq, Ord, PartialOrd, Hash)]
+                    #[allow(missing_docs)]
                     pub struct #name {
-                        child_0: #(#child_field_types)*
+                        pub child_0: #(#child_field_types)*
                     }
 
                     impl ::fandango::typing::Node for #name {
@@ -759,8 +763,9 @@ impl<'program, 'source> IntoRustSource<FandangoGenContext<'_, '_, 'program, 'sou
 
                 output.extend(quote! {
                     #[derive(Clone, Debug, Eq, PartialEq, Ord, PartialOrd, Hash)]
+                    #[allow(missing_docs)]
                     pub struct #name {
-                        #( #child_names: #child_field_types ),*
+                        #( pub #child_names: #child_field_types ),*
                     }
 
                     impl ::fandango::typing::Node for #name {

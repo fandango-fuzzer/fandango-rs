@@ -14,7 +14,7 @@ use panic_semihosting as _;
 use core::alloc::Layout;
 use embedded_alloc::Heap;
 
-const HEAP_SIZE: usize = 1 << 14;
+const HEAP_SIZE: usize = 1 << 15;
 
 #[global_allocator]
 static HEAP: Heap = Heap::empty();
@@ -26,10 +26,12 @@ mod app {
     use alloc::vec::Vec;
     use cortex_m_semihosting::debug::EXIT_SUCCESS;
     use cortex_m_semihosting::heprintln;
-    use fandango::generation::DefaultGenerated;
+    use fandango::generation::Generated;
+    use fandango::tuple_list::tuple_list;
     use fandango::visitor::write::WriteVisitor;
     use fandango::visitor::Visitor;
-    use fandango_eval::xml::{nonterminal_start, XmlConstraintFixer};
+    use fandango_eval::operators::DepthLimiter;
+    use fandango_eval::xml;
     use rand::SeedableRng;
 
     #[shared]
@@ -55,9 +57,11 @@ mod app {
     #[idle]
     fn idle(_: idle::Context) -> ! {
         let mut rng = rand::rngs::StdRng::from_seed([0u8; 32]);
+        let limiter = DepthLimiter::new::<xml::Type<'static>>(100);
+        let mut generators = tuple_list!(limiter);
         for _ in 0..10_000 {
-            let mut start = nonterminal_start::generate_default(&mut rng, &mut ());
-            let _ = XmlConstraintFixer::corrected(&mut rng, &mut ())
+            let mut start = xml::nonterminal_start::generate(&mut rng, &mut generators, 0);
+            let _ = xml::ConstraintFixer::corrected(&mut rng, &mut ())
                 .visit(&mut start, 0)
                 .unwrap();
 

@@ -1,9 +1,10 @@
 #![allow(missing_docs)]
 
 extern crate alloc;
-use criterion::{black_box, criterion_group, criterion_main, Criterion, Throughput};
+use criterion::{criterion_group, criterion_main, Criterion, Throughput};
 use rand::{RngCore, SeedableRng};
 use std::fs::File;
+use std::hint::black_box;
 use std::io::Read;
 
 fn urandom_throughput(c: &mut Criterion) {
@@ -55,7 +56,7 @@ fn xoshiro_throughput(c: &mut Criterion) {
 }
 
 mod xml {
-    use criterion::{black_box, BatchSize, BenchmarkId, Criterion, Throughput};
+    use criterion::{BatchSize, BenchmarkId, Criterion, Throughput};
     use fandango_core::generation::Generated;
     use fandango_core::visitor::navigation::CountBytes;
 
@@ -65,6 +66,7 @@ mod xml {
     use rand::seq::IndexedRandom;
     use rand::SeedableRng;
     use std::collections::{BTreeMap, Bound};
+    use std::hint::black_box;
 
     #[allow(dead_code)]
     #[derive(Fandango)]
@@ -80,7 +82,7 @@ mod xml {
                 let stashed = rng.clone();
 
                 (
-                    nonterminal_start::generate(&mut rng, &mut ()).count_bytes(),
+                    nonterminal_start::generate(&mut rng, &mut (), 0).count_bytes(),
                     stashed,
                 )
             })
@@ -107,7 +109,7 @@ mod xml {
             group.bench_with_input(BenchmarkId::new("throughput", count), &rngs, |b, rngs| {
                 b.iter_batched_ref(
                     || rngs.choose(&mut picker).copied().unwrap().clone(),
-                    |rng| nonterminal_start::generate(black_box(rng), &mut ()),
+                    |rng| nonterminal_start::generate(black_box(rng), &mut (), 0),
                     BatchSize::SmallInput,
                 );
             });
@@ -123,7 +125,7 @@ mod xml {
                 let stashed = rng.clone();
 
                 (
-                    nonterminal_start::generate(&mut rng, &mut ()).count_bytes(),
+                    nonterminal_start::generate(&mut rng, &mut (), 0).count_bytes(),
                     stashed,
                 )
             })
@@ -153,7 +155,10 @@ mod xml {
                     || rngs.choose(&mut picker).copied().unwrap().clone(),
                     |rng| {
                         WriteVisitor::new(black_box(&mut scratch))
-                            .visit(&mut nonterminal_start::generate(black_box(rng), &mut ()), 0)
+                            .visit(
+                                &mut nonterminal_start::generate(black_box(rng), &mut (), 0),
+                                0,
+                            )
                             .unwrap()
                             .continue_value()
                             .unwrap();

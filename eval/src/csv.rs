@@ -20,24 +20,28 @@ use fandango::typing::{AsNodeMut, AsNodeRef, Node};
 use fandango::visitor::{VisitResult, VisitableChildren, Visitor};
 use fandango::Fandango;
 
+/// Base for the CSV grammar stored in csv.fan.
 #[derive(Fandango)]
 #[fandango(grammar = "grammars/csv.fan", parse = false)]
-pub struct Csv;
+pub struct Csv(Infallible);
 
+/// A visitor which collects the violations of the constraints in the CSV grammar.
 #[derive(Debug, Default)]
-pub struct CsvConstraintVisitor<const CORRECT: bool> {
+pub struct ConstraintVisitor<const CORRECT: bool> {
     path: VecDeque<usize>,
     violations: Vec<VecDeque<usize>>,
 }
 
-impl CsvConstraintVisitor<false> {
+impl ConstraintVisitor<false> {
+    /// Construct this visitor in the form that was originally evaluated in FANDANGO.
     #[deprecated(note = "The CSV grammar originally incorrectly counts the number of fields.")]
     pub fn evaluated() -> Self {
         Self::default()
     }
 }
 
-impl CsvConstraintVisitor<true> {
+impl ConstraintVisitor<true> {
+    /// Construct this visitor in the form that produces correctly formatted data.
     pub fn corrected() -> Self {
         Self::default()
     }
@@ -57,7 +61,7 @@ fn count_fields(mut list: &nonterminal_csv_string_list) -> usize {
     count
 }
 
-impl<T> Visitor<T> for CsvConstraintVisitor<true>
+impl<T> Visitor<T> for ConstraintVisitor<true>
 where
     T: VisitableChildren<T> + AsNodeRef<nonterminal_csv_records>,
 {
@@ -94,12 +98,12 @@ where
     }
 }
 
-impl<T> Visitor<T> for CsvConstraintVisitor<false> {
+impl<T> Visitor<T> for ConstraintVisitor<false> {
     type Continue = Self;
     type Break = Infallible;
     type Error = Infallible;
 
-    fn visit<'program, N>(mut self, _node: &'program mut N, idx: usize) -> VisitResult<Self, T>
+    fn visit<'program, N>(self, _node: &'program mut N, _idx: usize) -> VisitResult<Self, T>
     where
         N: Node<TypeMut<'program> = T>,
         T: From<&'program mut N>,
@@ -108,26 +112,29 @@ impl<T> Visitor<T> for CsvConstraintVisitor<false> {
     }
 }
 
+/// A visitor which applies fixes based on the constraints in the CSV grammar.
 #[derive(Debug)]
-pub struct CsvConstraintFixer<'a, S, G, const CORRECT: bool> {
+pub struct ConstraintFixer<'a, S, G, const CORRECT: bool> {
     sampler: &'a mut S,
     generator: &'a mut G,
 }
 
-impl<'a, S, G> CsvConstraintFixer<'a, S, G, false> {
+impl<'a, S, G> ConstraintFixer<'a, S, G, false> {
+    /// Construct this fixer in the form that was originally evaluated in FANDANGO.
     #[deprecated(note = "The CSV grammar originally incorrectly counts the number of fields.")]
     pub fn evaluated(sampler: &'a mut S, generator: &'a mut G) -> Self {
         Self { sampler, generator }
     }
 }
 
-impl<'a, S, G> CsvConstraintFixer<'a, S, G, true> {
+impl<'a, S, G> ConstraintFixer<'a, S, G, true> {
+    /// Construct this fixer in the form that ensures the correctness of generated inputs.
     pub fn corrected(sampler: &'a mut S, generator: &'a mut G) -> Self {
         Self { sampler, generator }
     }
 }
 
-impl<'a, S, G, T> Visitor<T> for CsvConstraintFixer<'a, S, G, true>
+impl<'a, S, G, T> Visitor<T> for ConstraintFixer<'a, S, G, true>
 where
     nonterminal_raw_field: Generated<S, G>,
     T: VisitableChildren<T> + AsNodeMut<nonterminal_csv_records>,
@@ -228,7 +235,7 @@ where
     }
 }
 
-impl<'a, S, G, T> Visitor<T> for CsvConstraintFixer<'a, S, G, false> {
+impl<'a, S, G, T> Visitor<T> for ConstraintFixer<'a, S, G, false> {
     type Continue = Self;
     type Break = Infallible;
     type Error = Infallible;
@@ -245,11 +252,6 @@ impl<'a, S, G, T> Visitor<T> for CsvConstraintFixer<'a, S, G, false> {
 #[cfg(test)]
 mod test {
     use crate::csv;
-    use crate::csv::{
-        count_fields, nonterminal_csv_file, nonterminal_csv_record, nonterminal_csv_record_0,
-        nonterminal_csv_records, nonterminal_csv_records_0, nonterminal_csv_records_0_0,
-        CsvConstraintFixer, CsvConstraintVisitor,
-    };
     use crate::operators::DepthLimiter;
     use alloc::boxed::Box;
     use core::error::Error;
@@ -267,9 +269,9 @@ mod test {
         let mut generators = tuple_list!(DepthLimiter::new::<csv::Type<'static>>(50));
         let mut diff_count = 0;
         for _ in 0..100_000 {
-            let mut tree = nonterminal_csv_file::generate(&mut rng, &mut generators, 0);
-            let Ok(ControlFlow::Continue(CsvConstraintVisitor { violations, .. })) =
-                CsvConstraintVisitor::corrected().visit(&mut tree, 0);
+            let mut tree = csv::nonterminal_start::generate(&mut rng, &mut generators, 0);
+            let Ok(ControlFlow::Continue(csv::ConstraintVisitor { violations, .. })) =
+                csv::ConstraintVisitor::corrected().visit(&mut tree, 0);
 
             for mut violation in violations {
                 violation.pop_front();
@@ -281,47 +283,47 @@ mod test {
 
                 violation.truncate(len - 8);
 
-                let csv::TypeMut::nonterminal_csv_records(nonterminal_csv_records {
-                    child_0: nonterminal_csv_records_0::variant_0(record),
+                let csv::TypeMut::nonterminal_csv_records(csv::nonterminal_csv_records {
+                    child_0: csv::nonterminal_csv_records_0::variant_0(record),
                 }) = tree.go_to(0, violation)?
                 else {
                     unreachable!("We are inspecting the records directly.");
                 };
-                let nonterminal_csv_records_0_0 {
+                let csv::nonterminal_csv_records_0_0 {
                     child_0:
-                        nonterminal_csv_record {
+                        csv::nonterminal_csv_record {
                             child_0:
-                                nonterminal_csv_record_0 {
+                                csv::nonterminal_csv_record_0 {
                                     child_0: base_list, ..
                                 },
                         },
                     child_1:
-                        nonterminal_csv_records {
-                            child_0: nonterminal_csv_records_0::variant_0(remainder),
+                        csv::nonterminal_csv_records {
+                            child_0: csv::nonterminal_csv_records_0::variant_0(remainder),
                         },
                 } = &**record
                 else {
                     unreachable!("We are inspecting the records directly.");
                 };
-                let nonterminal_csv_records_0_0 {
+                let csv::nonterminal_csv_records_0_0 {
                     child_0:
-                        nonterminal_csv_record {
+                        csv::nonterminal_csv_record {
                             child_0:
-                                nonterminal_csv_record_0 {
+                                csv::nonterminal_csv_record_0 {
                                     child_0: cmp_list, ..
                                 },
                         },
                     ..
                 } = &**remainder;
 
-                assert_ne!(count_fields(base_list), count_fields(cmp_list));
+                assert_ne!(csv::count_fields(base_list), csv::count_fields(cmp_list));
 
                 diff_count += 1;
             }
 
-            let _ = CsvConstraintFixer::corrected(&mut rng, &mut ()).visit(&mut tree, 0)?;
-            let ControlFlow::Continue(CsvConstraintVisitor { violations, .. }) =
-                CsvConstraintVisitor::corrected().visit(&mut tree, 0)?;
+            let _ = csv::ConstraintFixer::corrected(&mut rng, &mut ()).visit(&mut tree, 0)?;
+            let ControlFlow::Continue(csv::ConstraintVisitor { violations, .. }) =
+                csv::ConstraintVisitor::corrected().visit(&mut tree, 0)?;
             assert_eq!(0, violations.len());
         }
         assert_ne!(0, diff_count);

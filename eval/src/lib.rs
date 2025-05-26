@@ -9,7 +9,11 @@ extern crate alloc;
 
 pub mod operators;
 
+#[cfg(feature = "csv")]
 pub mod csv;
-mod rest;
+#[cfg(feature = "rest")]
+pub mod rest;
+#[cfg(feature = "scriptsizec")]
 pub mod scriptsizec;
+#[cfg(feature = "xml")]
 pub mod xml;

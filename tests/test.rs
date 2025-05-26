@@ -117,7 +117,7 @@ mod simple {
     #[test]
     fn mutate() -> Result<(), Box<dyn Error>> {
         let mut rng = rng();
-        let mut start = nonterminal_start::generate(&mut rng, &mut ());
+        let mut start = nonterminal_start::generate(&mut rng, &mut (), 0);
 
         let mut generators = ();
 
@@ -132,7 +132,7 @@ mod simple {
                 .break_value()
                 .unwrap();
             let old_count = target.count_nodes();
-            target.generate_in_place(&mut rng, &mut generators);
+            target.generate_in_place(&mut rng, &mut generators, 0);
             let new_count = target.count_nodes();
             count = count - old_count + new_count;
             if old_start != start {
@@ -155,7 +155,7 @@ mod simple {
             &nonterminals,
             &mut rng,
         );
-        let mut start = DynamicNode::generate(&mut sampler, &mut ());
+        let mut start = DynamicNode::generate(&mut sampler, &mut (), 0);
 
         let mut generators = ();
 
@@ -172,7 +172,7 @@ mod simple {
             let old_count = target.count_nodes();
             let definition = target.definition();
             sampler.with_definition(definition);
-            target.generate_in_place(&mut sampler, &mut generators);
+            target.generate_in_place(&mut sampler, &mut generators, 0);
             let new_count = target.count_nodes();
             count = count - old_count + new_count;
             if old_start != start {
@@ -188,7 +188,7 @@ mod simple {
     #[test]
     fn generate() -> Result<(), Box<dyn Error>> {
         let mut rng = rng();
-        let mut start = nonterminal_start::generate(&mut rng, &mut ());
+        let mut start = nonterminal_start::generate(&mut rng, &mut (), 0);
 
         let serialized = String::from_utf8(
             WriteVisitor::new(Vec::new())
@@ -212,7 +212,7 @@ mod simple {
         let mut distribution = [0usize; 10];
 
         for _ in 0..100_000 {
-            let mut digit = nonterminal_digit::generate(&mut rng, &mut ());
+            let mut digit = nonterminal_digit::generate(&mut rng, &mut (), 0);
 
             WriteVisitor::new(&mut buf)
                 .visit(&mut digit, 0)?
@@ -242,7 +242,7 @@ mod simple {
         let mut distribution = [0usize; 10];
 
         for _ in 0..100_000 {
-            let mut digit = nonterminal_digit::generate(&mut rng, &mut generators);
+            let mut digit = nonterminal_digit::generate(&mut rng, &mut generators, 0);
 
             WriteVisitor::new(&mut buf)
                 .visit(&mut digit, 0)?
@@ -282,7 +282,7 @@ mod simple {
         let mut distribution = [0usize; 10];
 
         for _ in 0..100_000 {
-            let mut digit = DynamicNode::generate(&mut sampler, &mut generators);
+            let mut digit = DynamicNode::generate(&mut sampler, &mut generators, 0);
 
             WriteVisitor::new(&mut buf)
                 .visit(&mut digit, 0)?
@@ -313,8 +313,8 @@ mod simple {
         );
 
         for _ in 0..10_000 {
-            let mut static_start = nonterminal_start::generate(&mut rng, &mut ());
-            let mut dyn_start = DynamicNode::generate(&mut dyn_sampler, &mut ());
+            let mut static_start = nonterminal_start::generate(&mut rng, &mut (), 0);
+            let mut dyn_start = DynamicNode::generate(&mut dyn_sampler, &mut (), 0);
 
             let static_ser = WriteVisitor::new(Vec::new())
                 .visit(&mut static_start, 0)?
@@ -387,7 +387,7 @@ mod xml {
     #[test]
     fn generate() -> Result<(), Box<dyn Error>> {
         let mut rng = rng();
-        let mut start = nonterminal_start::generate_default(&mut rng, &mut ());
+        let mut start = nonterminal_start::generate_default(&mut rng, &mut (), 0);
 
         let serialized = String::from_utf8(
             WriteVisitor::new(Vec::new())
@@ -417,10 +417,10 @@ mod xml {
     #[test]
     fn find_replace() -> Result<(), Box<dyn Error>> {
         let mut rng = rng();
-        let mut first = nonterminal_start::generate_default(&mut rng, &mut ());
-        let mut second = nonterminal_start::generate_default(&mut rng, &mut ());
+        let mut first = nonterminal_start::generate_default(&mut rng, &mut (), 0);
+        let mut second = nonterminal_start::generate_default(&mut rng, &mut (), 0);
         while first == second {
-            second = nonterminal_start::generate_default(&mut rng, &mut ());
+            second = nonterminal_start::generate_default(&mut rng, &mut (), 0);
         }
 
         let second_clone = second.clone();
@@ -453,8 +453,8 @@ mod xml {
         );
 
         for _ in 0..10_000 {
-            let mut static_start = nonterminal_start::generate(&mut rng, &mut ());
-            let mut dyn_start = DynamicNode::generate(&mut dyn_sampler, &mut ());
+            let mut static_start = nonterminal_start::generate(&mut rng, &mut (), 0);
+            let mut dyn_start = DynamicNode::generate(&mut dyn_sampler, &mut (), 0);
 
             let static_ser = WriteVisitor::new(Vec::new())
                 .visit(&mut static_start, 0)?

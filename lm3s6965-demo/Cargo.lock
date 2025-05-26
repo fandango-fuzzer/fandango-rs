@@ -245,6 +245,7 @@ dependencies = [
 name = "fandango-eval"
 version = "0.1.0"
 dependencies = [
+ "embedded-io",
  "fandango",
  "hashbrown 0.15.3",
  "petgraph",

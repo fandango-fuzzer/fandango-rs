@@ -54,7 +54,7 @@ mod simple {
                 let stashed = rng.clone();
 
                 (
-                    nonterminal_start::generate(&mut rng, &mut ()).count_nodes(),
+                    nonterminal_start::generate(&mut rng, &mut (), 0).count_nodes(),
                     stashed,
                 )
             })
@@ -71,7 +71,7 @@ mod simple {
             group.bench_with_input(BenchmarkId::new("generate", count), &rng, |b, rng| {
                 b.iter_batched_ref(
                     || rng.clone(),
-                    |rng| nonterminal_start::generate(black_box(rng), &mut ()),
+                    |rng| nonterminal_start::generate(black_box(rng), &mut (), 0),
                     BatchSize::SmallInput,
                 );
             });
@@ -91,6 +91,7 @@ mod simple {
                                     black_box(rng),
                                 ),
                                 &mut (),
+                                0,
                             )
                         },
                         BatchSize::SmallInput,
@@ -98,7 +99,7 @@ mod simple {
                 },
             );
 
-            let mut start = nonterminal_start::generate(&mut rng.clone(), &mut ());
+            let mut start = nonterminal_start::generate(&mut rng.clone(), &mut (), 0);
             let dyn_start = DynamicNode::generate(
                 &mut DynamicSampler::new(
                     nonterminal_start::static_root(),
@@ -107,6 +108,7 @@ mod simple {
                     &mut rng.clone(),
                 ),
                 &mut (),
+                0,
             );
 
             group.bench_with_input(BenchmarkId::new("visit", count), &start, |b, start| {
@@ -155,7 +157,7 @@ mod simple {
                                 .visit(start, 0)?
                                 .break_value()
                                 .unwrap();
-                            target.generate_in_place(&mut rng, &mut ());
+                            target.generate_in_place(&mut rng, &mut (), 0);
                             Ok(())
                         })();
                     },
@@ -183,7 +185,7 @@ mod simple {
                                     &nonterminals,
                                     &mut rng,
                                 );
-                                target.generate_in_place(&mut sampler, &mut ());
+                                target.generate_in_place(&mut sampler, &mut (), 0);
                                 Ok(())
                             })();
                         },
@@ -201,7 +203,7 @@ mod simple {
                 let stashed = rng.clone();
 
                 (
-                    nonterminal_start::generate(&mut rng, &mut generators).count_nodes(),
+                    nonterminal_start::generate(&mut rng, &mut generators, 0).count_nodes(),
                     stashed,
                 )
             })
@@ -221,7 +223,7 @@ mod simple {
                 |b, rng| {
                     b.iter_batched_ref(
                         || rng.clone(),
-                        |rng| nonterminal_start::generate(black_box(rng), &mut generators),
+                        |rng| nonterminal_start::generate(black_box(rng), &mut generators, 0),
                         BatchSize::SmallInput,
                     );
                 },
@@ -242,6 +244,7 @@ mod simple {
                                     black_box(rng),
                                 ),
                                 &mut generators,
+                                0,
                             )
                         },
                         BatchSize::SmallInput,
@@ -299,7 +302,7 @@ mod xml {
                 let stashed = rng.clone();
 
                 (
-                    nonterminal_start::generate(&mut rng, &mut ()).count_nodes(),
+                    nonterminal_start::generate(&mut rng, &mut (), 0).count_nodes(),
                     stashed,
                 )
             })
@@ -316,7 +319,7 @@ mod xml {
             group.bench_with_input(BenchmarkId::new("generate", count), &rng, |b, rng| {
                 b.iter_batched_ref(
                     || rng.clone(),
-                    |rng| nonterminal_start::generate(black_box(rng), &mut ()),
+                    |rng| nonterminal_start::generate(black_box(rng), &mut (), 0),
                     BatchSize::SmallInput,
                 );
             });
@@ -336,6 +339,7 @@ mod xml {
                                     black_box(rng),
                                 ),
                                 &mut (),
+                                0,
                             )
                         },
                         BatchSize::SmallInput,
@@ -343,7 +347,7 @@ mod xml {
                 },
             );
 
-            let mut start = nonterminal_start::generate(&mut rng.clone(), &mut ());
+            let mut start = nonterminal_start::generate(&mut rng.clone(), &mut (), 0);
             let dyn_start = DynamicNode::generate(
                 &mut DynamicSampler::new(
                     nonterminal_start::static_root(),
@@ -352,6 +356,7 @@ mod xml {
                     &mut rng.clone(),
                 ),
                 &mut (),
+                0,
             );
 
             group.bench_with_input(BenchmarkId::new("visit", count), &start, |b, start| {
@@ -400,7 +405,7 @@ mod xml {
                                 .visit(start, 0)?
                                 .break_value()
                                 .unwrap();
-                            target.generate_in_place(&mut rng, &mut ());
+                            target.generate_in_place(&mut rng, &mut (), 0);
                             Ok(())
                         })();
                     },
@@ -428,7 +433,7 @@ mod xml {
                                     &nonterminals,
                                     &mut rng,
                                 );
-                                target.generate_in_place(&mut sampler, &mut ());
+                                target.generate_in_place(&mut sampler, &mut (), 0);
                                 Ok(())
                             })();
                         },
@@ -447,7 +452,7 @@ mod xml {
                 let stashed = rng.clone();
 
                 (
-                    nonterminal_start::generate(&mut rng, &mut generators).count_nodes(),
+                    nonterminal_start::generate(&mut rng, &mut generators, 0).count_nodes(),
                     stashed,
                 )
             })
@@ -467,7 +472,7 @@ mod xml {
                 |b, rng| {
                     b.iter_batched_ref(
                         || rng.clone(),
-                        |rng| nonterminal_start::generate(black_box(rng), &mut generators),
+                        |rng| nonterminal_start::generate(black_box(rng), &mut generators, 0),
                         BatchSize::SmallInput,
                     );
                 },
@@ -488,6 +493,7 @@ mod xml {
                                     black_box(rng),
                                 ),
                                 &mut generators,
+                                0,
                             )
                         },
                         BatchSize::SmallInput,

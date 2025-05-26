@@ -800,14 +800,7 @@ fn mutate<R: Rng>(rng: &mut R, node: start, times: usize) -> Result<start, Box<d
 ```
 
 In this way we have created an efficient mutator; at compile time, the count operations are wildly optimised, so this
-ends up being just about as efficient as counting the nodes once. As a matter of benchmarking, here are some results
-I previously recorded with my machine (you can find the corresponding grammars used
-in [tests/grammars](tests/grammars) and the benchmarks in [benches/generate.rs](benches/generate.rs)). "Elements" here
-represents the number of nodes used in the respective operation:
-
-![A line chart showing the evaluation of the "simple" grammar, with linear growth on each and similar times for generation, visitation, and mutation.](assets/simple.png)
-
-![A line chart showing the evaluation of the "xml" grammar, with linear growth on each. Generation has a notably higher growth rate than visitation and mutation, and mutation has a very slightly higher growth rate than visitation.](assets/xml.png)
+ends up being just about as efficient as counting the nodes once.
 
 ### Constraining
 
@@ -818,7 +811,8 @@ documentation for that if you need.
 
 ## Licensing
 
-This crate, like most others, uses dual-license MIT and Apache.
+This crate is licensed under EUPL v1.2.
 
 Some sections of the code are adaptations of [py_literal](https://github.com/jturner314/py_literal/releases/tag/0.4.0),
-which is similarly licensed, for which license files are provided in [core/src/py_literal](fandango/src/py_literal).
+which is licensed under Apache and MIT, for which license files are provided
+in [core/src/py_literal](fandango/src/py_literal).

@@ -21,25 +21,28 @@ use fandango::typing::{AsNodeRef, Node};
 use fandango::visitor::{VisitResult, VisitableChildren, Visitor};
 use fandango::Fandango;
 
+/// Base for the ScriptSizeC grammar stored in ssc.fan.
 #[derive(Fandango)]
 #[fandango(grammar = "grammars/scriptsizec.fan", parse = false)]
-pub struct ScriptSizeC(());
+pub struct ScriptSizeC(Infallible);
 
+/// A visitor which collects the violations of the constraints in the ScriptSizeC grammar.
 #[derive(Debug, Default)]
-pub struct SSCConstraintVisitor<S> {
+pub struct ConstraintVisitor<S> {
     scope: S,
     path: VecDeque<usize>,
     violations: Vec<VecDeque<usize>>,
 }
 
-impl SSCConstraintVisitor<BTreeSet<nonterminal_id>> {
+impl ConstraintVisitor<BTreeSet<nonterminal_id>> {
+    /// Construct this visitor in the form that was originally evaluated in FANDANGO.
     #[deprecated(note = "This implements the incorrect version of scriptsizec.fan constraints.")]
     pub fn evaluated() -> Self {
         Self::default()
     }
 }
 
-impl<T> Visitor<T> for SSCConstraintVisitor<BTreeSet<nonterminal_id>>
+impl<T> Visitor<T> for ConstraintVisitor<BTreeSet<nonterminal_id>>
 where
     T: VisitableChildren<T> + AsNodeRef<nonterminal_declaration> + AsNodeRef<nonterminal_id>,
 {
@@ -53,7 +56,7 @@ where
         T: From<&'program mut N>,
     {
         self.path.push_back(idx);
-        let mut visited = T::from(node);
+        let visited = T::from(node);
         if let Some(decl) = AsNodeRef::<nonterminal_declaration>::as_node(&visited) {
             let (id, path) = match &decl.child_0 {
                 nonterminal_declaration_0::variant_0(nonterminal_declaration_0_0 {
@@ -72,7 +75,7 @@ where
             } else {
                 self.scope.insert(id.clone());
             }
-        } else if let Some(id) = AsNodeRef::<nonterminal_id>::as_node(&mut visited) {
+        } else if let Some(id) = AsNodeRef::<nonterminal_id>::as_node(&visited) {
             if !self.scope.contains(id) {
                 self.violations.push(self.path.clone());
             }
@@ -84,11 +87,13 @@ where
     }
 }
 
-pub struct SSCConstraintFixer<S> {
+/// A visitor which applies fixes based on the constraints in the ScriptSizeC grammar.
+#[allow(dead_code)]
+pub struct ConstraintFixer<S> {
     scope: S,
 }
 
-impl<T> Visitor<T> for SSCConstraintFixer<BTreeSet<nonterminal_id>> {
+impl<T> Visitor<T> for ConstraintFixer<BTreeSet<nonterminal_id>> {
     type Continue = Self;
     type Break = Infallible;
     type Error = Infallible;
@@ -106,7 +111,6 @@ impl<T> Visitor<T> for SSCConstraintFixer<BTreeSet<nonterminal_id>> {
 mod test {
     use crate::operators::DepthLimiter;
     use crate::scriptsizec;
-    use crate::scriptsizec::{nonterminal_statement, SSCConstraintVisitor};
     use alloc::boxed::Box;
     use core::error::Error;
     use core::ops::ControlFlow;
@@ -124,9 +128,9 @@ mod test {
         let mut generators = tuple_list!(DepthLimiter::new::<scriptsizec::Type<'static>>(50));
         let mut diff_count = 0;
         for _ in 0..100_000 {
-            let mut tree = nonterminal_statement::generate(&mut rng, &mut generators, 0);
-            let Ok(ControlFlow::Continue(SSCConstraintVisitor { violations, .. })) =
-                SSCConstraintVisitor::evaluated().visit(&mut tree, 0);
+            let mut tree = scriptsizec::nonterminal_start::generate(&mut rng, &mut generators, 0);
+            let Ok(ControlFlow::Continue(scriptsizec::ConstraintVisitor { violations, .. })) =
+                scriptsizec::ConstraintVisitor::evaluated().visit(&mut tree, 0);
 
             for mut violation in violations {
                 violation.pop_front();

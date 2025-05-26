@@ -12,26 +12,29 @@
 
 use alloc::collections::VecDeque;
 use alloc::vec::Vec;
-use core::hash::Hash;
 use core::marker::PhantomData;
 use fandango::generation::{Generated, Generator, GeneratorTuple, Sampler};
 use fandango::graph::IntoGraph;
 use fandango::lang::FandangoNode;
-use fandango::typing::{AsStaticNode, Node, NodeTypes, StaticDiscriminable};
+use fandango::typing::{AsStaticNode, Node, OpaqueType, StaticDiscriminable};
 use hashbrown::HashMap;
-use petgraph::data::DataMap;
 use petgraph::visit::{EdgeRef, IntoNodeReferences};
 use petgraph::Direction;
 
+/// A generator which restricts the depth of the generated grammar.
+///
+/// This generator works by pre-calculating the shortest path(s) from each alternative, then forcing
+/// alternative selection once a specified depth is reached.
 pub struct DepthLimiter<SP> {
     max_depth: usize,
     shortest_path: SP,
 }
 
-impl DepthLimiter<ShortestPathImpl<HashMap<FandangoNode<'static, 'static>, Vec<usize>>>> {
-    pub fn new<T>(mut max_depth: usize) -> Self
+impl DepthLimiter<HashMap<FandangoNode<'static, 'static>, Vec<usize>>> {
+    /// Produce a new depth limiter for the given opaque type.
+    pub fn new<T>(max_depth: usize) -> Self
     where
-        T: NodeTypes,
+        T: OpaqueType,
     {
         let (_nonterminals, graph) = T::ROOT.inner().into_graph();
 
@@ -111,11 +114,10 @@ impl DepthLimiter<ShortestPathImpl<HashMap<FandangoNode<'static, 'static>, Vec<u
             }
         }
 
-        let shortest_paths = alternatives
+        let shortest_path = alternatives
             .into_iter()
             .map(|(idx, paths)| (*graph.node_weight(idx).unwrap(), paths))
             .collect();
-        let shortest_path = ShortestPathImpl { shortest_paths };
         Self {
             max_depth,
             shortest_path,
@@ -142,6 +144,7 @@ where
     }
 }
 
+/// Sampler which picks the shortest path according to a given shortest path provider.
 pub struct ShortestPathSampler<'a, S, SP> {
     inner: &'a mut S,
     shortest_path: &'a mut SP,
@@ -179,10 +182,6 @@ where
     }
 }
 
-pub struct ShortestPathImpl<SPS> {
-    shortest_paths: SPS,
-}
-
 struct FirstStep<T>(T);
 impl<T> FromIterator<T> for FirstStep<T> {
     fn from_iter<I: IntoIterator<Item = T>>(iter: I) -> Self {
@@ -192,15 +191,6 @@ impl<T> FromIterator<T> for FirstStep<T> {
 
 trait ShortestPath<N, S> {
     fn shortest_path(&self, sampler: &mut S) -> Option<usize>;
-}
-
-impl<N, S, SPS> ShortestPath<N, S> for ShortestPathImpl<SPS>
-where
-    SPS: ShortestPath<N, S>,
-{
-    fn shortest_path(&self, sampler: &mut S) -> Option<usize> {
-        self.shortest_paths.shortest_path(sampler)
-    }
 }
 
 impl<N, S> ShortestPath<N, S> for () {
@@ -239,7 +229,7 @@ where
 {
     #[inline(always)]
     fn shortest_path(&self, sampler: &mut S) -> Option<usize> {
-        if let Some(options) = self.get(&FandangoNode::from(N::static_definition())) {
+        if let Some(options) = self.get(&N::static_definition()) {
             return options.get(sampler.sample() % options.len()).copied();
         }
         None

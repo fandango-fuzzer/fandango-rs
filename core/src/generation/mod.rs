@@ -24,7 +24,7 @@ pub trait Sampler<N> {
 
 /// The default upper bound on the number of repetitions when an unmodified [`Rng`] is used as a
 /// [`Sampler`].
-pub const DEFAULT_UPPER_COUNT: usize = 64;
+pub const DEFAULT_UPPER_COUNT: usize = 5;
 
 impl<N, R> Sampler<N> for R
 where
