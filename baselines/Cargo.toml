@@ -32,3 +32,8 @@ fandango-targets = { path = "../targets" }
 criterion = { version = "0.6.0", features = ["html_reports"] }
 hashbrown = { version = "0.15.2", default-features = false }
 rand = { version = "0.9.1", default-features = false }
+
+[[bench]]
+name = "baselines"
+path = "benches/baselines.rs"
+harness = false
