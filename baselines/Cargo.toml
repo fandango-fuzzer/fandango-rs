@@ -15,6 +15,15 @@ common = { path = "common" }
 
 criterion.workspace = true
 
+[profile.release]
+codegen-units = 1
+lto = true
+
+[profile.bench]
+inherits = "release"
+debug = true
+opt-level = 3
+
 [workspace]
 members = [".", "common", "csv", "rest", "scriptsizec", "xml"]
 resolver = "3"
