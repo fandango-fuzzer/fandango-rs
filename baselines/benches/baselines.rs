@@ -1,3 +1,7 @@
+//! The actual benchmarks against csv, rest, scriptsizec, and xml.
+
+#![allow(missing_docs)]
+
 use baselines::perform_benchmark;
 use criterion::{criterion_group, criterion_main};
 

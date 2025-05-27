@@ -1,3 +1,5 @@
+//! Generic baseline benchmark runners against FANDANGO.
+
 #![no_std]
 
 extern crate alloc;
@@ -16,6 +18,7 @@ use fandango_targets::operators::DepthLimiter;
 use rand::SeedableRng;
 use rand::seq::IndexedRandom;
 
+/// A simple visitor which counts nonterminals, for use in benchmarking against FANDANGO.
 #[derive(Debug)]
 pub struct NonterminalVisitor {
     count: usize,
