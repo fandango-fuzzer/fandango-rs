@@ -290,7 +290,7 @@ mod xml {
 
     #[allow(dead_code)]
     #[derive(Fandango)]
-    #[fandango(grammar = "eval/grammars/xml.fan")]
+    #[fandango(grammar = "targets/grammars/xml.fan")]
     pub struct Xml;
 
     pub fn xml(c: &mut Criterion) {

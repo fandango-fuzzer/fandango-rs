@@ -1,7 +1,7 @@
 #![allow(missing_docs)]
 
 extern crate alloc;
-use criterion::{criterion_group, criterion_main, Criterion, Throughput};
+use criterion::{Criterion, Throughput, criterion_group, criterion_main};
 use rand::{RngCore, SeedableRng};
 use std::fs::File;
 use std::hint::black_box;
@@ -60,17 +60,17 @@ mod xml {
     use fandango_core::generation::Generated;
     use fandango_core::visitor::navigation::CountBytes;
 
-    use fandango_core::visitor::write::WriteVisitor;
     use fandango_core::visitor::Visitor;
+    use fandango_core::visitor::write::WriteVisitor;
     use fandango_derive::Fandango;
-    use rand::seq::IndexedRandom;
     use rand::SeedableRng;
+    use rand::seq::IndexedRandom;
     use std::collections::{BTreeMap, Bound};
     use std::hint::black_box;
 
     #[allow(dead_code)]
     #[derive(Fandango)]
-    #[fandango(grammar = "eval/grammars/xml.fan")]
+    #[fandango(grammar = "targets/grammars/xml.fan")]
     pub struct Xml;
 
     pub fn nowrite(c: &mut Criterion) {

@@ -3,8 +3,8 @@
 #![no_std]
 #![allow(deprecated)] // for DynamicNode
 
-use fandango::parse_pairs_as;
 use fandango::Parser;
+use fandango::parse_pairs_as;
 use fandango_core::typing::Node;
 
 extern crate alloc;
@@ -20,13 +20,13 @@ mod simple {
     use fandango_core::generation::util::Flattener;
     use fandango_core::generation::{Generated, InPlaceGenerated};
     use fandango_core::typing::{AsNode, AsStaticNode, Structured};
+    use fandango_core::visitor::Visitor;
     use fandango_core::visitor::navigation::{Advance, CountNodes, CountNodesWith, FindVisitor};
     use fandango_core::visitor::write::WriteVisitor;
-    use fandango_core::visitor::Visitor;
     use fandango_core::visitor_chain;
-    use rand::rngs::StdRng;
     use rand::Rng;
-    use rand::{rng, SeedableRng};
+    use rand::rngs::StdRng;
+    use rand::{SeedableRng, rng};
     use tuple_list::tuple_list;
 
     #[derive(Fandango)]
@@ -372,16 +372,16 @@ mod xml {
     use fandango_core::visitor::assignment::AssignmentVisitor;
 
     use fandango_core::dynamic::{DynamicNode, DynamicSampler};
+    use fandango_core::visitor::Visitor;
     use fandango_core::visitor::navigation::CountNodes;
     use fandango_core::visitor::write::WriteVisitor;
-    use fandango_core::visitor::Visitor;
     use fandango_derive::Fandango;
     use rand::rngs::StdRng;
-    use rand::{rng, SeedableRng};
+    use rand::{SeedableRng, rng};
 
     #[allow(dead_code)]
     #[derive(Fandango)]
-    #[fandango(grammar = "eval/grammars/xml.fan")]
+    #[fandango(grammar = "targets/grammars/xml.fan")]
     pub struct Xml;
 
     #[test]
@@ -430,10 +430,12 @@ mod xml {
         assert_eq!(first, second_clone);
         assert_ne!(second, second_clone);
 
-        assert!(AssignmentVisitor(first)
-            .visit(&mut second, 0)
-            .unwrap()
-            .is_break());
+        assert!(
+            AssignmentVisitor(first)
+                .visit(&mut second, 0)
+                .unwrap()
+                .is_break()
+        );
 
         assert_eq!(second, second_clone);
 

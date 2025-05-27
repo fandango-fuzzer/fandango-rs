@@ -118,9 +118,9 @@ impl Parse for FandangoDerivation {
         let mut parse = true;
         for attr in derived.attrs {
             let span = attr.span();
-            if let Meta::List(v) = attr.meta {
-                if let Some(ident) = v.path.get_ident() {
-                    if ident == "fandango" {
+            if let Meta::List(v) = attr.meta
+                && let Some(ident) = v.path.get_ident()
+                    && ident == "fandango" {
                         let args = v.parse_args_with(
                             Punctuated::<MetaNameValue, Token![,]>::parse_terminated,
                         )?;
@@ -157,21 +157,18 @@ impl Parse for FandangoDerivation {
                                         offsets.insert(offset_before, path);
                                         continue;
                                     }
-                                } else if ident == "parse" {
-                                    if let Expr::Lit(ExprLit {
+                                } else if ident == "parse"
+                                    && let Expr::Lit(ExprLit {
                                         lit: Lit::Bool(b), ..
                                     }) = arg.value
                                     {
                                         parse = b.value();
                                         continue;
                                     }
-                                }
                                 return Err(syn::Error::new(span, "Invalid fandango list."));
                             }
                         }
                     }
-                }
-            }
         }
         if offsets.is_empty() {
             return Err(syn::Error::new(input.span(), "Invalid fandango derivation; need at least 1 grammar specified. Use #[fandango(grammar = ...)]."));

@@ -25,19 +25,7 @@ jobs:
         run: cargo build --verbose --workspace
       - name: Run tests
         run: cargo test --verbose --workspace
-
-  baselines:
-    runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        toolchain:
-          - stable
-          - beta
-          - nightly
-    steps:
-      - uses: actions/checkout@v4
-      - run: rustup update ${{ matrix.toolchain }} && rustup default ${{ matrix.toolchain }}
-      - name: Build
+      - name: Build baselines
         run: cd baselines && cargo build --verbose --benches
 
   fmt:
@@ -52,6 +40,10 @@ jobs:
       - run: rustup component add rustfmt
       - name: Format
         run: cargo fmt --check
+      - name: Format baselines
+        run: pushd baselines && cargo build --verbose --benches && popd
+      - name: Format lm3s6965
+        run: pushd lm3s6965 && cargo build --verbose && popd
 
   check:
     runs-on: ubuntu-latest
@@ -67,12 +59,18 @@ jobs:
       - run: rustup component add clippy
       - name: Clippy
         run: cargo clippy --workspace --tests --benches -- -D warnings
+      - name: Clippy baselines
+        run: pushd baselines && clippy --workspace --tests --benches -- -D warnings && popd
 
   lm3s6965:
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        toolchain:
+          - nightly
     steps:
       - uses: actions/checkout@v4
-      - run: rustup update nightly && rustup default nightly
+      - run: rustup update ${{ matrix.toolchain }} && rustup default ${{ matrix.toolchain }}
       - run: rustup target add thumbv7m-none-eabi
       - name: Build
         run: cd lm3s6965-demo && cargo build
