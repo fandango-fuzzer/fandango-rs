@@ -43,7 +43,7 @@ jobs:
       - name: Format baselines
         run: pushd baselines && cargo build --verbose --benches && popd
       - name: Format lm3s6965
-        run: pushd lm3s6965 && cargo build --verbose && popd
+        run: pushd lm3s6965-demo && cargo build --verbose && popd
 
   check:
     runs-on: ubuntu-latest
@@ -58,7 +58,7 @@ jobs:
       - name: Clippy
         run: cargo clippy --workspace --tests --benches -- -D warnings
       - name: Clippy baselines
-        run: pushd baselines && clippy --workspace --tests --benches -- -D warnings && popd
+        run: pushd baselines && cargo clippy --workspace --tests --benches -- -D warnings && popd
 
   lm3s6965:
     runs-on: ubuntu-latest

@@ -56,9 +56,10 @@ pub trait VisitWith<'a, V>: Sized {
     /// # use std::marker::PhantomData;
     /// # use std::convert::Infallible;
     /// # use fandango_core::lang::FandangoNode;
-    /// # use fandango_core::typing::{AsNode, Discriminable, Node};
+    /// # use fandango_core::typing::{AsNode, AsNodeMut, Discriminable, Node};
     /// # use fandango_core::visitor::{MaybeVisitResult, VisitResult, VisitWith, VisitableChildren, Visitor};
     /// #
+    /// # #[derive(Clone)]
     /// # pub struct start;
     /// # impl Discriminable for start {
     /// #    fn discriminant(&self) -> usize {
@@ -103,6 +104,15 @@ pub trait VisitWith<'a, V>: Sized {
     ///         }
     ///     }
     /// }
+    /// #
+    /// # impl<'program> AsNodeMut<start> for TypeMut<'program> {
+    /// #    fn as_node_mut(&mut self) -> Option<&mut start> {
+    /// #        match self {
+    /// #            TypeMut::start(n) => Some(&mut *n),
+    /// #            // other children...
+    /// #        }
+    /// #    }
+    /// # }
     /// #
     /// # impl<'program> VisitableChildren<TypeMut<'program>> for TypeMut<'program> {
     /// #     fn visit_each<V>(self, visitor: V) -> VisitResult<V, TypeMut<'program>> where V: Visitor<TypeMut<'program>, Continue=V> {
