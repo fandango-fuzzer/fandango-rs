@@ -65,6 +65,8 @@ where
     for<'a> <B::Start as Node>::TypeMut<'a>: AsNodeMut<B::Start> + From<&'a mut B::Start>,
 {
     let mut group = c.benchmark_group(B::NAME);
+    group.sample_size(10); // our samples are small, but many
+
     // FANDANGO originally uses a depth limiter with depth 100.
     let mut generator = tuple_list!(DepthLimiter::new(B::program(), 100));
     let mut setup_generator = generator.clone();
@@ -87,9 +89,20 @@ where
     }
 
     let count = rngs.len() - 1;
-    let rngs = rngs.into_iter().step_by(count / 10).collect::<Vec<_>>();
+    let rngs = Vec::from_iter(rngs);
 
-    for (size, seeds) in rngs {
+    let grouped = rngs.chunks(count / 100).map(|chunk| {
+        let (sum, combined) =
+            chunk
+                .iter()
+                .fold((0, Vec::new()), |(sum, mut combined), (size, seq)| {
+                    combined.extend(seq.iter().copied());
+                    (sum + *size * seq.len(), combined)
+                });
+        (sum / combined.len(), combined)
+    });
+
+    for (size, seeds) in grouped {
         group.throughput(Throughput::Elements(size as u64));
 
         // raw generation
