@@ -41,9 +41,9 @@ jobs:
       - name: Format
         run: cargo fmt --check
       - name: Format baselines
-        run: pushd baselines && cargo build --verbose --benches && popd
+        run: pushd baselines && cargo fmt --check && popd
       - name: Format lm3s6965
-        run: pushd lm3s6965-demo && cargo build --verbose && popd
+        run: pushd lm3s6965-demo && cargo fmt --check && popd
 
   check:
     runs-on: ubuntu-latest
