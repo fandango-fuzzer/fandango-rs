@@ -17,7 +17,7 @@ use alloc::collections::{BTreeSet, VecDeque};
 use alloc::vec::Vec;
 use core::convert::Infallible;
 use core::ops::ControlFlow;
-use fandango::typing::{AsNodeRef, Node};
+use fandango::typing::{AsNodeMut, AsNodeRef, Node};
 use fandango::visitor::{VisitResult, VisitableChildren, Visitor};
 use fandango::Fandango;
 
@@ -53,7 +53,7 @@ where
     fn visit<'program, N>(mut self, node: &'program mut N, idx: usize) -> VisitResult<Self, T>
     where
         N: Node<TypeMut<'program> = T>,
-        T: From<&'program mut N>,
+        T: From<&'program mut N> + AsNodeMut<N>,
     {
         self.path.push_back(idx);
         let visited = T::from(node);
@@ -101,7 +101,7 @@ impl<T> Visitor<T> for ConstraintFixer<BTreeSet<nonterminal_id>> {
     fn visit<'program, N>(self, _node: &'program mut N, _idx: usize) -> VisitResult<Self, T>
     where
         N: Node<TypeMut<'program> = T>,
-        T: From<&'program mut N>,
+        T: From<&'program mut N> + AsNodeMut<N>,
     {
         Ok(ControlFlow::Continue(self)) // no fixes available for original fandango
     }
@@ -116,6 +116,7 @@ mod test {
     use core::ops::ControlFlow;
     use fandango::generation::Generated;
     use fandango::tuple_list::tuple_list;
+    use fandango::typing::Structured;
     use fandango::visitor::navigation::GoTo;
     use fandango::visitor::Visitor;
     use rand::rngs::StdRng;
@@ -125,7 +126,10 @@ mod test {
     #[allow(deprecated)]
     fn check_constraint() -> Result<(), Box<dyn Error>> {
         let mut rng = StdRng::seed_from_u64(0);
-        let mut generators = tuple_list!(DepthLimiter::new::<scriptsizec::Type<'static>>(50));
+        let mut generators = tuple_list!(DepthLimiter::new(
+            scriptsizec::nonterminal_start::ROOT.inner(),
+            50
+        ));
         let mut diff_count = 0;
         for _ in 0..100_000 {
             let mut tree = scriptsizec::nonterminal_start::generate(&mut rng, &mut generators, 0);

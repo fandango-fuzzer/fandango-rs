@@ -6,7 +6,7 @@
 
 use crate::generation::{DefaultGenerated, Generated, GeneratorTuple, InPlaceGenerated, Sampler};
 use crate::lang::{Operator, Symbol};
-use crate::typing::{AsNode, Discriminable, Node};
+use crate::typing::{AsNode, AsNodeMut, Discriminable, Node, OpaqueType};
 use crate::visitor::{MaybeVisitResult, VisitResult, VisitableChildren, Visitor};
 use alloc::boxed::Box;
 use alloc::vec;
@@ -340,12 +340,12 @@ where
     }
 }
 
-impl<'a, S, G> InPlaceGenerated<'a, S, G> for DynamicNode
+impl<S, G> InPlaceGenerated<S, G> for DynamicNode
 where
     S: Sampler<DynamicNode> + HasDynamicSampler,
     G: GeneratorTuple<DynamicNode, S>,
 {
-    fn generate_in_place(&'a mut self, sampler: &mut S, with: &mut G, depth: usize) {
+    fn generate_in_place(&mut self, sampler: &mut S, with: &mut G, depth: usize) {
         debug_assert_eq!(self.root, sampler.root());
         debug_assert_eq!(self.definition, sampler.definition());
 
@@ -393,6 +393,18 @@ impl Node for DynamicNode {
 
     fn children_mut(&mut self) -> Self::ChildrenRefMut<'_> {
         &mut self.content
+    }
+}
+
+impl AsNodeMut<DynamicNode> for DynamicNode {
+    fn as_node_mut(&mut self) -> Option<&mut DynamicNode> {
+        Some(self)
+    }
+}
+
+impl<'a> AsNodeMut<DynamicNode> for &'a mut DynamicNode {
+    fn as_node_mut(&mut self) -> Option<&mut DynamicNode> {
+        Some(self)
     }
 }
 
@@ -480,4 +492,8 @@ impl<'a> VisitableChildren<&'a mut DynamicNode> for &'a mut DynamicNode {
             Some(child) => Ok(visitor.visit(child, idx)),
         }
     }
+}
+
+impl OpaqueType for DynamicNode {
+    type Nodes = DynamicNode;
 }

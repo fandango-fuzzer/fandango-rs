@@ -459,7 +459,7 @@ pub trait Visitor<T> {
     fn visit<'program, N>(self, node: &'program mut N, idx: usize) -> VisitResult<Self, T>
     where
         N: Node<TypeMut<'program>=T>,
-        T: From<&'program mut N>;
+        T: From<&'program mut N> + AsNodeMut<N>;
 }
 
 pub type VisitResult<V, T>
@@ -555,7 +555,7 @@ where
     fn visit<'program, N>(mut self, node: &'program mut N, idx: usize) -> VisitResult<Self, T>
     where
         N: Node<TypeMut<'program>=T>,
-        T: From<&'program mut N>,
+        T: From<&'program mut N> + AsNodeMut<N>,
     {
         self.count += 1;
         T::from(node).visit_each(self)
@@ -603,7 +603,7 @@ where
     fn visit<'program, N>(self, node: &'program mut N, idx: usize) -> VisitResult<Self, T>
     where
         N: Node<TypeMut<'program>=T>,
-        T: From<&'program mut N>,
+        T: From<&'program mut N> + AsNodeMut<N>,
     {
         // create a list to track the parent->child index of each node
         let mut stack = Vec::new();
@@ -628,7 +628,7 @@ where
             fn visit<'program, N>(self, node: &'program mut N, idx: usize) -> VisitResult<Self, T>
             where
                 N: Node,
-                T: From<&'program mut N>,
+                T: From<&'program mut N> + AsNodeMut<N>,
             {
                 // if the child matches the predicate, return its index
                 if self.predicate(node) {
@@ -737,7 +737,7 @@ where
     fn visit<'program, N>(mut self, node: &'program mut N, _: usize) -> VisitResult<Self, T>
     where
         N: Node<TypeMut<'program>=T>,
-        T: From<&'program mut N>,
+        T: From<&'program mut N> + AsNodeMut<N>,
     {
         if self.count == self.target {
             return Ok(ControlFlow::Break(T::from(node)));

@@ -72,7 +72,7 @@ where
     fn visit<'program, N>(mut self, node: &'program mut N, idx: usize) -> VisitResult<Self, T>
     where
         N: Node<TypeMut<'program> = T>,
-        T: From<&'program mut N>,
+        T: From<&'program mut N> + AsNodeMut<N>,
     {
         self.path.push_back(idx);
         let visited = T::from(node);
@@ -106,7 +106,7 @@ impl<T> Visitor<T> for ConstraintVisitor<false> {
     fn visit<'program, N>(self, _node: &'program mut N, _idx: usize) -> VisitResult<Self, T>
     where
         N: Node<TypeMut<'program> = T>,
-        T: From<&'program mut N>,
+        T: From<&'program mut N> + AsNodeMut<N>,
     {
         Ok(ControlFlow::Continue(self)) // csv constraints are trivially true
     }
@@ -146,10 +146,10 @@ where
     fn visit<'program, N>(self, node: &'program mut N, _idx: usize) -> VisitResult<Self, T>
     where
         N: Node<TypeMut<'program> = T>,
-        T: From<&'program mut N>,
+        T: From<&'program mut N> + AsNodeMut<N>,
     {
         let mut visited = T::from(node);
-        if let Some(tree) = visited.as_node_mut() {
+        if let Some(tree) = AsNodeMut::<nonterminal_csv_records>::as_node_mut(&mut visited) {
             if let nonterminal_csv_records_0::variant_0(seq) = &mut tree.child_0 {
                 // this is horrible, but the compiler should be smart enough to see this
                 // is not needed and directly replace... hopefully
@@ -243,7 +243,7 @@ impl<'a, S, G, T> Visitor<T> for ConstraintFixer<'a, S, G, false> {
     fn visit<'program, N>(self, _node: &'program mut N, _idx: usize) -> VisitResult<Self, T>
     where
         N: Node<TypeMut<'program> = T>,
-        T: From<&'program mut N>,
+        T: From<&'program mut N> + AsNodeMut<N>,
     {
         Ok(ControlFlow::Continue(self)) // csv constraints are trivially true
     }
@@ -258,6 +258,7 @@ mod test {
     use core::ops::ControlFlow;
     use fandango::generation::Generated;
     use fandango::tuple_list::tuple_list;
+    use fandango::typing::Structured;
     use fandango::visitor::navigation::GoTo;
     use fandango::visitor::Visitor;
     use rand::rngs::StdRng;
@@ -266,7 +267,8 @@ mod test {
     #[test]
     fn check_constraint() -> Result<(), Box<dyn Error>> {
         let mut rng = StdRng::seed_from_u64(0);
-        let mut generators = tuple_list!(DepthLimiter::new::<csv::Type<'static>>(50));
+        let mut generators =
+            tuple_list!(DepthLimiter::new(csv::nonterminal_start::ROOT.inner(), 50));
         let mut diff_count = 0;
         for _ in 0..100_000 {
             let mut tree = csv::nonterminal_start::generate(&mut rng, &mut generators, 0);

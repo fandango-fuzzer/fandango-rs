@@ -94,7 +94,7 @@ where
     fn visit<'program, N>(mut self, node: &'program mut N, idx: usize) -> VisitResult<Self, T>
     where
         N: Node<TypeMut<'program> = T>,
-        T: From<&'program mut N>,
+        T: From<&'program mut N> + AsNodeMut<N>,
     {
         self.path.push_back(idx);
         let mut visited = T::from(node);
@@ -164,7 +164,7 @@ where
     fn visit<'program, N>(mut self, node: &'program mut N, _idx: usize) -> VisitResult<Self, T>
     where
         N: Node<TypeMut<'program> = T>,
-        T: From<&'program mut N>,
+        T: From<&'program mut N> + AsNodeMut<N>,
     {
         let visited = T::from(node);
         if let Some(label) = visited.as_node() {
@@ -186,7 +186,7 @@ impl<T> Visitor<T> for RestConstraintFixer<false> {
     fn visit<'program, N>(self, _node: &'program mut N, _idx: usize) -> VisitResult<Self, T>
     where
         N: Node<TypeMut<'program> = T>,
-        T: From<&'program mut N>,
+        T: From<&'program mut N> + AsNodeMut<N>,
     {
         Ok(ControlFlow::Continue(self)) // no fixes available for original fandango
     }
@@ -201,6 +201,7 @@ mod test {
     use core::ops::ControlFlow;
     use fandango::generation::Generated;
     use fandango::tuple_list::tuple_list;
+    use fandango::typing::Structured;
     use fandango::visitor::navigation::GoTo;
     use fandango::visitor::Visitor;
     use rand::rngs::StdRng;
@@ -210,7 +211,8 @@ mod test {
     #[allow(deprecated)]
     fn check_constraint() -> Result<(), Box<dyn Error>> {
         let mut rng = StdRng::seed_from_u64(0);
-        let mut generators = tuple_list!(DepthLimiter::new::<rest::Type<'static>>(50));
+        let mut generators =
+            tuple_list!(DepthLimiter::new(rest::nonterminal_start::ROOT.inner(), 50));
         let mut diff_count = 0;
         for _ in 0..100_000 {
             let mut tree = rest::nonterminal_start::generate(&mut rng, &mut generators, 0);

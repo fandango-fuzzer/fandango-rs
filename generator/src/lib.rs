@@ -216,8 +216,6 @@ pub fn derive_fandango_or_emit_error(
         all_node_names = quote! { (#node, #all_node_names) };
     }
 
-    let first_node = &node_names[0];
-
     let mut arrays = Vec::new();
     let mut referenced = Vec::new();
     let metadata = tokenize_metadata(
@@ -312,11 +310,6 @@ pub fn derive_fandango_or_emit_error(
             #(#node_names(&'program #node_names)),*
         }
 
-        impl ::fandango::typing::OpaqueType for Type<'_> {
-            type Nodes = #all_node_names;
-            const ROOT: &'static ::fandango::lang::Tagged<'static, ::fandango::lang::Program<'static>> = <#first_node as ::fandango::typing::Structured>::ROOT;
-        }
-
         #(
             impl<'program> ::fandango::typing::AsNodeRef<#node_names> for Type<'program> {
                 fn as_node(&self) -> Option<&#node_names> {
@@ -334,9 +327,18 @@ pub fn derive_fandango_or_emit_error(
             #(#node_names(&'program mut #node_names)),*
         }
 
+        impl ::fandango::typing::Discriminable for TypeMut<'_> {
+            fn discriminant(&self) -> usize {
+                match self {
+                    #(
+                        Self::#node_names(n) => n.discriminant(),
+                    )*
+                }
+            }
+        }
+
         impl ::fandango::typing::OpaqueType for TypeMut<'_> {
             type Nodes = #all_node_names;
-            const ROOT: &'static ::fandango::lang::Tagged<'static, ::fandango::lang::Program<'static>> = <#first_node as ::fandango::typing::Structured>::ROOT;
         }
 
         #(
@@ -390,13 +392,11 @@ pub fn derive_fandango_or_emit_error(
             }
         }
 
-        impl<'a, 'program, S, G> ::fandango::generation::InPlaceGenerated<'a, S, G> for TypeMut<'program>
+        impl<'program, S, G> ::fandango::generation::InPlaceGenerated<S, G> for TypeMut<'program>
         where
             #(#node_names: ::fandango::generation::Generated<S, G>),*,
-            #(::alloc::boxed::Box<#node_names>: ::fandango::generation::Generated<S, G>),*,
-            'program: 'a,
         {
-            fn generate_in_place(&'a mut self, sampler: &mut S, with: &mut G, depth: usize) {
+            fn generate_in_place(&mut self, sampler: &mut S, with: &mut G, depth: usize) {
                 match self.reborrow() {
                     #(TypeMut::#node_names(n) => {
                         *n = ::fandango::generation::Generated::generate(sampler, with, depth);

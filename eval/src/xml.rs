@@ -58,7 +58,7 @@ where
     fn visit<'program, N>(mut self, node: &'program mut N, idx: usize) -> VisitResult<Self, T>
     where
         N: Node<TypeMut<'program> = T>,
-        T: From<&'program mut N>,
+        T: From<&'program mut N> + AsNodeMut<N>,
     {
         self.path.push_back(idx);
         let visited = T::from(node);
@@ -140,7 +140,7 @@ where
     fn visit<'program, N>(self, node: &'program mut N, _idx: usize) -> VisitResult<Self, T>
     where
         N: Node<TypeMut<'program> = T>,
-        T: From<&'program mut N>,
+        T: From<&'program mut N> + AsNodeMut<N>,
     {
         let mut visited = T::from(node);
         if let Some(tree) = AsNodeMut::<nonterminal_xml_tree>::as_node_mut(&mut visited) {
@@ -199,7 +199,7 @@ where
     fn visit<'program, N>(self, node: &'program mut N, _idx: usize) -> VisitResult<Self, T>
     where
         N: Node<TypeMut<'program> = T>,
-        T: From<&'program mut N>,
+        T: From<&'program mut N> + AsNodeMut<N>,
     {
         let mut visited = T::from(node);
         if let Some(tree) = AsNodeMut::<nonterminal_xml_tree>::as_node_mut(&mut visited) {
@@ -217,13 +217,15 @@ where
 #[cfg(test)]
 mod test {
     use crate::operators::DepthLimiter;
-    use crate::xml;
+    use crate::{crossover, xml};
     use alloc::boxed::Box;
+    use alloc::collections::VecDeque;
+    use alloc::vec;
     use core::error::Error;
     use core::ops::ControlFlow;
     use fandango::generation::Generated;
     use fandango::tuple_list::tuple_list;
-    use fandango::typing::Node;
+    use fandango::typing::{Node, Structured};
     use fandango::visitor::navigation::GoTo;
     use fandango::visitor::Visitor;
     use rand::rngs::StdRng;
@@ -232,7 +234,8 @@ mod test {
     #[test]
     fn check_constraint() -> Result<(), Box<dyn Error>> {
         let mut rng = StdRng::seed_from_u64(0);
-        let mut generators = tuple_list!(DepthLimiter::new::<xml::Type<'static>>(50));
+        let mut generators =
+            tuple_list!(DepthLimiter::new(xml::nonterminal_start::ROOT.inner(), 50));
         let mut tag_diff_count = 0;
         let mut attr_diff_count = 0;
         for _ in 0..100_000 {
@@ -295,6 +298,28 @@ mod test {
         }
         assert_ne!(0, tag_diff_count);
         assert_ne!(0, attr_diff_count);
+        Ok(())
+    }
+
+    #[test]
+    fn crossover() -> Result<(), Box<dyn Error>> {
+        let mut rng = StdRng::seed_from_u64(0);
+
+        let mut first = xml::nonterminal_start::generate(&mut rng, &mut (), 0);
+        let mut second = xml::nonterminal_start::generate(&mut rng, &mut (), 0);
+        assert_ne!(first, second);
+
+        let mut choices = vec![VecDeque::from([0])];
+        let crossed = crossover!(
+            xml::nonterminal_start,
+            &mut first,
+            &mut second,
+            choices,
+            &mut rng
+        )?;
+        assert!(crossed);
+        assert_eq!(first, second);
+
         Ok(())
     }
 }

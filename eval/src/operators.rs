@@ -12,11 +12,16 @@
 
 use alloc::collections::VecDeque;
 use alloc::vec::Vec;
+use core::convert::Infallible;
 use core::marker::PhantomData;
-use fandango::generation::{Generated, Generator, GeneratorTuple, Sampler};
+use core::ops::ControlFlow;
+use fandango::generation::{Generated, Generator, GeneratorTuple, InPlaceGenerated, Sampler};
 use fandango::graph::IntoGraph;
-use fandango::lang::FandangoNode;
-use fandango::typing::{AsStaticNode, Node, OpaqueType, StaticDiscriminable};
+use fandango::lang::{FandangoNode, Program};
+use fandango::typing::{AsNodeMut, AsStaticNode, Node, StaticDiscriminable};
+use fandango::visitor::error::InvalidPath;
+use fandango::visitor::navigation::GoTo;
+use fandango::visitor::{VisitResult, VisitableChildren, Visitor};
 use hashbrown::HashMap;
 use petgraph::visit::{EdgeRef, IntoNodeReferences};
 use petgraph::Direction;
@@ -30,13 +35,10 @@ pub struct DepthLimiter<SP> {
     shortest_path: SP,
 }
 
-impl DepthLimiter<HashMap<FandangoNode<'static, 'static>, Vec<usize>>> {
+impl<'program, 'source> DepthLimiter<HashMap<FandangoNode<'program, 'source>, Vec<usize>>> {
     /// Produce a new depth limiter for the given opaque type.
-    pub fn new<T>(max_depth: usize) -> Self
-    where
-        T: OpaqueType,
-    {
-        let (_nonterminals, graph) = T::ROOT.inner().into_graph();
+    pub fn new(program: &'program Program<'source>, max_depth: usize) -> Self {
+        let (_nonterminals, graph) = program.into_graph();
 
         let mut depths = graph
             .node_references()
@@ -234,4 +236,157 @@ where
         }
         None
     }
+}
+
+/// Mutate a node, FANDANGO-style.
+pub fn mutate<'a, N, S, G>(
+    mutated: &'a mut N,
+    choices: &mut Vec<VecDeque<usize>>,
+    sampler: &mut S,
+    generator: &mut G,
+) -> Result<Option<N::TypeMut<'a>>, InvalidPath>
+where
+    N: Node + for<'b> GoTo<'b, Value = N::TypeMut<'b>>,
+    for<'b> N::TypeMut<'b>: InPlaceGenerated<S, G>,
+    S: Sampler<N>,
+{
+    if choices.is_empty() {
+        return Ok(None);
+    }
+
+    // pick any path for mutation
+    let mut path = choices.swap_remove(sampler.sample() % choices.len());
+
+    // prune paths which are invalidated; that is, removing paths which start with this one
+    choices.retain(|v| v.len() < path.len() || v.iter().zip(&path).any(|(a, b)| a != b));
+
+    let depth = path.len() - 1; // retain depth info
+    let idx = path.pop_front().unwrap();
+    let mut node = mutated.go_to(idx, path)?;
+
+    node.generate_in_place(sampler, generator, depth);
+
+    Ok(Some(node))
+}
+
+/// Scans a set of nodes for all instances of a given discriminant.
+pub struct NodeScan {
+    discriminant: usize,
+    path: VecDeque<usize>,
+    paths: Vec<VecDeque<usize>>,
+}
+
+impl NodeScan {
+    /// Create a new scanner for the given node.
+    pub fn new<O>() -> Self
+    where
+        O: StaticDiscriminable,
+    {
+        Self {
+            discriminant: O::DISCRIMINANT,
+            path: VecDeque::new(),
+            paths: Vec::new(),
+        }
+    }
+
+    /// Acquire the paths resulting from the search.
+    pub fn paths(self) -> Vec<VecDeque<usize>> {
+        self.paths
+    }
+}
+
+impl<T> Visitor<T> for NodeScan
+where
+    T: VisitableChildren<T>,
+{
+    type Continue = Self;
+    type Break = Infallible;
+    type Error = Infallible;
+
+    fn visit<'program, N>(mut self, node: &'program mut N, idx: usize) -> VisitResult<Self, T>
+    where
+        N: Node<TypeMut<'program> = T>,
+        T: From<&'program mut N> + AsNodeMut<N>,
+    {
+        self.path.push_back(idx);
+        if node.discriminant() == self.discriminant {
+            self.paths.push(self.path.clone());
+        }
+        let mut result = T::from(node).visit_each(self);
+        if let Ok(ControlFlow::Continue(visitor)) = &mut result {
+            visitor.path.pop_back();
+        }
+        result
+    }
+}
+
+/// Crossover a node, FANDANGO-style.
+///
+/// Due to limitations of the Rust type system, we have to keep this as a macro for now. :(
+#[macro_export]
+macro_rules! crossover {
+    ($crossed:ty, $mutated:expr, $base:expr, $choices:ident, $sampler:expr) => {
+        (|| {
+            let mut base_choices = $crate::operators::NodeScan::new::<$crossed>()
+                .visit($base, 0)
+                .unwrap()
+                .continue_value()
+                .unwrap()
+                .paths();
+            if base_choices.is_empty() {
+                return Result::<bool, ::fandango::visitor::error::InvalidPath>::Ok(false);
+            }
+
+            let mut filtered = ::alloc::vec::Vec::new();
+            for path in $choices.iter() {
+                let mut cloned = path.clone();
+                let idx = cloned.pop_front().unwrap();
+                let mut node = $mutated.go_to(idx, cloned)?;
+
+                if ::fandango::typing::AsNodeMut::<$crossed>::as_node_mut(&mut node).is_some() {
+                    filtered.push(path);
+                }
+            }
+            if filtered.is_empty() {
+                return Ok(false);
+            }
+
+            // pick any path for mutation
+            let mut path = filtered
+                .swap_remove(
+                    ::fandango::generation::Sampler::<$crossed>::sample($sampler) % $choices.len(),
+                )
+                .clone();
+            let mut base_path = base_choices
+                .swap_remove(
+                    ::fandango::generation::Sampler::<$crossed>::sample($sampler)
+                        % base_choices.len(),
+                )
+                .clone();
+
+            // prune paths which are invalidated; that is, removing paths which start with this one
+            $choices.retain(|v| v.len() < path.len() || v.iter().zip(&path).any(|(a, b)| a != b));
+
+            let idx = path.pop_front().unwrap();
+            let mut node = $mutated.go_to(idx, path)?;
+
+            let _ = base_path.pop_front().unwrap();
+            let mut base = $base.go_to(idx, base_path)?;
+
+            ::fandango::visitor::assignment::AssignmentVisitor(
+                ::fandango::typing::AsNodeMut::<$crossed>::as_node_mut(&mut base)
+                    .cloned()
+                    .unwrap(),
+            )
+            .visit(
+                ::fandango::typing::AsNodeMut::<$crossed>::as_node_mut(&mut node).unwrap(),
+                idx,
+            )
+            .unwrap()
+            .break_value()
+            .unwrap();
+
+            Ok(true)
+        })()
+    };
 }

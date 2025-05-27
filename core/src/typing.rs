@@ -76,7 +76,7 @@ pub trait StaticDiscriminable {
 }
 
 /// A node representing an entry in a grammar or a derivation tree.
-pub trait Node: Sized + AsNode + Discriminable {
+pub trait Node: Sized + AsNode + Discriminable + Clone {
     /// An enum which describes all possible nodes, and for which the following traits are
     /// implemented by generation (for `N::Type<'program>`):
     ///  - `From<&'program N>`
@@ -84,7 +84,6 @@ pub trait Node: Sized + AsNode + Discriminable {
     ///  - `From<&'program mut N>`
     ///  - `From<&'program mut Box<N>>`
     ///  - `From<N::TypeMut<'program>>`
-    ///  - `OpaqueType`
     type Type<'program>
     where
         Self: 'program;
@@ -186,10 +185,7 @@ pub trait AsNodeMut<N> {
 }
 
 /// An opaque type which represents a node.
-pub trait OpaqueType {
+pub trait OpaqueType: Discriminable {
     /// All the nodes that this type could refer to, in a Haskell-style tuple list.
     type Nodes;
-
-    /// The root node over all types; see [`Structured::ROOT`].
-    const ROOT: &'static Tagged<'static, Program<'static>>;
 }

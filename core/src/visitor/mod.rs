@@ -5,7 +5,7 @@ pub mod error;
 pub mod navigation;
 pub mod write;
 
-use crate::typing::Node;
+use crate::typing::{AsNodeMut, Node};
 use alloc::boxed::Box;
 use alloc::vec::Vec;
 use core::error::Error;
@@ -28,7 +28,7 @@ pub trait Visitor<T> {
     fn visit<'program, N>(self, node: &'program mut N, idx: usize) -> VisitResult<Self, T>
     where
         N: Node<TypeMut<'program> = T>,
-        T: From<&'program mut N>;
+        T: From<&'program mut N> + AsNodeMut<N>;
 }
 
 /// Visits an opaque node with the provided visitor.
@@ -38,10 +38,10 @@ pub trait VisitWith<'a, V>: Sized {
     ///
     /// ```
     /// # #![allow(non_camel_case_types)]
-    /// # struct start<'source>(std::marker::PhantomData<&'source ()>);
+    /// # struct start();
     /// #
-    /// pub enum TypeMut<'program, 'source> {
-    ///     start(&'program mut start<'source>),
+    /// pub enum TypeMut<'program> {
+    ///     start(&'program mut start),
     ///     // other variants...
     /// }
     /// ```
@@ -59,14 +59,14 @@ pub trait VisitWith<'a, V>: Sized {
     /// # use fandango_core::typing::{AsNode, Discriminable, Node};
     /// # use fandango_core::visitor::{MaybeVisitResult, VisitResult, VisitWith, VisitableChildren, Visitor};
     /// #
-    /// # pub struct start<'source>(PhantomData<&'source ()>);
-    /// # impl Discriminable for start<'_> {
+    /// # pub struct start;
+    /// # impl Discriminable for start {
     /// #    fn discriminant(&self) -> usize {
     /// #        0
     /// #    }
     /// # }
     /// #
-    /// # impl AsNode for start<'_> {
+    /// # impl AsNode for start {
     /// #     fn root(&self) -> FandangoNode<'static, 'static> {
     /// #         unimplemented!()
     /// #     }
@@ -76,9 +76,9 @@ pub trait VisitWith<'a, V>: Sized {
     /// #     }
     /// # }
     /// #
-    /// # impl<'source> Node for start<'source> {
+    /// # impl Node for start {
     /// #     type Type<'program> = () where Self: 'program;
-    /// #     type TypeMut<'program> = TypeMut<'program, 'source> where Self: 'program;
+    /// #     type TypeMut<'program> = TypeMut<'program> where Self: 'program;
     /// #     type ChildrenRef<'program> = () where Self: 'program;
     /// #     type ChildrenRefMut<'program> = () where Self: 'program;
     /// #
@@ -90,13 +90,13 @@ pub trait VisitWith<'a, V>: Sized {
     /// #         unimplemented!()
     /// #     }
     /// # }
-    /// pub enum TypeMut<'program, 'source> {
-    ///     start(&'program mut start<'source>),
+    /// pub enum TypeMut<'program> {
+    ///     start(&'program mut start),
     ///     // other children...
     /// }
     ///
-    /// impl<'program, 'source> TypeMut<'program, 'source> {
-    ///     fn reborrow<'a>(&'a mut self) -> TypeMut<'a, 'source> where 'source: 'a {
+    /// impl<'program> TypeMut<'program> {
+    ///     fn reborrow<'a>(&'a mut self) -> TypeMut<'a> {
     ///         match self {
     ///             TypeMut::start(n) => TypeMut::start(&mut *n),
     ///             // other children...
@@ -104,44 +104,43 @@ pub trait VisitWith<'a, V>: Sized {
     ///     }
     /// }
     /// #
-    /// # impl<'program, 'source> VisitableChildren<TypeMut<'program, 'source>> for TypeMut<'program, 'source> {
-    /// #     fn visit_each<V>(self, visitor: V) -> VisitResult<V, TypeMut<'program, 'source>> where V: Visitor<TypeMut<'program, 'source>, Continue=V> {
+    /// # impl<'program> VisitableChildren<TypeMut<'program>> for TypeMut<'program> {
+    /// #     fn visit_each<V>(self, visitor: V) -> VisitResult<V, TypeMut<'program>> where V: Visitor<TypeMut<'program>, Continue=V> {
     /// #         Ok(ControlFlow::Continue(visitor))
     /// #     }
     /// #
-    /// #     fn visit_each_reverse<V>(self, visitor: V) -> VisitResult<V, TypeMut<'program, 'source>> where V: Visitor<TypeMut<'program, 'source>, Continue=V> {
+    /// #     fn visit_each_reverse<V>(self, visitor: V) -> VisitResult<V, TypeMut<'program>> where V: Visitor<TypeMut<'program>, Continue=V> {
     /// #         unimplemented!()
     /// #     }
     /// #
-    /// #     fn visit_each_from<V>(self, visitor: V, idx: usize) -> VisitResult<V, TypeMut<'program, 'source>> where V: Visitor<TypeMut<'program, 'source>, Continue=V> {
+    /// #     fn visit_each_from<V>(self, visitor: V, idx: usize) -> VisitResult<V, TypeMut<'program>> where V: Visitor<TypeMut<'program>, Continue=V> {
     /// #         unimplemented!()
     /// #     }
     /// #
-    /// #     fn visit_each_reverse_from<V>(self, visitor: V, idx: usize) -> VisitResult<V, TypeMut<'program, 'source>> where V: Visitor<TypeMut<'program, 'source>, Continue=V> {
+    /// #     fn visit_each_reverse_from<V>(self, visitor: V, idx: usize) -> VisitResult<V, TypeMut<'program>> where V: Visitor<TypeMut<'program>, Continue=V> {
     /// #         unimplemented!()
     /// #     }
     /// #
-    /// #     fn visit_nth<V>(self, visitor: V, idx: usize) -> MaybeVisitResult<V, TypeMut<'program, 'source>> where V: Visitor<TypeMut<'program, 'source>> {
+    /// #     fn visit_nth<V>(self, visitor: V, idx: usize) -> MaybeVisitResult<V, TypeMut<'program>> where V: Visitor<TypeMut<'program>> {
     /// #         unimplemented!()
     /// #     }
     /// # }
     /// #
-    /// # impl<'program, 'source> From<&'program mut start<'source>> for TypeMut<'program, 'source> {
-    /// #     fn from(value: &'program mut start<'source>) -> Self {
+    /// # impl<'program> From<&'program mut start> for TypeMut<'program> {
+    /// #     fn from(value: &'program mut start) -> Self {
     /// #         Self::start(value)
     /// #     }
     /// # }
     /// #
-    /// impl<'a, 'program, 'source, V> VisitWith<'a, V> for TypeMut<'program, 'source>
+    /// impl<'a, 'program, V> VisitWith<'a, V> for TypeMut<'program>
     /// where
     ///     'program: 'a,
-    ///     'source: 'program,
     /// {
-    ///     type Visited = TypeMut<'a, 'source>;
+    ///     type Visited = TypeMut<'a>;
     ///
     ///     fn visit_with(&'a mut self, visitor: V, idx: usize) -> VisitResult<V, Self::Visited>
     ///     where
-    ///         V: Visitor<TypeMut<'a, 'source>> {
+    ///         V: Visitor<TypeMut<'a>> {
     ///         match self.reborrow() {
     ///             TypeMut::start(n) => visitor.visit(n, idx),
     ///             // other children...
@@ -162,7 +161,7 @@ pub trait VisitWith<'a, V>: Sized {
     ///     fn visit<'program, N>(self, node: &'program mut N, _: usize) -> VisitResult<Self, T>
     ///     where
     ///         N: Node<TypeMut<'program> = T>,
-    ///         T: From<&'program mut N>
+    ///         T: From<&'program mut N> + AsNodeMut<N>
     ///     {
     ///         T::from(node).visit_each(self)
     ///     }
@@ -170,8 +169,8 @@ pub trait VisitWith<'a, V>: Sized {
     ///
     /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
     /// // using later...
-    /// # let node = start(PhantomData);
-    /// let mut node: start<'static> = node; // node from generated source
+    /// # let node = start;
+    /// let mut node: start = node; // node from generated source
     /// let mut t = TypeMut::from(&mut node);
     /// // we can now perform the visitation multiple times
     /// t.visit_with(ToyVisitor, 0)?;
@@ -283,7 +282,7 @@ where
     fn visit<'program, N>(self, node: &'program mut N, idx: usize) -> VisitResult<Self, T>
     where
         N: Node<TypeMut<'program> = T>,
-        T: From<&'program mut N>,
+        T: From<&'program mut N> + AsNodeMut<N>,
     {
         Ok(match self {
             Either::Left(visitor) => match visitor.visit(node, idx).map_err(Either::Left)? {
@@ -346,7 +345,7 @@ macro_rules! visitor_chain {
             ::core::ops::ControlFlow::Continue(c) => ::core::result::Result::Err(::fandango::visitor::ChainError::UnexpectedContinue(c))?,
             ::core::ops::ControlFlow::Break(b) => b
         };
-        visitor_chain!(starting from next, $node, $idx, $($visitors),+)
+        visitor_chain!(@ next, $node, $idx, $($visitors),+)
     }};
 
     ($node:expr, $idx:expr, $visitor:expr, $($visitors:expr),+) => {{

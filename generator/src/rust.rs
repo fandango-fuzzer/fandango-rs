@@ -141,10 +141,13 @@ where
         } else {
             format_ident!("{name}_0")
         };
-        let child_type = if needs_indirection.contains(&(node_weight, child_weight)) {
-            quote! { ::alloc::boxed::Box<#child_name> }
+        let (child_type, prefix) = if needs_indirection.contains(&(node_weight, child_weight)) {
+            (
+                quote! { ::alloc::boxed::Box<#child_name> },
+                quote! { ::core::ops::DerefMut::deref_mut },
+            )
         } else {
-            quote! { #child_name }
+            (quote! { #child_name }, quote! {})
         };
 
         let from = from_boilerplate(&name);
@@ -172,7 +175,7 @@ where
                 where
                     V: ::fandango::visitor::Visitor<TypeMut<'program>, Continue = V>
                 {
-                    visitor.visit(&mut self.child_0, 0)
+                    visitor.visit(#prefix(&mut self.child_0), 0)
                 }
 
                 fn visit_each_reverse<V>(self, visitor: V) -> ::fandango::visitor::VisitResult<V, TypeMut<'program>>
@@ -205,7 +208,7 @@ where
                     V: ::fandango::visitor::Visitor<TypeMut<'program>>
                 {
                     if idx == 0 {
-                        Ok(visitor.visit(&mut self.child_0, 0))
+                        Ok(visitor.visit(#prefix(&mut self.child_0), 0))
                     } else {
                         Err(visitor)
                     }
@@ -332,7 +335,7 @@ impl<'program, 'source> IntoRustSource<FandangoGenContext<'_, '_, 'program, 'sou
             })
             .collect::<Vec<_>>();
 
-        let child_field_types = children
+        let (child_field_types, visit_prefixes) = children
             .iter()
             .zip(&child_types)
             .map(|((_, _, child, _), name)| {
@@ -340,13 +343,16 @@ impl<'program, 'source> IntoRustSource<FandangoGenContext<'_, '_, 'program, 'sou
                 match node_weight {
                     FandangoNode::Operator(op) => match op {
                         Operator::Kleene(_) | Operator::Plus(_) | Operator::Repeat(_, _, _) => {
-                            quote! { ::alloc::vec::Vec<#base> }
+                            (quote! { ::alloc::vec::Vec<#base> }, quote! {})
                         }
                         Operator::Option(_) => {
                             if needs_indirection.contains(&(node_weight, *child)) {
-                                quote! { ::core::option::Option<::alloc::boxed::Box<#base>> }
+                                (
+                                    quote! { ::core::option::Option<::alloc::boxed::Box<#base>> },
+                                    quote! { ::core::ops::DerefMut::deref_mut },
+                                )
                             } else {
-                                quote! { ::core::option::Option<#base> }
+                                (quote! { ::core::option::Option<#base> }, quote! {})
                             }
                         }
                         Operator::Symbol(_) => {
@@ -355,14 +361,17 @@ impl<'program, 'source> IntoRustSource<FandangoGenContext<'_, '_, 'program, 'sou
                     },
                     _ => {
                         if needs_indirection.contains(&(node_weight, *child)) {
-                            quote! { ::alloc::boxed::Box<#base> }
+                            (
+                                quote! { ::alloc::boxed::Box<#base> },
+                                quote! { ::core::ops::DerefMut::deref_mut },
+                            )
                         } else {
-                            base
+                            (base, quote! {})
                         }
                     }
                 }
             })
-            .collect::<Vec<_>>();
+            .collect::<(Vec<_>, Vec<_>)>();
 
         match node_weight {
             FandangoNode::String(orig) => {
@@ -485,7 +494,7 @@ impl<'program, 'source> IntoRustSource<FandangoGenContext<'_, '_, 'program, 'sou
                         where
                             V: ::fandango::visitor::Visitor<TypeMut<'program>, Continue = V> {
                             match self {
-                                #(#name::#child_variants(n) => visitor.visit(n, #indices)),*
+                                #(#name::#child_variants(n) => visitor.visit(#visit_prefixes(n), #indices)),*
                             }
                         }
 
@@ -501,7 +510,7 @@ impl<'program, 'source> IntoRustSource<FandangoGenContext<'_, '_, 'program, 'sou
                             V: ::fandango::visitor::Visitor<TypeMut<'program>, Continue = V>
                         {
                             match self {
-                                #(#name::#child_variants(n) if idx >= #indices => visitor.visit(n, idx)),*,
+                                #(#name::#child_variants(n) if idx >= #indices => visitor.visit(#visit_prefixes(n), idx)),*,
                                 _ => Ok(::core::ops::ControlFlow::Continue(visitor))
                             }
                         }
@@ -511,7 +520,7 @@ impl<'program, 'source> IntoRustSource<FandangoGenContext<'_, '_, 'program, 'sou
                             V: ::fandango::visitor::Visitor<TypeMut<'program>, Continue = V>
                         {
                             match self {
-                                #(#name::#child_variants(n) if idx <= #indices => visitor.visit(n, idx)),*,
+                                #(#name::#child_variants(n) if idx <= #indices => visitor.visit(#visit_prefixes(n), idx)),*,
                                 _ => Ok(::core::ops::ControlFlow::Continue(visitor))
                             }
                         }
@@ -524,7 +533,7 @@ impl<'program, 'source> IntoRustSource<FandangoGenContext<'_, '_, 'program, 'sou
                         where
                             V: ::fandango::visitor::Visitor<TypeMut<'program>> {
                             match self {
-                                #(#name::#child_variants(n) if idx == #indices => Ok(visitor.visit(n, idx))),*,
+                                #(#name::#child_variants(n) if idx == #indices => Ok(visitor.visit(#visit_prefixes(n), idx))),*,
                                 _ => Err(visitor)
                             }
                         }
@@ -570,6 +579,7 @@ impl<'program, 'source> IntoRustSource<FandangoGenContext<'_, '_, 'program, 'sou
             }
             FandangoNode::Operator(op) => {
                 assert_eq!(children.len(), 1);
+                let prefix = &visit_prefixes[0];
 
                 let range_check_fail = match op {
                     Operator::Repeat(_, start, end) => {
@@ -647,7 +657,7 @@ impl<'program, 'source> IntoRustSource<FandangoGenContext<'_, '_, 'program, 'sou
                             V: ::fandango::visitor::Visitor<TypeMut<'program>, Continue = V>
                         {
                             for (i, child) in self.children_mut().iter_mut().enumerate() {
-                                visitor = match visitor.visit(child, i)? {
+                                visitor = match visitor.visit(#prefix(child), i)? {
                                     ::core::ops::ControlFlow::Continue(visitor) => visitor,
                                     c => return Ok(c),
                                 }
@@ -660,7 +670,7 @@ impl<'program, 'source> IntoRustSource<FandangoGenContext<'_, '_, 'program, 'sou
                             V: ::fandango::visitor::Visitor<TypeMut<'program>, Continue = V>
                         {
                             for (i, child) in self.children_mut().iter_mut().enumerate().rev() {
-                                visitor = match visitor.visit(child, i)? {
+                                visitor = match visitor.visit(#prefix(child), i)? {
                                     ::core::ops::ControlFlow::Continue(visitor) => visitor,
                                     c => return Ok(c),
                                 }
@@ -673,7 +683,7 @@ impl<'program, 'source> IntoRustSource<FandangoGenContext<'_, '_, 'program, 'sou
                             V: ::fandango::visitor::Visitor<TypeMut<'program>, Continue=V>
                         {
                             for (i, child) in self.children_mut().iter_mut().skip(idx).enumerate().rev() {
-                                visitor = match visitor.visit(child, i)? {
+                                visitor = match visitor.visit(#prefix(child), i)? {
                                     ::core::ops::ControlFlow::Continue(visitor) => visitor,
                                     c => return Ok(c),
                                 }
@@ -686,7 +696,7 @@ impl<'program, 'source> IntoRustSource<FandangoGenContext<'_, '_, 'program, 'sou
                             V: ::fandango::visitor::Visitor<TypeMut<'program>, Continue=V>
                         {
                             for (i, child) in self.children_mut().iter_mut().skip(idx).enumerate() {
-                                visitor = match visitor.visit(child, i)? {
+                                visitor = match visitor.visit(#prefix(child), i)? {
                                     ::core::ops::ControlFlow::Continue(visitor) => visitor,
                                     c => return Ok(c),
                                 }
@@ -703,7 +713,7 @@ impl<'program, 'source> IntoRustSource<FandangoGenContext<'_, '_, 'program, 'sou
                             V: ::fandango::visitor::Visitor<TypeMut<'program>>
                         {
                             if let Some(node) = self.children_mut().iter_mut().nth(idx) {
-                                Ok(visitor.visit(node, idx))
+                                Ok(visitor.visit(#prefix(node), idx))
                             } else {
                                 Err(visitor)
                             }
@@ -760,6 +770,8 @@ impl<'program, 'source> IntoRustSource<FandangoGenContext<'_, '_, 'program, 'sou
                 child_names_rev.reverse();
                 let mut indices_rev = indices.clone();
                 indices_rev.reverse();
+                let mut prefixes_rev = visit_prefixes.clone();
+                prefixes_rev.reverse();
 
                 output.extend(quote! {
                     #[derive(Clone, Debug, Eq, PartialEq, Ord, PartialOrd, Hash)]
@@ -785,7 +797,7 @@ impl<'program, 'source> IntoRustSource<FandangoGenContext<'_, '_, 'program, 'sou
                             V: ::fandango::visitor::Visitor<TypeMut<'program>, Continue = V>,
                         {
                             #(
-                            let visitor = match visitor.visit(&mut self.#child_names, #indices)? {
+                            let visitor = match visitor.visit(#visit_prefixes(&mut self.#child_names), #indices)? {
                                 ::core::ops::ControlFlow::Continue(v) => v,
                                 c => return Ok(c),
                             };
@@ -798,7 +810,7 @@ impl<'program, 'source> IntoRustSource<FandangoGenContext<'_, '_, 'program, 'sou
                             V: ::fandango::visitor::Visitor<TypeMut<'program>, Continue = V>
                         {
                             #(
-                            let visitor = match visitor.visit(&mut self.#child_names_rev, #indices_rev)? {
+                            let visitor = match visitor.visit(#prefixes_rev(&mut self.#child_names_rev), #indices_rev)? {
                                 ::core::ops::ControlFlow::Continue(v) => v,
                                 c => return Ok(c),
                             };
@@ -812,7 +824,7 @@ impl<'program, 'source> IntoRustSource<FandangoGenContext<'_, '_, 'program, 'sou
                         {
                             #(
                             let visitor = if #indices_rev <= idx {
-                                match visitor.visit(&mut self.#child_names_rev, #indices_rev)? {
+                                match visitor.visit(#prefixes_rev(&mut self.#child_names_rev), #indices_rev)? {
                                     ::core::ops::ControlFlow::Continue(v) => v,
                                     c => return Ok(c),
                                 }
@@ -829,7 +841,7 @@ impl<'program, 'source> IntoRustSource<FandangoGenContext<'_, '_, 'program, 'sou
                         {
                             #(
                             let visitor = if idx <= #indices {
-                                match visitor.visit(&mut self.#child_names, #indices)? {
+                                match visitor.visit(#visit_prefixes(&mut self.#child_names), #indices)? {
                                     ::core::ops::ControlFlow::Continue(v) => v,
                                     c => return Ok(c),
                                 }
@@ -845,7 +857,7 @@ impl<'program, 'source> IntoRustSource<FandangoGenContext<'_, '_, 'program, 'sou
                             V: ::fandango::visitor::Visitor<TypeMut<'program>>,
                         {
                             match idx {
-                                #(#indices => Ok(visitor.visit(&mut self.#child_names, #indices))),*,
+                                #(#indices => Ok(visitor.visit(#visit_prefixes(&mut self.#child_names), #indices))),*,
                                 _ => Err(visitor)
                             }
                         }

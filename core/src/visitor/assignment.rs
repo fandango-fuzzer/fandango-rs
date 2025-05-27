@@ -21,7 +21,7 @@ where
     fn visit<'program, N>(self, node: &'program mut N, _idx: usize) -> VisitResult<Self, T>
     where
         N: Node<TypeMut<'program> = T>,
-        T: From<&'program mut N>,
+        T: From<&'program mut N> + AsNodeMut<N>,
     {
         match T::from(node).as_node_mut() {
             None => Err(self),

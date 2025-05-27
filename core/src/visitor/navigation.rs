@@ -1,6 +1,6 @@
 //! Utility visitors for navigating type trees.
 
-use crate::typing::Node;
+use crate::typing::{AsNodeMut, Node};
 use crate::visitor::error::InvalidPath;
 use crate::visitor::{VisitResult, VisitWith, VisitableChildren, Visitor};
 use alloc::collections::VecDeque;
@@ -102,7 +102,7 @@ where
     fn visit<'program, N>(mut self, node: &'program mut N, idx: usize) -> VisitResult<Self, T>
     where
         N: Node<TypeMut<'program> = T>,
-        T: From<&'program mut N>,
+        T: From<&'program mut N> + AsNodeMut<N>,
     {
         let actual_ptr = node as *const N as usize;
         if node.discriminant() == self.discriminant && actual_ptr == self.reference {
@@ -135,7 +135,7 @@ where
     fn visit<'program, N>(self, node: &'program mut N, idx: usize) -> VisitResult<Self, T>
     where
         N: Node<TypeMut<'program> = T>,
-        T: From<&'program mut N>,
+        T: From<&'program mut N> + AsNodeMut<N>,
     {
         let mut stack = Vec::new();
 
@@ -157,7 +157,7 @@ where
             fn visit<'program, N>(self, node: &'program mut N, idx: usize) -> VisitResult<Self, T>
             where
                 N: Node,
-                T: From<&'program mut N>,
+                T: From<&'program mut N> + AsNodeMut<N>,
             {
                 let actual_ptr = node as *const N as usize;
                 let discriminant = node.discriminant();
@@ -256,7 +256,7 @@ where
     fn visit<'program, N>(mut self, node: &'program mut N, _: usize) -> VisitResult<Self, T>
     where
         N: Node<TypeMut<'program> = T>,
-        T: From<&'program mut N>,
+        T: From<&'program mut N> + AsNodeMut<N>,
     {
         if self.count == self.target {
             return Ok(ControlFlow::Break(T::from(node)));
@@ -300,7 +300,7 @@ where
     fn visit<'program, N>(mut self, node: &'program mut N, _: usize) -> VisitResult<Self, T>
     where
         N: Node<TypeMut<'program> = T>,
-        T: From<&'program mut N>,
+        T: From<&'program mut N> + AsNodeMut<N>,
     {
         if let Some(next) = self.to.pop_front() {
             T::from(node)
@@ -335,7 +335,7 @@ impl<'a, N> GoTo<'a> for N
 where
     N: Node + 'a,
     GoToVisitor: Visitor<N::TypeMut<'a>, Break = N::TypeMut<'a>, Error = InvalidPath>,
-    N::TypeMut<'a>: From<&'a mut N>,
+    N::TypeMut<'a>: From<&'a mut N> + AsNodeMut<N>,
 {
     type Value = N::TypeMut<'a>;
 
@@ -408,7 +408,7 @@ where
     fn visit<'program, N>(mut self, node: &'program mut N, idx: usize) -> VisitResult<Self, T>
     where
         N: Node<TypeMut<'program> = T>,
-        T: From<&'program mut N>,
+        T: From<&'program mut N> + AsNodeMut<N>,
     {
         self.count += 1;
         GoToVisitor::new(core::mem::take(&mut self.from))
@@ -437,7 +437,7 @@ impl<'a, N> CountNodes<'a> for N
 where
     N: Node + 'a,
     NodeCountVisitor: Visitor<N::TypeMut<'a>, Continue = NodeCountVisitor, Error = InvalidPath>,
-    N::TypeMut<'a>: From<&'a mut N>,
+    N::TypeMut<'a>: From<&'a mut N> + AsNodeMut<N>,
 {
     fn count_nodes(&'a mut self) -> usize {
         NodeCountVisitor::new()
@@ -505,7 +505,7 @@ where
     fn visit<'program, N>(mut self, node: &'program mut N, idx: usize) -> VisitResult<Self, T>
     where
         N: Node<TypeMut<'program> = T>,
-        T: From<&'program mut N>,
+        T: From<&'program mut N> + AsNodeMut<N>,
     {
         self.count += 1;
         GoToVisitor::new(core::mem::take(&mut self.from))
@@ -534,7 +534,7 @@ impl<'a, N> CountBytes<'a> for N
 where
     N: Node + 'a,
     ByteCountVisitor: Visitor<N::TypeMut<'a>, Continue = ByteCountVisitor, Error = InvalidPath>,
-    N::TypeMut<'a>: From<&'a mut N>,
+    N::TypeMut<'a>: From<&'a mut N> + AsNodeMut<N>,
 {
     fn count_bytes(&'a mut self) -> usize {
         ByteCountVisitor::new()
