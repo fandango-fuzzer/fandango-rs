@@ -53,3 +53,12 @@ jobs:
       - run: rustup component add clippy
       - name: Clippy
         run: cargo clippy --workspace --tests --benches -- -D warnings
+
+  lm3s6965:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: rustup update stable && rustup default stable
+      - run: rustup target add thumbv7m-none-eabi
+      - name: Build
+        run: cd lm3s6965-demo && cargo build

@@ -28,6 +28,7 @@ mod app {
     use cortex_m_semihosting::heprintln;
     use fandango::generation::Generated;
     use fandango::tuple_list::tuple_list;
+    use fandango::typing::Structured;
     use fandango::visitor::write::WriteVisitor;
     use fandango::visitor::Visitor;
     use fandango_eval::operators::DepthLimiter;
@@ -57,7 +58,7 @@ mod app {
     #[idle]
     fn idle(_: idle::Context) -> ! {
         let mut rng = rand::rngs::StdRng::from_seed([0u8; 32]);
-        let limiter = DepthLimiter::new::<xml::Type<'static>>(100);
+        let limiter = DepthLimiter::new(xml::nonterminal_start::ROOT.inner(), 100);
         let mut generators = tuple_list!(limiter);
         for _ in 0..10_000 {
             let mut start = xml::nonterminal_start::generate(&mut rng, &mut generators, 0);
