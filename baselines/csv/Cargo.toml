@@ -1,0 +1,11 @@
+[package]
+name = "csv"
+version = "0.0.0"
+edition = "2024"
+publish = false
+
+[dependencies]
+fandango.workspace = true
+fandango-targets = { workspace = true, features = ["csv"] }
+
+common = { path = "../common" }

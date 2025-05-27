@@ -1,5 +1,5 @@
 [package]
-name = "fandango-eval"
+name = "fandango-targets"
 version.workspace = true
 edition.workspace = true
 authors.workspace = true

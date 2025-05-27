@@ -1,10 +1,11 @@
 [package]
-name = "csv"
+name = "rest"
 version = "0.0.0"
 edition = "2024"
 publish = false
 
 [dependencies]
+fandango.workspace = true
+fandango-targets = { workspace = true, features = ["rest"] }
+
 common = { path = "../common" }
-fandango = { path = "../../.." }
-fandango-eval = { path = "../..", features = ["csv"] }

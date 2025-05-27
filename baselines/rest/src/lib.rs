@@ -9,23 +9,23 @@ use core::convert::Infallible;
 use fandango::generation::{Generated, Sampler};
 use fandango::typing::Structured;
 use fandango::visitor::Visitor;
-use fandango_eval::operators::mutate;
-use fandango_eval::{Checker, crossover, csv};
+use fandango_targets::operators::mutate;
+use fandango_targets::{Checker, crossover, rest};
 
-pub struct CsvBenchmark(Infallible);
+pub struct Benchmark(Infallible);
 
 #[allow(deprecated)]
-impl BenchmarkSuite<StdSampler, StdGenerator> for CsvBenchmark {
-    type Start = csv::nonterminal_start;
+impl BenchmarkSuite<StdSampler, StdGenerator> for Benchmark {
+    type Start = rest::nonterminal_start;
 
-    const NAME: &'static str = "csv";
+    const NAME: &'static str = "rest";
 
     fn generate(sampler: &mut StdSampler, generator: &mut StdGenerator) -> Self::Start {
-        csv::nonterminal_start::generate(sampler, generator, 0)
+        rest::nonterminal_start::generate(sampler, generator, 0)
     }
 
-    fn fix(item: &mut Self::Start, sampler: &mut StdSampler, generator: &mut StdGenerator) {
-        csv::ConstraintFixer::evaluated(sampler, generator)
+    fn fix(item: &mut Self::Start, _sampler: &mut StdSampler, _generator: &mut StdGenerator) {
+        rest::ConstraintFixer::evaluated()
             .visit(item, 0)
             .unwrap()
             .continue_value()
@@ -33,7 +33,7 @@ impl BenchmarkSuite<StdSampler, StdGenerator> for CsvBenchmark {
     }
 
     fn check(item: &mut Self::Start) -> Vec<VecDeque<usize>> {
-        csv::ConstraintVisitor::evaluated()
+        rest::ConstraintVisitor::evaluated()
             .visit(item, 0)
             .unwrap()
             .continue_value()
@@ -56,17 +56,11 @@ impl BenchmarkSuite<StdSampler, StdGenerator> for CsvBenchmark {
         choices: &mut Vec<VecDeque<usize>>,
         sampler: &mut StdSampler,
     ) -> bool {
-        crossover!(
-            csv::nonterminal_csv_string_list,
-            item,
-            other,
-            choices,
-            sampler
-        )
-        .unwrap()
+        crossover!(rest::nonterminal_id, item, other, choices, sampler).unwrap()
+            || crossover!(rest::nonterminal_underline, item, other, choices, sampler).unwrap()
     }
 
     fn program() -> &'static fandango::lang::Program<'static> {
-        csv::nonterminal_start::ROOT.inner()
+        rest::nonterminal_start::ROOT.inner()
     }
 }

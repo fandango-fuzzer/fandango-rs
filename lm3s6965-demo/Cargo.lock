@@ -242,16 +242,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "fandango-eval"
-version = "0.1.0"
-dependencies = [
- "embedded-io",
- "fandango",
- "hashbrown 0.15.3",
- "petgraph",
-]
-
-[[package]]
 name = "fandango-generator"
 version = "0.1.0"
 dependencies = [
@@ -262,6 +252,16 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 2.0.101",
+]
+
+[[package]]
+name = "fandango-targets"
+version = "0.1.0"
+dependencies = [
+ "embedded-io",
+ "fandango",
+ "hashbrown 0.15.3",
+ "petgraph",
 ]
 
 [[package]]
@@ -375,7 +375,7 @@ dependencies = [
  "cortex-m-semihosting",
  "embedded-alloc",
  "fandango",
- "fandango-eval",
+ "fandango-targets",
  "lm3s6965",
  "panic-semihosting",
  "rand",

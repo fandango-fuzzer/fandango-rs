@@ -5,4 +5,7 @@ edition = "2024"
 publish = false
 
 [dependencies]
-fandango-eval = { path = "../..", features = ["scriptsizec"] }
+fandango.workspace = true
+fandango-targets.workspace = true
+
+common = { path = "../common" }

@@ -183,9 +183,16 @@ where
 
 /// A visitor which applies fixes based on the constraints in the REST grammar.
 #[derive(Debug, Default)]
-pub struct RestConstraintFixer<const FIXED: bool>(());
+pub struct ConstraintFixer<const FIXED: bool>(());
 
-impl<T> Visitor<T> for RestConstraintFixer<false> {
+impl ConstraintFixer<false> {
+    /// Construct this fixer in the form that was originally evaluated in FANDANGO.
+    pub fn evaluated() -> Self {
+        Self(())
+    }
+}
+
+impl<T> Visitor<T> for ConstraintFixer<false> {
     type Continue = Self;
     type Break = Infallible;
     type Error = Infallible;

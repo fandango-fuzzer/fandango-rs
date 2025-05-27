@@ -1,0 +1,11 @@
+[package]
+name = "xml"
+version = "0.0.0"
+edition = "2024"
+publish = false
+
+[dependencies]
+fandango.workspace = true
+fandango-targets.workspace = true
+
+common = { path = "../common" }

@@ -1,8 +1,0 @@
-[package]
-name = "rest"
-version = "0.0.0"
-edition = "2024"
-publish = false
-
-[dependencies]
-fandango-eval = { path = "../..", features = ["rest"] }

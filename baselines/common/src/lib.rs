@@ -9,7 +9,7 @@ use criterion::{BatchSize, BenchmarkId, Criterion, Throughput};
 use fandango::lang::{FandangoNode, Program};
 use fandango::tuple_list::{tuple_list, tuple_list_type};
 use fandango::visitor::navigation::{CountNodes, CountNodesWith};
-use fandango_eval::operators::DepthLimiter;
+use fandango_targets::operators::DepthLimiter;
 use hashbrown::HashMap;
 use rand::SeedableRng;
 use rand::rngs::StdRng;

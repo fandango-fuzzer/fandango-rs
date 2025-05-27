@@ -1,7 +1,7 @@
 #![allow(missing_docs)]
 #![allow(deprecated)] // for DynamicNode
 
-use criterion::{black_box, criterion_group, criterion_main, Criterion};
+use criterion::{Criterion, black_box, criterion_group, criterion_main};
 use fandango_core::graph::IntoGraph;
 use fandango_core::lang::Program;
 
@@ -26,14 +26,14 @@ fn graph_simple(c: &mut Criterion) {
 }
 
 mod simple {
-    use criterion::{black_box, BatchSize, BenchmarkId, Criterion, Throughput};
+    use criterion::{BatchSize, BenchmarkId, Criterion, Throughput, black_box};
     use fandango_core::dynamic::{DynamicNode, DynamicSampler};
     use fandango_core::generation::util::Flattener;
     use fandango_core::generation::{Generated, InPlaceGenerated};
     use fandango_core::typing::{AsNode, AsStaticNode, Node, Structured};
+    use fandango_core::visitor::Visitor;
     use fandango_core::visitor::navigation::{Advance, CountNodes};
     use fandango_core::visitor::write::WriteVisitor;
-    use fandango_core::visitor::Visitor;
     use fandango_derive::Fandango;
     use rand::{Rng, SeedableRng};
     use std::collections::BTreeMap;
@@ -255,7 +255,7 @@ mod simple {
     }
 }
 
-pub const XML_GRAMMAR: &str = include_str!("../eval/grammars/xml.fan");
+pub const XML_GRAMMAR: &str = include_str!("../targets/grammars/xml.fan");
 
 fn parse_xml(c: &mut Criterion) {
     c.bench_function("parse xml grammar", |b| {
@@ -274,14 +274,14 @@ fn graph_xml(c: &mut Criterion) {
 }
 
 mod xml {
-    use criterion::{black_box, BatchSize, BenchmarkId, Criterion, Throughput};
+    use criterion::{BatchSize, BenchmarkId, Criterion, Throughput, black_box};
     use fandango_core::dynamic::{DynamicNode, DynamicSampler};
     use fandango_core::generation::util::Flattener;
     use fandango_core::generation::{Generated, InPlaceGenerated};
     use fandango_core::typing::{AsNode, AsStaticNode, Structured};
+    use fandango_core::visitor::Visitor;
     use fandango_core::visitor::navigation::{Advance, CountNodes};
     use fandango_core::visitor::write::WriteVisitor;
-    use fandango_core::visitor::Visitor;
     use fandango_derive::Fandango;
     use rand::{Rng, SeedableRng};
     use std::collections::BTreeMap;

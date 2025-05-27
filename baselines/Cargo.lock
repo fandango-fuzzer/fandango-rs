@@ -132,7 +132,7 @@ version = "0.0.0"
 dependencies = [
  "criterion",
  "fandango",
- "fandango-eval",
+ "fandango-targets",
  "hashbrown",
  "rand",
 ]
@@ -226,7 +226,7 @@ version = "0.0.0"
 dependencies = [
  "common",
  "fandango",
- "fandango-eval",
+ "fandango-targets",
 ]
 
 [[package]]
@@ -291,16 +291,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "fandango-eval"
-version = "0.1.0"
-dependencies = [
- "embedded-io",
- "fandango",
- "hashbrown",
- "petgraph",
-]
-
-[[package]]
 name = "fandango-generator"
 version = "0.1.0"
 dependencies = [
@@ -311,6 +301,16 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn",
+]
+
+[[package]]
+name = "fandango-targets"
+version = "0.1.0"
+dependencies = [
+ "embedded-io",
+ "fandango",
+ "hashbrown",
+ "petgraph",
 ]
 
 [[package]]
@@ -629,7 +629,9 @@ checksum = "2b15c43186be67a4fd63bee50d0303afffcef381492ebe2c5d87f324e1b8815c"
 name = "rest"
 version = "0.0.0"
 dependencies = [
- "fandango-eval",
+ "common",
+ "fandango",
+ "fandango-targets",
 ]
 
 [[package]]
@@ -657,7 +659,9 @@ dependencies = [
 name = "scriptsizec"
 version = "0.0.0"
 dependencies = [
- "fandango-eval",
+ "common",
+ "fandango",
+ "fandango-targets",
 ]
 
 [[package]]
@@ -938,7 +942,9 @@ checksum = "589f6da84c646204747d1270a2a5661ea66ed1cced2631d546fdfb155959f9ec"
 name = "xml"
 version = "0.0.0"
 dependencies = [
- "fandango-eval",
+ "common",
+ "fandango",
+ "fandango-targets",
 ]
 
 [[package]]

@@ -26,6 +26,9 @@ type_alias_bounds = "allow"
 missing_docs = "warn"
 
 [workspace.dependencies]
+fandango = { path = ".." }
+fandango-targets = { path = "../targets" }
+
 criterion = { version = "0.6.0", features = ["html_reports"] }
 hashbrown = { version = "0.15.2", default-features = false }
 rand = { version = "0.9.1", default-features = false }
