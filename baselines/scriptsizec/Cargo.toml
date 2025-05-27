@@ -6,6 +6,6 @@ publish = false
 
 [dependencies]
 fandango.workspace = true
-fandango-targets.workspace = true
+fandango-targets = { workspace = true, features = ["scriptsizec"] }
 
 common = { path = "../common" }

@@ -120,7 +120,7 @@ pub struct ConstraintFixer<'a, S, G, const CORRECT: bool> {
 
 impl<'a, S, G> ConstraintFixer<'a, S, G, false> {
     /// Construct this fixer in the form that was originally evaluated in FANDANGO.
-    #[deprecated(note = "This is an incomplete fixer, used for evaluation purposes.")]
+    #[deprecated(note = "The XML grammar fixer from FANDANGO is weaker than it could be.")]
     pub fn evaluated(sampler: &'a mut S, generator: &'a mut G) -> Self {
         Self { sampler, generator }
     }

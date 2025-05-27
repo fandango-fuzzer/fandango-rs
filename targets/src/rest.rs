@@ -187,6 +187,7 @@ pub struct ConstraintFixer<const FIXED: bool>(());
 
 impl ConstraintFixer<false> {
     /// Construct this fixer in the form that was originally evaluated in FANDANGO.
+    #[deprecated(note = "The REST grammar originally does not represent label deduplication.")]
     pub fn evaluated() -> Self {
         Self(())
     }

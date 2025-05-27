@@ -37,7 +37,7 @@ pub struct ConstraintVisitor<S> {
 
 impl ConstraintVisitor<BTreeSet<nonterminal_id>> {
     /// Construct this visitor in the form that was originally evaluated in FANDANGO.
-    #[deprecated(note = "This implements the incorrect version of scriptsizec.fan constraints.")]
+    #[deprecated(note = "The ScriptSizeC grammar originally does not implement scoping.")]
     pub fn evaluated() -> Self {
         Self::default()
     }
@@ -98,6 +98,16 @@ where
 #[allow(dead_code)]
 pub struct ConstraintFixer<S> {
     scope: S,
+}
+
+impl ConstraintFixer<BTreeSet<nonterminal_id>> {
+    /// Construct this fixer in the form that was originally evaluated in FANDANGO.
+    #[deprecated(note = "The ScriptSizeC grammar originally does not implement scoping.")]
+    pub fn evaluated() -> Self {
+        Self {
+            scope: BTreeSet::new(),
+        }
+    }
 }
 
 impl<T> Visitor<T> for ConstraintFixer<BTreeSet<nonterminal_id>> {
