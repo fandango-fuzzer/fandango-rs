@@ -23,13 +23,14 @@ use fandango::visitor::error::InvalidPath;
 use fandango::visitor::navigation::GoTo;
 use fandango::visitor::{VisitResult, VisitableChildren, Visitor};
 use hashbrown::HashMap;
-use petgraph::visit::{EdgeRef, IntoNodeReferences};
 use petgraph::Direction;
+use petgraph::visit::{EdgeRef, IntoNodeReferences};
 
 /// A generator which restricts the depth of the generated grammar.
 ///
 /// This generator works by pre-calculating the shortest path(s) from each alternative, then forcing
 /// alternative selection once a specified depth is reached.
+#[derive(Clone, Debug)]
 pub struct DepthLimiter<SP> {
     max_depth: usize,
     shortest_path: SP,
@@ -212,7 +213,7 @@ where
     #[inline(always)]
     fn shortest_path(&self, sampler: &mut S) -> Option<usize> {
         if N::DISCRIMINANT == T::DISCRIMINANT {
-            let options = &self.0 .1;
+            let options = &self.0.1;
             if options.is_empty() {
                 None
             } else {
@@ -341,7 +342,7 @@ macro_rules! crossover {
             for path in $choices.iter() {
                 let mut cloned = path.clone();
                 let idx = cloned.pop_front().unwrap();
-                let mut node = $mutated.go_to(idx, cloned)?;
+                let mut node = ::fandango::visitor::navigation::GoTo::go_to($mutated, idx, cloned)?;
 
                 if ::fandango::typing::AsNodeMut::<$crossed>::as_node_mut(&mut node).is_some() {
                     filtered.push(path);
@@ -368,10 +369,10 @@ macro_rules! crossover {
             $choices.retain(|v| v.len() < path.len() || v.iter().zip(&path).any(|(a, b)| a != b));
 
             let idx = path.pop_front().unwrap();
-            let mut node = $mutated.go_to(idx, path)?;
+            let mut node = ::fandango::visitor::navigation::GoTo::go_to($mutated, idx, path)?;
 
             let _ = base_path.pop_front().unwrap();
-            let mut base = $base.go_to(idx, base_path)?;
+            let mut base = ::fandango::visitor::navigation::GoTo::go_to($base, idx, base_path)?;
 
             ::fandango::visitor::assignment::AssignmentVisitor(
                 ::fandango::typing::AsNodeMut::<$crossed>::as_node_mut(&mut base)

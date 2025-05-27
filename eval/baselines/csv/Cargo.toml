@@ -1,0 +1,10 @@
+[package]
+name = "csv"
+version = "0.0.0"
+edition = "2024"
+publish = false
+
+[dependencies]
+common = { path = "../common" }
+fandango = { path = "../../.." }
+fandango-eval = { path = "../..", features = ["csv"] }

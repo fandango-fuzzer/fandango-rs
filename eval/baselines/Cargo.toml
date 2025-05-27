@@ -1,0 +1,31 @@
+[package]
+name = "baselines"
+version = "0.0.0"
+edition = "2024"
+publish = false
+
+[dependencies]
+csv = { path = "csv" }
+rest = { path = "rest" }
+scriptsizec = { path = "scriptsizec" }
+xml = { path = "xml" }
+
+[dev-dependencies]
+common = { path = "common" }
+
+criterion.workspace = true
+
+[workspace]
+members = [".", "common", "csv", "rest", "scriptsizec", "xml"]
+resolver = "3"
+
+[workspace.lints.rust]
+bindings_with_variant_name = "allow"
+type_alias_bounds = "allow"
+
+missing_docs = "warn"
+
+[workspace.dependencies]
+criterion = { version = "0.6.0", features = ["html_reports"] }
+hashbrown = { version = "0.15.2", default-features = false }
+rand = { version = "0.9.1", default-features = false }

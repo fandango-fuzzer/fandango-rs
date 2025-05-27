@@ -13,13 +13,14 @@
 //!
 //! Note that this constraint set is erroneous; scope tracking is not correctly implemented.
 
+use crate::Checker;
 use alloc::collections::{BTreeSet, VecDeque};
 use alloc::vec::Vec;
 use core::convert::Infallible;
 use core::ops::ControlFlow;
+use fandango::Fandango;
 use fandango::typing::{AsNodeMut, AsNodeRef, Node};
 use fandango::visitor::{VisitResult, VisitableChildren, Visitor};
-use fandango::Fandango;
 
 /// Base for the ScriptSizeC grammar stored in ssc.fan.
 #[derive(Fandango)]
@@ -39,6 +40,12 @@ impl ConstraintVisitor<BTreeSet<nonterminal_id>> {
     #[deprecated(note = "This implements the incorrect version of scriptsizec.fan constraints.")]
     pub fn evaluated() -> Self {
         Self::default()
+    }
+}
+
+impl<S> Checker for ConstraintVisitor<S> {
+    fn violations(self) -> Vec<VecDeque<usize>> {
+        self.violations
     }
 }
 
@@ -117,10 +124,10 @@ mod test {
     use fandango::generation::Generated;
     use fandango::tuple_list::tuple_list;
     use fandango::typing::Structured;
-    use fandango::visitor::navigation::GoTo;
     use fandango::visitor::Visitor;
-    use rand::rngs::StdRng;
+    use fandango::visitor::navigation::GoTo;
     use rand::SeedableRng;
+    use rand::rngs::StdRng;
 
     #[test]
     #[allow(deprecated)]

@@ -6,8 +6,6 @@ authors.workspace = true
 publish = false
 
 [features]
-default = ["csv", "rest", "scriptsizec", "xml"]
-
 csv = []
 rest = []
 scriptsizec = []

@@ -11,15 +11,16 @@
 //! ;
 //! ```
 
+use crate::Checker;
 use alloc::borrow::ToOwned;
 use alloc::collections::{BTreeSet, VecDeque};
 use alloc::vec::Vec;
 use core::convert::Infallible;
 use core::ops::ControlFlow;
+use fandango::Fandango;
 use fandango::generation::Generated;
 use fandango::typing::{AsNodeMut, AsNodeRef, Node};
 use fandango::visitor::{VisitResult, VisitableChildren, Visitor};
-use fandango::Fandango;
 
 /// Base for the XML grammar stored in xml.fan.
 #[derive(Fandango)]
@@ -42,6 +43,12 @@ impl ConstraintVisitor {
     /// Construct this visitor in the form that produces correctly formatted data.
     pub fn corrected() -> Self {
         ConstraintVisitor::default()
+    }
+}
+
+impl Checker for ConstraintVisitor {
+    fn violations(self) -> Vec<VecDeque<usize>> {
+        self.violations
     }
 }
 
@@ -226,10 +233,10 @@ mod test {
     use fandango::generation::Generated;
     use fandango::tuple_list::tuple_list;
     use fandango::typing::{Node, Structured};
-    use fandango::visitor::navigation::GoTo;
     use fandango::visitor::Visitor;
-    use rand::rngs::StdRng;
+    use fandango::visitor::navigation::GoTo;
     use rand::SeedableRng;
+    use rand::rngs::StdRng;
 
     #[test]
     fn check_constraint() -> Result<(), Box<dyn Error>> {
