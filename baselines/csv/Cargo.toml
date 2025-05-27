@@ -9,3 +9,6 @@ fandango.workspace = true
 fandango-targets = { workspace = true, features = ["csv"] }
 
 common = { path = "../common" }
+
+[lints]
+workspace = true

@@ -304,7 +304,7 @@ where
                             sampler.with_definition(FandangoNode::from(sym)),
                             with,
                             depth,
-                        )
+                        );
                     }
                 };
                 let sym = FandangoNode::from(sym);

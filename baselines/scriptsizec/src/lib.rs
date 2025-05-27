@@ -1,3 +1,5 @@
+//! Benchmarking definitions for the ScriptSizeC grammar.
+
 #![no_std]
 
 extern crate alloc;
@@ -6,12 +8,13 @@ use alloc::collections::VecDeque;
 use alloc::vec::Vec;
 use common::{BenchmarkSuite, StdGenerator, StdSampler};
 use core::convert::Infallible;
-use fandango::generation::{Generated, Sampler};
+use fandango::generation::Generated;
 use fandango::typing::Structured;
 use fandango::visitor::Visitor;
 use fandango_targets::operators::mutate;
 use fandango_targets::{Checker, crossover, scriptsizec};
 
+/// The [`BenchmarkSuite`] definition for ScriptSizeC.
 pub struct Benchmark(Infallible);
 
 #[allow(deprecated)]

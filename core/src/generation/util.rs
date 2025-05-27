@@ -237,8 +237,8 @@ where
 mod dynamic_impls {
     use crate::dynamic::{DynamicNode, HasDynamicSampler};
     use crate::generation::util::{
-        flatten, FandangoNode, FlattenedSampler, Flattener, FlattenerTarget, StaticTarget,
-        Unflattenable,
+        FandangoNode, FlattenedSampler, Flattener, FlattenerTarget, StaticTarget, Unflattenable,
+        flatten,
     };
     use crate::generation::{Generated, Generator, GeneratorTuple, Sampler};
     use crate::impl_has_dynamic_sampler;

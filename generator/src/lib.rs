@@ -174,7 +174,10 @@ impl Parse for FandangoDerivation {
             }
         }
         if offsets.is_empty() {
-            return Err(syn::Error::new(input.span(), "Invalid fandango derivation; need at least 1 grammar specified. Use #[fandango(grammar = ...)]."));
+            return Err(syn::Error::new(
+                input.span(),
+                "Invalid fandango derivation; need at least 1 grammar specified. Use #[fandango(grammar = ...)].",
+            ));
         }
         let merged = String::from_utf8(merged).map_err(|e| {
             let invalid = e.utf8_error().valid_up_to() + 1;

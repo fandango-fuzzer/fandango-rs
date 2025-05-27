@@ -11,9 +11,9 @@ use core::fmt::{Debug, Display, Formatter, Write};
 use core::hash::Hash;
 use core::hash::Hasher;
 use core::str::FromStr;
+use pest::Parser;
 use pest::error::{Error as PestError, ErrorVariant};
 use pest::iterators::Pair;
-use pest::Parser;
 
 #[allow(deprecated)]
 use core::hash::SipHasher;
@@ -684,16 +684,16 @@ mod py_literal {
 pub(crate) mod test {
     use crate::lang::parser::Fandango;
     use crate::lang::{
-        parse_string, Alternative, Concatenation, Nonterminal, Operator, Production, Program, Rule,
-        Statement, Symbol,
+        Alternative, Concatenation, Nonterminal, Operator, Production, Program, Rule, Statement,
+        Symbol, parse_string,
     };
     use alloc::borrow::Cow;
     use alloc::boxed::Box;
     use alloc::format;
     use alloc::vec::Vec;
     use core::error::Error;
-    use pest::iterators::Pair;
     use pest::Parser;
+    use pest::iterators::Pair;
 
     fn check_string_operator<const BORROW: bool>(operator: Pair<'_, Rule>, expected: &str) {
         let (symbol,) = parse_pairs_as!(operator.into_inner(), (Rule::symbol,));

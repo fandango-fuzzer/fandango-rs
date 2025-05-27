@@ -1,5 +1,5 @@
 use fandango_core::lang::FandangoNode;
-use fandango_core::lang::{compute_tag_hash, Operator, Statement, Symbol};
+use fandango_core::lang::{Operator, Statement, Symbol, compute_tag_hash};
 use pest::Span;
 use proc_macro2::{Ident, Literal, TokenStream};
 use quote::{format_ident, quote};
