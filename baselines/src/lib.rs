@@ -67,7 +67,7 @@ where
 {
     let mut group = c.benchmark_group(B::NAME);
     group.sample_size(10);
-    group.warm_up_time(Duration::ZERO);
+    group.warm_up_time(Duration::from_secs(1));
     group.measurement_time(Duration::from_secs(1));
 
     // FANDANGO originally uses a depth limiter with depth 100.
