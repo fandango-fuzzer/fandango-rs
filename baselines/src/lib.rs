@@ -9,6 +9,7 @@ use alloc::vec::Vec;
 use common::{BenchmarkSuite, StdGenerator, StdSampler};
 use core::convert::Infallible;
 use core::hint::black_box;
+use core::time::Duration;
 use criterion::{BatchSize, BenchmarkId, Criterion, Throughput};
 use fandango::lang::FandangoNode;
 use fandango::tuple_list::tuple_list;
@@ -65,7 +66,9 @@ where
     for<'a> <B::Start as Node>::TypeMut<'a>: AsNodeMut<B::Start> + From<&'a mut B::Start>,
 {
     let mut group = c.benchmark_group(B::NAME);
-    group.sample_size(10); // our samples are small, but many
+    group.sample_size(10);
+    group.warm_up_time(Duration::ZERO);
+    group.measurement_time(Duration::from_secs(1));
 
     // FANDANGO originally uses a depth limiter with depth 100.
     let mut generator = tuple_list!(DepthLimiter::new(B::program(), 100));
