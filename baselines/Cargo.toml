@@ -5,15 +5,18 @@ edition = "2024"
 publish = false
 
 [dependencies]
+fandango.workspace = true
+fandango-targets.workspace = true
+
 csv = { path = "csv" }
 rest = { path = "rest" }
 scriptsizec = { path = "scriptsizec" }
 xml = { path = "xml" }
 
-[dev-dependencies]
 common = { path = "common" }
 
 criterion.workspace = true
+rand.workspace = true
 
 [profile.release]
 codegen-units = 1
