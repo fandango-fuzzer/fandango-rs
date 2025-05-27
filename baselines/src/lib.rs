@@ -25,6 +25,9 @@ pub struct NonterminalVisitor {
     count: usize,
 }
 
+/// The number of segments to split the available samples into.
+pub const NUM_SEGMENTS: usize = 25;
+
 impl NonterminalVisitor {
     fn new() -> Self {
         Self { count: 0 }
@@ -66,9 +69,8 @@ where
     for<'a> <B::Start as Node>::TypeMut<'a>: AsNodeMut<B::Start> + From<&'a mut B::Start>,
 {
     let mut group = c.benchmark_group(B::NAME);
-    group.sample_size(10);
-    group.warm_up_time(Duration::from_secs(1));
-    group.measurement_time(Duration::from_secs(1));
+    group.warm_up_time(Duration::from_millis(100));
+    group.measurement_time(Duration::from_millis(900));
 
     // FANDANGO originally uses a depth limiter with depth 100.
     let mut generator = tuple_list!(DepthLimiter::new(B::program(), 100));
@@ -94,7 +96,7 @@ where
     let count = rngs.len() - 1;
     let rngs = Vec::from_iter(rngs);
 
-    let grouped = rngs.chunks(count / 100).map(|chunk| {
+    let grouped = rngs.chunks(count / NUM_SEGMENTS).map(|chunk| {
         let (sum, combined) =
             chunk
                 .iter()
