@@ -2,6 +2,9 @@
 
 pub mod util;
 
+use crate::dynamic::DefinitionOf;
+use crate::lang::FandangoNode;
+use crate::typing::AsStaticNode;
 use alloc::boxed::Box;
 use rand::Rng;
 
@@ -52,6 +55,20 @@ where
 
     fn sample(&mut self) -> usize {
         self.next_u64() as usize
+    }
+}
+
+impl<N, R> DefinitionOf<N> for R
+where
+    N: AsStaticNode,
+    R: Rng,
+{
+    fn root_of(&self) -> FandangoNode<'static, 'static> {
+        N::static_root()
+    }
+
+    fn definition_of(&self) -> FandangoNode<'static, 'static> {
+        N::static_definition()
     }
 }
 

@@ -15,13 +15,16 @@ use alloc::vec::Vec;
 use core::convert::Infallible;
 use core::marker::PhantomData;
 use core::ops::ControlFlow;
+#[allow(deprecated)]
+use fandango::dynamic::{DefinitionOf, DynamicNode, HasDynamicSampler};
 use fandango::generation::{Generated, Generator, GeneratorTuple, InPlaceGenerated, Sampler};
 use fandango::graph::IntoGraph;
 use fandango::lang::{FandangoNode, Program};
-use fandango::typing::{AsNodeMut, AsStaticNode, Node, StaticDiscriminable};
+use fandango::typing::{AsNodeMut, Node, StaticDiscriminable};
 use fandango::visitor::error::InvalidPath;
 use fandango::visitor::navigation::GoTo;
 use fandango::visitor::{VisitResult, VisitableChildren, Visitor};
+use fandango::{impl_definition_of, impl_has_dynamic_sampler};
 use hashbrown::HashMap;
 use petgraph::Direction;
 use petgraph::visit::{EdgeRef, IntoNodeReferences};
@@ -185,6 +188,20 @@ where
     }
 }
 
+impl<S, SP> HasDynamicSampler for ShortestPathSampler<'_, S, SP>
+where
+    S: HasDynamicSampler,
+{
+    impl_has_dynamic_sampler!(inner);
+}
+
+impl<N, S, SP> DefinitionOf<N> for ShortestPathSampler<'_, S, SP>
+where
+    S: DefinitionOf<N>,
+{
+    impl_definition_of!(inner);
+}
+
 struct FirstStep<T>(T);
 impl<T> FromIterator<T> for FirstStep<T> {
     fn from_iter<I: IntoIterator<Item = T>>(iter: I) -> Self {
@@ -227,12 +244,11 @@ where
 
 impl<N, S> ShortestPath<N, S> for HashMap<FandangoNode<'static, 'static>, Vec<usize>>
 where
-    N: AsStaticNode,
-    S: Sampler<N>,
+    S: Sampler<N> + DefinitionOf<N>,
 {
     #[inline(always)]
     fn shortest_path(&self, sampler: &mut S) -> Option<usize> {
-        if let Some(options) = self.get(&N::static_definition()) {
+        if let Some(options) = self.get(&sampler.definition_of()) {
             return options.get(sampler.sample() % options.len()).copied();
         }
         None
@@ -270,6 +286,37 @@ where
     Ok(Some(node))
 }
 
+/// Mutate a node dynamically, FANDANGO-style.
+#[allow(deprecated)]
+pub fn mutate_dynamic<'a, S, G>(
+    mutated: &'a mut DynamicNode,
+    choices: &mut Vec<VecDeque<usize>>,
+    sampler: &mut S,
+    generator: &mut G,
+) -> Result<Option<&'a mut DynamicNode>, InvalidPath>
+where
+    DynamicNode: InPlaceGenerated<S, G>,
+    S: Sampler<DynamicNode> + HasDynamicSampler,
+{
+    if choices.is_empty() {
+        return Ok(None);
+    }
+
+    // pick any path for mutation
+    let mut path = choices.swap_remove(sampler.sample() % choices.len());
+
+    // prune paths which are invalidated; that is, removing paths which start with this one
+    choices.retain(|v| v.len() < path.len() || v.iter().zip(&path).any(|(a, b)| a != b));
+
+    let depth = path.len() - 1; // retain depth info
+    let idx = path.pop_front().unwrap();
+    let node = mutated.go_to(idx, path)?;
+
+    node.generate_in_place(sampler, generator, depth);
+
+    Ok(Some(node))
+}
+
 /// Scans a set of nodes for all instances of a given discriminant.
 pub struct NodeScan {
     discriminant: usize,
@@ -279,12 +326,9 @@ pub struct NodeScan {
 
 impl NodeScan {
     /// Create a new scanner for the given node.
-    pub fn new<O>() -> Self
-    where
-        O: StaticDiscriminable,
-    {
+    pub fn new(discriminant: usize) -> Self {
         Self {
-            discriminant: O::DISCRIMINANT,
+            discriminant,
             path: VecDeque::new(),
             paths: Vec::new(),
         }
@@ -326,9 +370,9 @@ where
 /// Due to limitations of the Rust type system, we have to keep this as a macro for now. :(
 #[macro_export]
 macro_rules! crossover {
-    ($crossed:ty, $mutated:expr, $base:expr, $choices:ident, $sampler:expr) => {
+    (@ $discriminant:expr, $crossed:ty, $mutated:expr, $base:expr, $choices:ident, $sampler:expr) => {
         (|| {
-            let mut base_choices = $crate::operators::NodeScan::new::<$crossed>()
+            let mut base_choices = $crate::operators::NodeScan::new($discriminant)
                 .visit($base, 0)
                 .unwrap()
                 .continue_value()
@@ -344,7 +388,8 @@ macro_rules! crossover {
                 let idx = cloned.pop_front().unwrap();
                 let mut node = ::fandango::visitor::navigation::GoTo::go_to($mutated, idx, cloned)?;
 
-                if ::fandango::typing::AsNodeMut::<$crossed>::as_node_mut(&mut node).is_some() {
+                use ::fandango::typing::Discriminable;
+                if node.discriminant() == $discriminant {
                     filtered.push(path);
                 }
             }
@@ -390,4 +435,14 @@ macro_rules! crossover {
             Ok(true)
         })()
     };
+
+    ($crossed:ty, $mutated:expr, $base:expr, $choices:ident, $sampler:expr) => {{
+        let discriminant = <$crossed as ::fandango::typing::StaticDiscriminable>::DISCRIMINANT;
+        $crate::crossover!(@ discriminant, $crossed, $mutated, $base, $choices, $sampler)
+    }};
+
+    (dynamic $crossed:expr, $mutated:expr, $base:expr, $choices:ident, $sampler:expr) => {{
+        let discriminant = ::fandango::dynamic::DynamicDiscriminant::computed_discriminant(&$crossed);
+        $crate::crossover!(@ discriminant, ::fandango::dynamic::DynamicNode, $mutated, $base, $choices, $sampler)
+    }};
 }

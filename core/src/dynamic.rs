@@ -148,6 +148,40 @@ macro_rules! impl_has_dynamic_sampler {
     };
 }
 
+/// Get the definition of a node `N`. Allows for static or dynamic checking, according to what's
+/// appropriate.
+pub trait DefinitionOf<N> {
+    /// The root of the given node.
+    fn root_of(&self) -> crate::lang::FandangoNode<'static, 'static>;
+
+    /// The definition of the given node.
+    fn definition_of(&self) -> crate::lang::FandangoNode<'static, 'static>;
+}
+
+/// Helper macro for defining [`DefinitionOf`], just like [`impl_has_dynamic_handler`].
+#[macro_export]
+macro_rules! impl_definition_of {
+    ($inner: ident) => {
+        fn root_of(&self) -> $crate::lang::FandangoNode<'static, 'static> {
+            self.$inner.root_of()
+        }
+
+        fn definition_of(&self) -> $crate::lang::FandangoNode<'static, 'static> {
+            self.$inner.definition_of()
+        }
+    };
+}
+
+impl<S> DefinitionOf<DynamicNode> for DynamicSampler<'_, S> {
+    fn root_of(&self) -> crate::lang::FandangoNode<'static, 'static> {
+        self.root
+    }
+
+    fn definition_of(&self) -> crate::lang::FandangoNode<'static, 'static> {
+        self.definition
+    }
+}
+
 impl<S> HasDynamicSampler for DynamicSampler<'_, S> {
     fn root(&self) -> FandangoNode {
         self.root
@@ -363,9 +397,21 @@ impl AsNode for DynamicNode {
     }
 }
 
+/// Computes the discriminan
+pub trait DynamicDiscriminant {
+    /// Computes the dynamic discriminant for this value.
+    fn computed_discriminant(&self) -> usize;
+}
+
+impl DynamicDiscriminant for FandangoNode {
+    fn computed_discriminant(&self) -> usize {
+        DefaultHashBuilder::default().hash_one(self) as usize
+    }
+}
+
 impl Discriminable for DynamicNode {
     fn discriminant(&self) -> usize {
-        DefaultHashBuilder::default().hash_one(self.definition) as usize
+        self.definition.computed_discriminant()
     }
 }
 

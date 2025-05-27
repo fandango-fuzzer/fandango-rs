@@ -8,8 +8,9 @@ use alloc::collections::VecDeque;
 use alloc::vec::Vec;
 use common::{BenchmarkSuite, StdGenerator, StdSampler};
 use core::convert::Infallible;
+use fandango::dynamic::{DynamicNode, DynamicSampler};
 use fandango::generation::Generated;
-use fandango::typing::Structured;
+use fandango::typing::{AsStaticNode, Structured};
 use fandango::visitor::Visitor;
 use fandango_targets::operators::mutate;
 use fandango_targets::{Checker, crossover, csv};
@@ -17,7 +18,6 @@ use fandango_targets::{Checker, crossover, csv};
 /// The [`BenchmarkSuite`] definition for CSV.
 pub struct Benchmark(Infallible);
 
-#[allow(deprecated)]
 impl BenchmarkSuite<StdSampler, StdGenerator> for Benchmark {
     type Start = csv::nonterminal_start;
 
@@ -61,6 +61,22 @@ impl BenchmarkSuite<StdSampler, StdGenerator> for Benchmark {
     ) -> bool {
         crossover!(
             csv::nonterminal_csv_string_list,
+            item,
+            other,
+            choices,
+            sampler
+        )
+        .unwrap()
+    }
+
+    fn crossover_dynamic(
+        item: &mut DynamicNode,
+        other: &mut DynamicNode,
+        choices: &mut Vec<VecDeque<usize>>,
+        sampler: &mut DynamicSampler<StdSampler>,
+    ) -> bool {
+        crossover!(
+            dynamic csv::nonterminal_csv_string_list::static_definition(),
             item,
             other,
             choices,

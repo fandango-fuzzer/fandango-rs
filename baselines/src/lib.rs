@@ -11,11 +11,13 @@ use core::convert::Infallible;
 use core::hint::black_box;
 use core::time::Duration;
 use criterion::{BatchSize, BenchmarkId, Criterion, Throughput};
+use fandango::dynamic::{DynamicNode, DynamicSampler};
+use fandango::generation::Generated;
 use fandango::lang::FandangoNode;
 use fandango::tuple_list::tuple_list;
-use fandango::typing::{AsNodeMut, Node};
+use fandango::typing::{AsNodeMut, AsStaticNode, Node};
 use fandango::visitor::{VisitResult, VisitableChildren, Visitor};
-use fandango_targets::operators::DepthLimiter;
+use fandango_targets::operators::{DepthLimiter, mutate_dynamic};
 use rand::SeedableRng;
 use rand::seq::IndexedRandom;
 
@@ -58,10 +60,15 @@ where
 pub fn perform_benchmark<B>(c: &mut Criterion)
 where
     B: BenchmarkSuite<StdSampler, StdGenerator>,
-    B::Start: Node + Clone + Ord,
+    B::Start: Node + Clone + Ord + AsStaticNode,
     // boilerplate since we're doing this generically
     for<'a> NonterminalVisitor: Visitor<
             <B::Start as Node>::TypeMut<'a>,
+            Continue = NonterminalVisitor,
+            Break = Infallible,
+            Error = Infallible,
+        > + Visitor<
+            &'a mut DynamicNode,
             Continue = NonterminalVisitor,
             Break = Infallible,
             Error = Infallible,
@@ -76,12 +83,21 @@ where
     let mut generator = tuple_list!(DepthLimiter::new(B::program(), 100));
     let mut setup_generator = generator.clone();
 
+    let nonterminals = B::program().nonterminals();
+
     let mut global = StdSampler::seed_from_u64(0);
 
     // collect seeds which produce inputs of a given size
     let mut rngs = BTreeMap::new();
     for seed in 0..100_000 {
         let mut rng = StdSampler::seed_from_u64(seed);
+        let mut dyn_rng = StdSampler::seed_from_u64(seed);
+        let mut dyn_rng = DynamicSampler::new(
+            <B::Start as AsStaticNode>::static_root(),
+            <B::Start as AsStaticNode>::static_definition(),
+            &nonterminals,
+            &mut dyn_rng,
+        );
 
         let mut value = B::generate(&mut rng, &mut generator);
         let size = NonterminalVisitor::new()
@@ -90,6 +106,18 @@ where
             .continue_value()
             .unwrap()
             .count;
+
+        let mut dyn_value = DynamicNode::generate(&mut dyn_rng, &mut generator, 0);
+        assert_eq!(
+            size,
+            NonterminalVisitor::new()
+                .visit(&mut dyn_value, 0)
+                .unwrap()
+                .continue_value()
+                .unwrap()
+                .count
+        );
+
         rngs.entry(size).or_insert_with(Vec::new).push(seed);
     }
 
@@ -119,6 +147,26 @@ where
             )
         });
 
+        // raw generation
+        group.bench_function(BenchmarkId::new("generate dynamic", size), |b| {
+            b.iter_batched_ref(
+                || StdSampler::seed_from_u64(seeds.choose(&mut global).copied().unwrap()),
+                |sampler| {
+                    DynamicNode::generate(
+                        &mut DynamicSampler::new(
+                            <B::Start as AsStaticNode>::static_root(),
+                            <B::Start as AsStaticNode>::static_definition(),
+                            &nonterminals,
+                            black_box(sampler),
+                        ),
+                        &mut generator,
+                        0,
+                    )
+                },
+                BatchSize::SmallInput,
+            )
+        });
+
         // fixing a generated input
         group.bench_function(BenchmarkId::new("fix", size), |b| {
             b.iter_batched_ref(
@@ -129,7 +177,7 @@ where
                     );
                     (sample, global.clone())
                 },
-                |(value, local)| B::fix(black_box(value), local, &mut generator),
+                |(value, local)| B::fix(black_box(value), black_box(local), &mut generator),
                 BatchSize::SmallInput,
             )
         });
@@ -157,11 +205,58 @@ where
                         &mut StdSampler::seed_from_u64(seeds.choose(&mut global).copied().unwrap()),
                         &mut setup_generator,
                     );
-                    B::fix(&mut sample, &mut global, &mut setup_generator);
                     let choices = B::check(&mut sample);
                     (sample, choices, global.clone())
                 },
-                |(value, choices, local)| B::mutate(value, choices, local, &mut generator),
+                |(value, choices, local)| {
+                    B::mutate(
+                        black_box(value),
+                        black_box(choices),
+                        black_box(local),
+                        &mut generator,
+                    )
+                },
+                BatchSize::SmallInput,
+            )
+        });
+
+        // mutate a generated input
+        // the generator and sampler are unconstrained for this operation
+        group.bench_function(BenchmarkId::new("mutate dynamic", size), |b| {
+            b.iter_batched_ref(
+                || {
+                    let seed = seeds.choose(&mut global).copied().unwrap();
+                    let mut sample =
+                        B::generate(&mut StdSampler::seed_from_u64(seed), &mut setup_generator);
+                    let choices = B::check(&mut sample);
+
+                    let sample = DynamicNode::generate(
+                        &mut DynamicSampler::new(
+                            <B::Start as AsStaticNode>::static_root(),
+                            <B::Start as AsStaticNode>::static_definition(),
+                            &nonterminals,
+                            &mut StdSampler::seed_from_u64(seed),
+                        ),
+                        &mut setup_generator,
+                        0,
+                    );
+                    (sample, choices, global.clone())
+                },
+                |(value, choices, local)| {
+                    mutate_dynamic(
+                        black_box(value),
+                        black_box(choices),
+                        &mut DynamicSampler::new(
+                            <B::Start as AsStaticNode>::static_root(),
+                            <B::Start as AsStaticNode>::static_definition(),
+                            &nonterminals,
+                            black_box(local),
+                        ),
+                        &mut generator,
+                    )
+                    .unwrap()
+                    .is_some()
+                },
                 BatchSize::SmallInput,
             )
         });
@@ -176,18 +271,77 @@ where
                         &mut StdSampler::seed_from_u64(seeds.choose(&mut global).copied().unwrap()),
                         &mut setup_generator,
                     );
-                    B::fix(&mut sample, &mut global, &mut setup_generator);
                     let choices = B::check(&mut sample);
 
-                    let mut other = B::generate(
+                    let other = B::generate(
                         &mut StdSampler::seed_from_u64(seeds.choose(&mut global).copied().unwrap()),
                         &mut setup_generator,
                     );
-                    B::fix(&mut other, &mut global, &mut setup_generator);
 
                     (sample, other, choices, global.clone())
                 },
-                |(value, base, choices, local)| B::crossover(value, base, choices, local),
+                |(value, base, choices, local)| {
+                    B::crossover(
+                        black_box(value),
+                        black_box(base),
+                        black_box(choices),
+                        black_box(local),
+                    )
+                },
+                BatchSize::SmallInput,
+            )
+        });
+
+        // crossover a generated input using another sampled input
+        // the sampler are unconstrained for this operation
+        // the sampled input is from the same seed size
+        group.bench_function(BenchmarkId::new("crossover dynamic", size), |b| {
+            b.iter_batched_ref(
+                || {
+                    let seed = seeds.choose(&mut global).copied().unwrap();
+                    let mut sample =
+                        B::generate(&mut StdSampler::seed_from_u64(seed), &mut setup_generator);
+                    let choices = B::check(&mut sample);
+
+                    let sample = DynamicNode::generate(
+                        &mut DynamicSampler::new(
+                            <B::Start as AsStaticNode>::static_root(),
+                            <B::Start as AsStaticNode>::static_definition(),
+                            &nonterminals,
+                            &mut StdSampler::seed_from_u64(seed),
+                        ),
+                        &mut setup_generator,
+                        0,
+                    );
+
+                    let other = DynamicNode::generate(
+                        &mut DynamicSampler::new(
+                            <B::Start as AsStaticNode>::static_root(),
+                            <B::Start as AsStaticNode>::static_definition(),
+                            &nonterminals,
+                            &mut StdSampler::seed_from_u64(
+                                seeds.choose(&mut global).copied().unwrap(),
+                            ),
+                        ),
+                        &mut setup_generator,
+                        0,
+                    );
+
+                    (sample, other, choices, global.clone())
+                },
+                |(value, base, choices, local)| {
+                    B::crossover_dynamic(
+                        black_box(value),
+                        black_box(base),
+                        black_box(choices),
+                        &mut DynamicSampler::new(
+                            <B::Start as AsStaticNode>::static_root(),
+                            <B::Start as AsStaticNode>::static_definition(),
+                            &nonterminals,
+                            black_box(local),
+                        ),
+                    )
+                },
                 BatchSize::SmallInput,
             )
         });

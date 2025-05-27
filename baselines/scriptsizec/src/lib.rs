@@ -8,8 +8,9 @@ use alloc::collections::VecDeque;
 use alloc::vec::Vec;
 use common::{BenchmarkSuite, StdGenerator, StdSampler};
 use core::convert::Infallible;
+use fandango::dynamic::{DynamicNode, DynamicSampler};
 use fandango::generation::Generated;
-use fandango::typing::Structured;
+use fandango::typing::{AsStaticNode, Structured};
 use fandango::visitor::Visitor;
 use fandango_targets::operators::mutate;
 use fandango_targets::{Checker, crossover, scriptsizec};
@@ -17,7 +18,6 @@ use fandango_targets::{Checker, crossover, scriptsizec};
 /// The [`BenchmarkSuite`] definition for ScriptSizeC.
 pub struct Benchmark(Infallible);
 
-#[allow(deprecated)]
 impl BenchmarkSuite<StdSampler, StdGenerator> for Benchmark {
     type Start = scriptsizec::nonterminal_start;
 
@@ -60,6 +60,22 @@ impl BenchmarkSuite<StdSampler, StdGenerator> for Benchmark {
         sampler: &mut StdSampler,
     ) -> bool {
         crossover!(scriptsizec::nonterminal_id, item, other, choices, sampler).unwrap()
+    }
+
+    fn crossover_dynamic(
+        item: &mut DynamicNode,
+        other: &mut DynamicNode,
+        choices: &mut Vec<VecDeque<usize>>,
+        sampler: &mut DynamicSampler<StdSampler>,
+    ) -> bool {
+        crossover!(
+            dynamic scriptsizec::nonterminal_id::static_definition(),
+            item,
+            other,
+            choices,
+            sampler
+        )
+        .unwrap()
     }
 
     fn program() -> &'static fandango::lang::Program<'static> {

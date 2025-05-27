@@ -6,11 +6,19 @@ extern crate alloc;
 
 use alloc::collections::VecDeque;
 use alloc::vec::Vec;
+
+use fandango::dynamic::{DynamicNode, DynamicSampler};
 use fandango::lang::{FandangoNode, Program};
 use fandango::tuple_list::tuple_list_type;
 use fandango_targets::operators::DepthLimiter;
 use hashbrown::HashMap;
 use rand::rngs::StdRng;
+
+/// The sampler to be used throughout the evaluation.
+pub type StdSampler = StdRng;
+/// The generator to be used throughout the evaluation.
+pub type StdGenerator =
+    tuple_list_type!(DepthLimiter<HashMap<FandangoNode<'static, 'static>, Vec<usize>>>);
 
 /// Trait which each benchmark target will implement, for consistency.
 pub trait BenchmarkSuite<S, G> {
@@ -47,12 +55,16 @@ pub trait BenchmarkSuite<S, G> {
         sampler: &mut S,
     ) -> bool;
 
+    /// Crossover the given dynamic node at the given points with the provided base.
+    ///
+    /// Since the crossover targets are specific to each benchmark, we split these out.
+    fn crossover_dynamic(
+        item: &mut DynamicNode,
+        other: &mut DynamicNode,
+        choices: &mut Vec<VecDeque<usize>>,
+        sampler: &mut DynamicSampler<S>,
+    ) -> bool;
+
     /// The static [`Program`] node which represents the grammar.
     fn program() -> &'static Program<'static>;
 }
-
-/// The sampler to be used throughout the evaluation.
-pub type StdSampler = StdRng;
-/// The generator to be used throughout the evaluation.
-pub type StdGenerator =
-    tuple_list_type!(DepthLimiter<HashMap<FandangoNode<'static, 'static>, Vec<usize>>>);
