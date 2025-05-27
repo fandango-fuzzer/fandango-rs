@@ -355,7 +355,7 @@ macro_rules! crossover {
             // pick any path for mutation
             let mut path = filtered
                 .swap_remove(
-                    ::fandango::generation::Sampler::<$crossed>::sample($sampler) % $choices.len(),
+                    ::fandango::generation::Sampler::<$crossed>::sample($sampler) % filtered.len(),
                 )
                 .clone();
             let mut base_path = base_choices
