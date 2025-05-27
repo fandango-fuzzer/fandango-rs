@@ -148,8 +148,9 @@ where
             )
         });
 
-        // mutate a generated input
-        // the crossover source and sampler are unconstrained for this operation
+        // crossover a generated input using another sampled input
+        // the sampler are unconstrained for this operation
+        // the sampled input is from the same seed size
         group.bench_function(BenchmarkId::new("crossover", size), |b| {
             b.iter_batched_ref(
                 || {
@@ -157,10 +158,16 @@ where
                         &mut StdSampler::seed_from_u64(seeds.choose(&mut global).copied().unwrap()),
                         &mut setup_generator,
                     );
-                    let base = B::generate(&mut global, &mut setup_generator);
                     B::fix(&mut sample, &mut global, &mut setup_generator);
                     let choices = B::check(&mut sample);
-                    (sample, base, choices, global.clone())
+
+                    let mut other = B::generate(
+                        &mut StdSampler::seed_from_u64(seeds.choose(&mut global).copied().unwrap()),
+                        &mut setup_generator,
+                    );
+                    B::fix(&mut other, &mut global, &mut setup_generator);
+
+                    (sample, other, choices, global.clone())
                 },
                 |(value, base, choices, local)| B::crossover(value, base, choices, local),
                 BatchSize::SmallInput,
