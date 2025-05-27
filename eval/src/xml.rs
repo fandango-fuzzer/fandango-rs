@@ -302,6 +302,24 @@ mod test {
     }
 
     #[test]
+    fn mutate() -> Result<(), Box<dyn Error>> {
+        let mut rng = StdRng::seed_from_u64(0);
+
+        let mut first = xml::nonterminal_start::generate(&mut rng, &mut (), 0);
+        let second = first.clone();
+        assert_eq!(first, second);
+
+        let mut choices = vec![VecDeque::from([0])];
+        let mutated =
+            crate::operators::mutate(&mut first, &mut choices, &mut rng, &mut ())?.unwrap();
+        assert!(matches!(mutated, xml::TypeMut::nonterminal_start(_)));
+        assert!(choices.is_empty());
+        assert_ne!(first, second);
+
+        Ok(())
+    }
+
+    #[test]
     fn crossover() -> Result<(), Box<dyn Error>> {
         let mut rng = StdRng::seed_from_u64(0);
 
@@ -318,6 +336,7 @@ mod test {
             &mut rng
         )?;
         assert!(crossed);
+        assert!(choices.is_empty());
         assert_eq!(first, second);
 
         Ok(())

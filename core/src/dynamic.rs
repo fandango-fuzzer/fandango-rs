@@ -6,7 +6,7 @@
 
 use crate::generation::{DefaultGenerated, Generated, GeneratorTuple, InPlaceGenerated, Sampler};
 use crate::lang::{Operator, Symbol};
-use crate::typing::{AsNode, AsNodeMut, Discriminable, Node, OpaqueType};
+use crate::typing::{AsNode, AsNodeMut, Discriminable, Node};
 use crate::visitor::{MaybeVisitResult, VisitResult, VisitableChildren, Visitor};
 use alloc::boxed::Box;
 use alloc::vec;
@@ -402,7 +402,7 @@ impl AsNodeMut<DynamicNode> for DynamicNode {
     }
 }
 
-impl<'a> AsNodeMut<DynamicNode> for &'a mut DynamicNode {
+impl AsNodeMut<DynamicNode> for &mut DynamicNode {
     fn as_node_mut(&mut self) -> Option<&mut DynamicNode> {
         Some(self)
     }
@@ -492,8 +492,4 @@ impl<'a> VisitableChildren<&'a mut DynamicNode> for &'a mut DynamicNode {
             Some(child) => Ok(visitor.visit(child, idx)),
         }
     }
-}
-
-impl OpaqueType for DynamicNode {
-    type Nodes = DynamicNode;
 }

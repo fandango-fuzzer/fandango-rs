@@ -310,6 +310,16 @@ pub fn derive_fandango_or_emit_error(
             #(#node_names(&'program #node_names)),*
         }
 
+        impl ::fandango::typing::Discriminable for Type<'_> {
+            fn discriminant(&self) -> usize {
+                match self {
+                    #(
+                        Self::#node_names(n) => n.discriminant(),
+                    )*
+                }
+            }
+        }
+
         #(
             impl<'program> ::fandango::typing::AsNodeRef<#node_names> for Type<'program> {
                 fn as_node(&self) -> Option<&#node_names> {
@@ -335,10 +345,6 @@ pub fn derive_fandango_or_emit_error(
                     )*
                 }
             }
-        }
-
-        impl ::fandango::typing::OpaqueType for TypeMut<'_> {
-            type Nodes = #all_node_names;
         }
 
         #(

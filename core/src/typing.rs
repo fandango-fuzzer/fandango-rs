@@ -183,9 +183,3 @@ pub trait AsNodeMut<N> {
     /// contains that node.
     fn as_node_mut(&mut self) -> Option<&mut N>;
 }
-
-/// An opaque type which represents a node.
-pub trait OpaqueType: Discriminable {
-    /// All the nodes that this type could refer to, in a Haskell-style tuple list.
-    type Nodes;
-}
