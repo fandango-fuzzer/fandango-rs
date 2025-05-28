@@ -10,5 +10,8 @@ fandango-targets = { workspace = true, features = ["scriptsizec"] }
 
 common = { path = "../common" }
 
+[dev-dependencies]
+rand.workspace = true
+
 [lints]
 workspace = true

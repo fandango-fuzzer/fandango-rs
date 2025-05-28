@@ -533,7 +533,14 @@ impl<'a> VisitableChildren<&'a mut DynamicNode> for &'a mut DynamicNode {
     where
         V: Visitor<&'a mut DynamicNode>,
     {
-        match self.children_mut().iter_mut().nth(idx) {
+        let child = match self.children_mut() {
+            DynamicNodeVariant::Sequence(seq) => seq.get_mut(idx),
+            DynamicNodeVariant::Alternation { variant, content } if *variant == idx => {
+                content.get_mut(0)
+            }
+            _ => None,
+        };
+        match child {
             None => Err(visitor),
             Some(child) => Ok(visitor.visit(child, idx)),
         }

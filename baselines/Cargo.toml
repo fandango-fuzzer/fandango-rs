@@ -27,6 +27,11 @@ inherits = "release"
 debug = true
 opt-level = 3
 
+[profile.bench-noopt]
+inherits = "dev"
+debug-assertions = false
+overflow-checks = false
+
 [workspace]
 members = [".", "common", "csv", "rest", "scriptsizec", "xml"]
 resolver = "3"

@@ -20,7 +20,7 @@ use fandango::dynamic::{DefinitionOf, DynamicNode, HasDynamicSampler};
 use fandango::generation::{Generated, Generator, GeneratorTuple, InPlaceGenerated, Sampler};
 use fandango::graph::IntoGraph;
 use fandango::lang::{FandangoNode, Program};
-use fandango::typing::{AsNodeMut, Node, StaticDiscriminable};
+use fandango::typing::{AsNode, AsNodeMut, Node, StaticDiscriminable};
 use fandango::visitor::error::InvalidPath;
 use fandango::visitor::navigation::GoTo;
 use fandango::visitor::{VisitResult, VisitableChildren, Visitor};
@@ -312,6 +312,7 @@ where
     let idx = path.pop_front().unwrap();
     let node = mutated.go_to(idx, path)?;
 
+    sampler.with_definition(node.definition());
     node.generate_in_place(sampler, generator, depth);
 
     Ok(Some(node))
@@ -445,4 +446,37 @@ macro_rules! crossover {
         let discriminant = ::fandango::dynamic::DynamicDiscriminant::computed_discriminant(&$crossed);
         $crate::crossover!(@ discriminant, ::fandango::dynamic::DynamicNode, $mutated, $base, $choices, $sampler)
     }};
+}
+
+/// A simple visitor which counts nonterminals, for use in benchmarking against FANDANGO.
+#[derive(Debug, Default)]
+pub struct NonterminalVisitor {
+    count: usize,
+}
+
+impl NonterminalVisitor {
+    /// Collect the count associated with this visitor.
+    pub fn count(self) -> usize {
+        self.count
+    }
+}
+
+impl<T> Visitor<T> for NonterminalVisitor
+where
+    T: VisitableChildren<T>,
+{
+    type Continue = Self;
+    type Break = Infallible;
+    type Error = Infallible;
+
+    fn visit<'program, N>(mut self, node: &'program mut N, _idx: usize) -> VisitResult<Self, T>
+    where
+        N: Node<TypeMut<'program> = T>,
+        T: From<&'program mut N> + AsNodeMut<N>,
+    {
+        if matches!(node.definition(), FandangoNode::Nonterminal(_)) {
+            self.count += 1;
+        }
+        T::from(node).visit_each(self)
+    }
 }

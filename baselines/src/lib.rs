@@ -16,45 +16,14 @@ use fandango::generation::Generated;
 use fandango::lang::FandangoNode;
 use fandango::tuple_list::tuple_list;
 use fandango::typing::{AsNodeMut, AsStaticNode, Node};
+use fandango::visitor::write::WriteVisitor;
 use fandango::visitor::{VisitResult, VisitableChildren, Visitor};
-use fandango_targets::operators::{DepthLimiter, mutate_dynamic};
+use fandango_targets::operators::{DepthLimiter, NonterminalVisitor, mutate_dynamic};
 use rand::SeedableRng;
 use rand::seq::IndexedRandom;
 
-/// A simple visitor which counts nonterminals, for use in benchmarking against FANDANGO.
-#[derive(Debug)]
-pub struct NonterminalVisitor {
-    count: usize,
-}
-
 /// The number of segments to split the available samples into.
 pub const NUM_SEGMENTS: usize = 25;
-
-impl NonterminalVisitor {
-    fn new() -> Self {
-        Self { count: 0 }
-    }
-}
-
-impl<T> Visitor<T> for NonterminalVisitor
-where
-    T: VisitableChildren<T>,
-{
-    type Continue = Self;
-    type Break = Infallible;
-    type Error = Infallible;
-
-    fn visit<'program, N>(mut self, node: &'program mut N, _idx: usize) -> VisitResult<Self, T>
-    where
-        N: Node<TypeMut<'program> = T>,
-        T: From<&'program mut N> + AsNodeMut<N>,
-    {
-        if matches!(node.definition(), FandangoNode::Nonterminal(_)) {
-            self.count += 1;
-        }
-        T::from(node).visit_each(self)
-    }
-}
 
 /// Do the benchmark! Set `B` to your desired baseline.
 pub fn perform_benchmark<B>(c: &mut Criterion)
@@ -73,7 +42,9 @@ where
             Break = Infallible,
             Error = Infallible,
         >,
-    for<'a> <B::Start as Node>::TypeMut<'a>: AsNodeMut<B::Start> + From<&'a mut B::Start>,
+    for<'a> <B::Start as Node>::TypeMut<'a>: VisitableChildren<<B::Start as Node>::TypeMut<'a>>
+        + AsNodeMut<B::Start>
+        + From<&'a mut B::Start>,
 {
     let mut group = c.benchmark_group(B::NAME);
     group.warm_up_time(Duration::from_millis(100));
@@ -89,7 +60,7 @@ where
 
     // collect seeds which produce inputs of a given size
     let mut rngs = BTreeMap::new();
-    for seed in 0..100_000 {
+    for seed in 0..1_000 {
         let mut rng = StdSampler::seed_from_u64(seed);
         let mut dyn_rng = StdSampler::seed_from_u64(seed);
         let mut dyn_rng = DynamicSampler::new(
@@ -100,23 +71,37 @@ where
         );
 
         let mut value = B::generate(&mut rng, &mut generator);
-        let size = NonterminalVisitor::new()
+        let size = NonterminalVisitor::default()
             .visit(&mut value, 0)
             .unwrap()
             .continue_value()
             .unwrap()
-            .count;
+            .count();
 
         let mut dyn_value = DynamicNode::generate(&mut dyn_rng, &mut generator, 0);
         assert_eq!(
             size,
-            NonterminalVisitor::new()
+            NonterminalVisitor::default()
                 .visit(&mut dyn_value, 0)
                 .unwrap()
                 .continue_value()
                 .unwrap()
-                .count
+                .count()
         );
+
+        let first = WriteVisitor::new(Vec::new())
+            .visit(&mut value, 0)
+            .unwrap()
+            .continue_value()
+            .unwrap()
+            .output();
+        let second = WriteVisitor::new(Vec::new())
+            .visit(&mut dyn_value, 0)
+            .unwrap()
+            .continue_value()
+            .unwrap()
+            .output();
+        assert_eq!(first, second);
 
         rngs.entry(size).or_insert_with(Vec::new).push(seed);
     }

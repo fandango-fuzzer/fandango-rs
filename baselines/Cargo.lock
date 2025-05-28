@@ -665,6 +665,7 @@ dependencies = [
  "common",
  "fandango",
  "fandango-targets",
+ "rand",
 ]
 
 [[package]]
