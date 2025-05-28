@@ -255,8 +255,7 @@ mod defs {
             });
 
             // crossover a generated input using another sampled input
-            // the sampler are unconstrained for this operation
-            // the sampled input is from the same seed size
+            // the sampler and base input are unconstrained for this operation
             group.bench_function(BenchmarkId::new("crossover", size), |b| {
                 b.iter_batched_ref(
                     || {
@@ -268,12 +267,7 @@ mod defs {
                         );
                         let choices = B::check(&mut sample);
 
-                        let other = B::generate(
-                            &mut StdSampler::seed_from_u64(
-                                seeds.choose(&mut global).copied().unwrap(),
-                            ),
-                            &mut setup_generator,
-                        );
+                        let other = B::generate(&mut global, &mut setup_generator);
 
                         (sample, other, choices, global.clone())
                     },
@@ -290,8 +284,7 @@ mod defs {
             });
 
             // crossover a generated input using another sampled input
-            // the sampler are unconstrained for this operation
-            // the sampled input is from the same seed size
+            // the sampler and base input are unconstrained for this operation
             group.bench_function(BenchmarkId::new("crossover dynamic", size), |b| {
                 b.iter_batched_ref(
                     || {
@@ -316,9 +309,7 @@ mod defs {
                                 <B::Start as AsStaticNode>::static_root(),
                                 <B::Start as AsStaticNode>::static_definition(),
                                 &nonterminals,
-                                &mut StdSampler::seed_from_u64(
-                                    seeds.choose(&mut global).copied().unwrap(),
-                                ),
+                                &mut global,
                             ),
                             &mut setup_generator,
                             0,
