@@ -4,6 +4,9 @@ version = "0.0.0"
 edition = "2024"
 publish = false
 
+[features]
+static_defs = ["common/static_defs", "fandango-targets/static_defs"]
+
 [dependencies]
 fandango.workspace = true
 fandango-targets = { workspace = true, features = ["xml"] }

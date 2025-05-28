@@ -14,6 +14,7 @@ mod defs {
     use core::convert::Infallible;
     use fandango::Fandango;
 
+    /// Base for the CSV grammar stored in csv.fan.
     #[derive(Fandango)]
     #[fandango(grammar = "grammars/csv.fan", parse = false, dynamic = true)]
     pub struct Csv(Infallible);

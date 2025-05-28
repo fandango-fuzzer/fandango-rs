@@ -110,7 +110,6 @@ where
             .next()
             .expect("Nonterminals should have exactly one definition.");
         let child = e.target();
-        let weight = *e.weight();
         assert!(
             edges.next().is_none(),
             "Nonterminals should have exactly one definition."
@@ -122,11 +121,6 @@ where
         let FandangoNode::Nonterminal(nt) = node_weight else {
             unimplemented!("Can only transforms non-terminals into source code.")
         };
-
-        let input = weight.get_input();
-        output.extend(quote! {
-            const SOURCE: &'static str = #input;
-        });
 
         let pest_name = format_ident!("{}", nt.name());
         let name = format_ident!("nonterminal_{}", nt.name());

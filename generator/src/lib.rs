@@ -220,6 +220,8 @@ pub fn derive_fandango_or_emit_error(
 ) -> Result<TokenStream, TokenStream> {
     let parsed = Program::try_from(&source.merged).map_err(|e| source.to_compile_error(e))?;
 
+    let input = parsed.statements()[0].span().get_input();
+
     let (_lookup, graph) = (&parsed).into_graph();
     let mut tokenized = TokenStream::new();
 
@@ -246,6 +248,8 @@ pub fn derive_fandango_or_emit_error(
 
         #(#referenced)*
 
+        const SOURCE: &'static str = #input;
+
         #[allow(missing_docs)]
         pub const STRUCTURE: &'static ::fandango::lang::Tagged<
             'static,
@@ -254,7 +258,13 @@ pub fn derive_fandango_or_emit_error(
     };
 
     if source.dynamic() {
-        Ok(dyn_content)
+        Ok(quote! {
+            #dyn_content
+
+            #(
+                struct #node_names(::core::convert::Infallible);
+            )*
+        })
     } else {
         let ident = &source.ident;
 

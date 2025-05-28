@@ -133,7 +133,6 @@ checksum = "f46ad14479a25103f283c0f10005961cf086d8dc42205bb44c46ac563475dca6"
 name = "common"
 version = "0.0.0"
 dependencies = [
- "criterion",
  "fandango",
  "fandango-targets",
  "hashbrown",
@@ -665,7 +664,6 @@ dependencies = [
  "common",
  "fandango",
  "fandango-targets",
- "rand",
 ]
 
 [[package]]

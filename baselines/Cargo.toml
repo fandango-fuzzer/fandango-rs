@@ -4,6 +4,17 @@ version = "0.0.0"
 edition = "2024"
 publish = false
 
+[features]
+default = ["static_defs"]
+static_defs = [
+    "common/static_defs",
+    "csv/static_defs",
+    "rest/static_defs",
+    "scriptsizec/static_defs",
+    "xml/static_defs",
+    "fandango-targets/static_defs"
+]
+
 [dependencies]
 fandango.workspace = true
 fandango-targets.workspace = true
@@ -45,7 +56,7 @@ missing_docs = "warn"
 
 [workspace.dependencies]
 fandango = { path = ".." }
-fandango-targets = { path = "../targets" }
+fandango-targets = { path = "../targets", default-features = false }
 
 criterion = { version = "0.6.0", features = ["html_reports"] }
 hashbrown = { version = "0.15.2", default-features = false }
