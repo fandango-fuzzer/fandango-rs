@@ -12,7 +12,7 @@ mod defs {
     use crate::NUM_SEGMENTS;
     use alloc::collections::BTreeMap;
     use alloc::vec::Vec;
-    use common::{BenchmarkSuite, DynamicBenchmarkSuite, StdGenerator, StdSampler};
+    use common::{BenchmarkSuite, StdGenerator, StdSampler};
     use core::convert::Infallible;
     use core::hint::black_box;
     use core::time::Duration;
