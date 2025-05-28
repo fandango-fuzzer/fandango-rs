@@ -373,16 +373,6 @@ where
 macro_rules! crossover {
     (@ $discriminant:expr, $crossed:ty, $mutated:expr, $base:expr, $choices:ident, $sampler:expr) => {
         (|| {
-            let mut base_choices = $crate::operators::NodeScan::new($discriminant)
-                .visit($base, 0)
-                .unwrap()
-                .continue_value()
-                .unwrap()
-                .paths();
-            if base_choices.is_empty() {
-                return Result::<bool, ::fandango::visitor::error::InvalidPath>::Ok(false);
-            }
-
             let mut filtered = ::alloc::vec::Vec::new();
             for path in $choices.iter() {
                 let mut cloned = path.clone();
@@ -396,6 +386,16 @@ macro_rules! crossover {
             }
             if filtered.is_empty() {
                 return Ok(false);
+            }
+
+            let mut base_choices = $crate::operators::NodeScan::new($discriminant)
+                .visit($base, 0)
+                .unwrap()
+                .continue_value()
+                .unwrap()
+                .paths();
+            if base_choices.is_empty() {
+                return Result::<bool, ::fandango::visitor::error::InvalidPath>::Ok(false);
             }
 
             // pick any path for mutation
