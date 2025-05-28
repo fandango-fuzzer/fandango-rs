@@ -32,6 +32,7 @@ pub struct FandangoDerivation {
     merged: String,
     offsets: BTreeMap<usize, PathBuf>,
     parse: bool,
+    dynamic: bool,
 }
 
 impl FandangoDerivation {
@@ -106,6 +107,11 @@ impl FandangoDerivation {
     fn parse(&self) -> bool {
         self.parse
     }
+
+    /// Determines whether we are in dynamic mode (i.e. no static definitions) or typed mode.
+    pub fn dynamic(&self) -> bool {
+        self.dynamic
+    }
 }
 
 impl Parse for FandangoDerivation {
@@ -116,6 +122,7 @@ impl Parse for FandangoDerivation {
         let mut merged = Vec::new();
         let mut offsets = BTreeMap::new();
         let mut parse = true;
+        let mut dynamic = false;
         for attr in derived.attrs {
             let span = attr.span();
             if let Meta::List(v) = attr.meta {
@@ -165,6 +172,14 @@ impl Parse for FandangoDerivation {
                                         parse = b.value();
                                         continue;
                                     }
+                                } else if ident == "dynamic" {
+                                    if let Expr::Lit(ExprLit {
+                                        lit: Lit::Bool(b), ..
+                                    }) = arg.value
+                                    {
+                                        dynamic = b.value();
+                                        continue;
+                                    }
                                 }
                                 return Err(syn::Error::new(span, "Invalid fandango list."));
                             }
@@ -194,6 +209,7 @@ impl Parse for FandangoDerivation {
             merged,
             offsets,
             parse,
+            dynamic,
         })
     }
 }
@@ -214,11 +230,6 @@ pub fn derive_fandango_or_emit_error(
 
     let node_names = mapped_names.values().cloned().collect::<Vec<_>>();
 
-    let mut all_node_names = quote! { () };
-    for node in node_names.iter() {
-        all_node_names = quote! { (#node, #all_node_names) };
-    }
-
     let mut arrays = Vec::new();
     let mut referenced = Vec::new();
     let metadata = tokenize_metadata(
@@ -230,33 +241,51 @@ pub fn derive_fandango_or_emit_error(
         &mut referenced,
     );
 
-    let ident = &source.ident;
+    let dyn_content = quote! {
+        #(#arrays)*
 
-    let grammar = if source.parse() {
-        let mut grammar_source = String::new();
-        graph.emit_pest(&mut (), &mut grammar_source).unwrap();
-        let mocked = quote! {
-            #[derive(Parser)]
-            #[grammar_inline = #grammar_source]
-            pub struct #ident;
-        };
+        #(#referenced)*
 
-        let grammar = pest_generator::derive_parser(mocked, false);
-        // rewrite: we don't want to force people to import other dependencies
-        let mut grammar = grammar
-            .into_iter()
-            .map(|e| match e {
-                TokenTree::Ident(ident) => {
-                    if ident == "pest" || ident == "pest_derive" {
-                        TokenTree::Ident(Ident::new("fandango", proc_macro2::Span::mixed_site()))
-                    } else {
-                        TokenTree::Ident(ident)
+        #[allow(missing_docs)]
+        pub const STRUCTURE: &'static ::fandango::lang::Tagged<
+            'static,
+            ::fandango::lang::Program
+        > = &#metadata;
+    };
+
+    if source.dynamic() {
+        Ok(dyn_content)
+    } else {
+        let ident = &source.ident;
+
+        let grammar = if source.parse() {
+            let mut grammar_source = String::new();
+            graph.emit_pest(&mut (), &mut grammar_source).unwrap();
+            let mocked = quote! {
+                #[derive(Parser)]
+                #[grammar_inline = #grammar_source]
+                pub struct #ident;
+            };
+
+            let grammar = pest_generator::derive_parser(mocked, false);
+            // rewrite: we don't want to force people to import other dependencies
+            let mut grammar = grammar
+                .into_iter()
+                .map(|e| match e {
+                    TokenTree::Ident(ident) => {
+                        if ident == "pest" || ident == "pest_derive" {
+                            TokenTree::Ident(Ident::new(
+                                "fandango",
+                                proc_macro2::Span::mixed_site(),
+                            ))
+                        } else {
+                            TokenTree::Ident(ident)
+                        }
                     }
-                }
-                other => other,
-            })
-            .collect::<TokenStream>();
-        grammar.extend(quote! {
+                    other => other,
+                })
+                .collect::<TokenStream>();
+            grammar.extend(quote! {
             impl #ident {
                 #[allow(missing_docs)]
                 pub fn extract(
@@ -271,216 +300,209 @@ pub fn derive_fandango_or_emit_error(
                 }
             }
         });
-        grammar
-    } else {
-        TokenStream::new()
-    };
+            grammar
+        } else {
+            TokenStream::new()
+        };
 
-    let discriminants = (0usize..node_names.len()).collect::<Vec<_>>();
+        let discriminants = (0usize..node_names.len()).collect::<Vec<_>>();
 
-    Ok(quote! {
-        #tokenized
+        Ok(quote! {
+            #tokenized
 
-        #(#arrays)*
+            #dyn_content
 
-        #(#referenced)*
-
-        trait TypeSampler
-        where
-            #(Self: ::fandango::generation::Sampler<#node_names>),*
-        {}
-
-        impl<S> TypeSampler for S
-        where
-            #(S: ::fandango::generation::Sampler<#node_names>),*
-        {}
-
-        trait TypeGenerator<S>
-        where
-            #(Self: ::fandango::generation::GeneratorTuple<#node_names, S>),*,
-            #(Self: ::fandango::generation::GeneratorTuple<::alloc::boxed::Box<#node_names>, S>),*
-        {}
-
-        impl<S, G> TypeGenerator<S> for G
-        where
-            #(G: ::fandango::generation::GeneratorTuple<#node_names, S>),*,
-            #(G: ::fandango::generation::GeneratorTuple<::alloc::boxed::Box<#node_names>, S>),*
-        {}
-
-        #[derive(Clone, Debug)]
-        #[allow(missing_docs)]
-        pub enum Type<'program> {
-            #(#node_names(&'program #node_names)),*
-        }
-
-        impl ::fandango::typing::Discriminable for Type<'_> {
-            fn discriminant(&self) -> usize {
-                match self {
-                    #(
-                        Self::#node_names(n) => n.discriminant(),
-                    )*
-                }
-            }
-        }
-
-        #(
-            impl<'program> ::fandango::typing::AsNodeRef<#node_names> for Type<'program> {
-                fn as_node(&self) -> Option<&#node_names> {
-                    match self {
-                        Self::#node_names(n) => Some(n),
-                        _ => None,
-                    }
-                }
-            }
-        )*
-
-        #[derive(Debug)]
-        #[allow(missing_docs)]
-        pub enum TypeMut<'program> {
-            #(#node_names(&'program mut #node_names)),*
-        }
-
-        impl ::fandango::typing::Discriminable for TypeMut<'_> {
-            fn discriminant(&self) -> usize {
-                match self {
-                    #(
-                        Self::#node_names(n) => n.discriminant(),
-                    )*
-                }
-            }
-        }
-
-        #(
-            impl<'program> ::fandango::typing::AsNodeRef<#node_names> for TypeMut<'program> {
-                fn as_node(&self) -> Option<&#node_names> {
-                    match self {
-                        Self::#node_names(n) => Some(n),
-                        _ => None,
-                    }
-                }
-            }
-
-            impl<'program> ::fandango::typing::AsNodeMut<#node_names> for TypeMut<'program> {
-                fn as_node_mut(&mut self) -> Option<&mut #node_names> {
-                    match self {
-                        Self::#node_names(n) => Some(n),
-                        _ => None,
-                    }
-                }
-            }
-        )*
-
-        impl<'program> TypeMut<'program> {
-            fn reborrow<'a>(&'a mut self) -> TypeMut<'a> {
-                match self {
-                    #(TypeMut::#node_names(n) => TypeMut::#node_names(&mut *n)),*
-                }
-            }
-        }
-
-        impl<'program> From<TypeMut<'program>> for Type<'program> {
-            fn from(mutable: TypeMut<'program>) -> Type<'program> {
-                match mutable {
-                    #(TypeMut::#node_names(n) => Type::#node_names(n)),*
-                }
-            }
-        }
-
-        impl<'a, 'program, V> ::fandango::visitor::VisitWith<'a, V> for TypeMut<'program>
-        where
-            'program: 'a,
-        {
-            type Visited = TypeMut<'a>;
-
-            fn visit_with(&'a mut self, visitor: V, idx: usize) -> ::fandango::visitor::VisitResult<V, Self::Visited>
+            trait TypeSampler
             where
-                V: ::fandango::visitor::Visitor<TypeMut<'a>>, {
-                match self.reborrow() {
-                    #(TypeMut::#node_names(n) => visitor.visit(n, idx)),*
-                }
-            }
-        }
+                #(Self: ::fandango::generation::Sampler<#node_names>),*
+            {}
 
-        impl<'program, S, G> ::fandango::generation::InPlaceGenerated<S, G> for TypeMut<'program>
-        where
-            #(#node_names: ::fandango::generation::Generated<S, G>),*,
-        {
-            fn generate_in_place(&mut self, sampler: &mut S, with: &mut G, depth: usize) {
-                match self.reborrow() {
-                    #(TypeMut::#node_names(n) => {
-                        *n = ::fandango::generation::Generated::generate(sampler, with, depth);
-                    }),*
-                }
-            }
-        }
-
-        impl<'program> ::fandango::visitor::VisitableChildren<TypeMut<'program>> for TypeMut<'program> {
-            fn visit_each<V>(self, visitor: V) -> ::fandango::visitor::VisitResult<V, TypeMut<'program>>
+            impl<S> TypeSampler for S
             where
-                V: ::fandango::visitor::Visitor<TypeMut<'program>, Continue = V>
-            {
-                match self {
-                    #(TypeMut::#node_names(n) => n.visit_each(visitor)),*
-                }
-            }
+                #(S: ::fandango::generation::Sampler<#node_names>),*
+            {}
 
-            fn visit_each_reverse<V>(self, visitor: V) -> ::fandango::visitor::VisitResult<V, TypeMut<'program>>
+            trait TypeGenerator<S>
             where
-                V: ::fandango::visitor::Visitor<TypeMut<'program>, Continue = V>
-            {
-                match self {
-                    #(TypeMut::#node_names(n) => n.visit_each_reverse(visitor)),*
-                }
-            }
+                #(Self: ::fandango::generation::GeneratorTuple<#node_names, S>),*,
+                #(Self: ::fandango::generation::GeneratorTuple<::alloc::boxed::Box<#node_names>, S>),*
+            {}
 
-            fn visit_each_reverse_from<V>(self, visitor: V, idx: usize) -> ::fandango::visitor::VisitResult<V, TypeMut<'program>>
+            impl<S, G> TypeGenerator<S> for G
             where
-                V: ::fandango::visitor::Visitor<TypeMut<'program>, Continue=V>
-            {
-                match self {
-                    #(TypeMut::#node_names(n) => n.visit_each_reverse_from(visitor, idx)),*
-                }
+                #(G: ::fandango::generation::GeneratorTuple<#node_names, S>),*,
+                #(G: ::fandango::generation::GeneratorTuple<::alloc::boxed::Box<#node_names>, S>),*
+            {}
+
+            #[derive(Clone, Debug)]
+            #[allow(missing_docs)]
+            pub enum Type<'program> {
+                #(#node_names(&'program #node_names)),*
             }
 
-            fn visit_each_from<V>(self, visitor: V, idx: usize) -> ::fandango::visitor::VisitResult<V, TypeMut<'program>>
-            where
-                V: ::fandango::visitor::Visitor<TypeMut<'program>, Continue=V>
-            {
-                match self {
-                    #(TypeMut::#node_names(n) => n.visit_each_from(visitor, idx)),*
-                }
-            }
-
-            fn visit_nth<V>(self, visitor: V, idx: usize) -> ::fandango::visitor::MaybeVisitResult<V, TypeMut<'program>>
-            where
-                V: ::fandango::visitor::Visitor<TypeMut<'program>>
-            {
-                match self {
-                    #(TypeMut::#node_names(n) => n.visit_nth(visitor, idx)),*
-                }
-            }
-        }
-
-        #(
-            impl ::fandango::typing::StaticDiscriminable for #node_names
-            {
-                const DISCRIMINANT: usize = #discriminants;
-            }
-
-            impl ::fandango::typing::Discriminable for #node_names
-            {
+            impl ::fandango::typing::Discriminable for Type<'_> {
                 fn discriminant(&self) -> usize {
-                    <Self as ::fandango::typing::StaticDiscriminable>::DISCRIMINANT
+                    match self {
+                        #(
+                            Self::#node_names(n) => n.discriminant(),
+                        )*
+                    }
                 }
             }
-        )*
 
-        #[allow(missing_docs)]
-        pub const STRUCTURE: &'static ::fandango::lang::Tagged<
-            'static,
-            ::fandango::lang::Program
-        > = &#metadata;
+            #(
+                impl<'program> ::fandango::typing::AsNodeRef<#node_names> for Type<'program> {
+                    fn as_node(&self) -> Option<&#node_names> {
+                        match self {
+                            Self::#node_names(n) => Some(n),
+                            _ => None,
+                        }
+                    }
+                }
+            )*
 
-        #grammar
-    })
+            #[derive(Debug)]
+            #[allow(missing_docs)]
+            pub enum TypeMut<'program> {
+                #(#node_names(&'program mut #node_names)),*
+            }
+
+            impl ::fandango::typing::Discriminable for TypeMut<'_> {
+                fn discriminant(&self) -> usize {
+                    match self {
+                        #(
+                            Self::#node_names(n) => n.discriminant(),
+                        )*
+                    }
+                }
+            }
+
+            #(
+                impl<'program> ::fandango::typing::AsNodeRef<#node_names> for TypeMut<'program> {
+                    fn as_node(&self) -> Option<&#node_names> {
+                        match self {
+                            Self::#node_names(n) => Some(n),
+                            _ => None,
+                        }
+                    }
+                }
+
+                impl<'program> ::fandango::typing::AsNodeMut<#node_names> for TypeMut<'program> {
+                    fn as_node_mut(&mut self) -> Option<&mut #node_names> {
+                        match self {
+                            Self::#node_names(n) => Some(n),
+                            _ => None,
+                        }
+                    }
+                }
+            )*
+
+            impl<'program> TypeMut<'program> {
+                fn reborrow<'a>(&'a mut self) -> TypeMut<'a> {
+                    match self {
+                        #(TypeMut::#node_names(n) => TypeMut::#node_names(&mut *n)),*
+                    }
+                }
+            }
+
+            impl<'program> From<TypeMut<'program>> for Type<'program> {
+                fn from(mutable: TypeMut<'program>) -> Type<'program> {
+                    match mutable {
+                        #(TypeMut::#node_names(n) => Type::#node_names(n)),*
+                    }
+                }
+            }
+
+            impl<'a, 'program, V> ::fandango::visitor::VisitWith<'a, V> for TypeMut<'program>
+            where
+                'program: 'a,
+            {
+                type Visited = TypeMut<'a>;
+
+                fn visit_with(&'a mut self, visitor: V, idx: usize) -> ::fandango::visitor::VisitResult<V, Self::Visited>
+                where
+                    V: ::fandango::visitor::Visitor<TypeMut<'a>>, {
+                    match self.reborrow() {
+                        #(TypeMut::#node_names(n) => visitor.visit(n, idx)),*
+                    }
+                }
+            }
+
+            impl<'program, S, G> ::fandango::generation::InPlaceGenerated<S, G> for TypeMut<'program>
+            where
+                #(#node_names: ::fandango::generation::Generated<S, G>),*,
+            {
+                fn generate_in_place(&mut self, sampler: &mut S, with: &mut G, depth: usize) {
+                    match self.reborrow() {
+                        #(TypeMut::#node_names(n) => {
+                            *n = ::fandango::generation::Generated::generate(sampler, with, depth);
+                        }),*
+                    }
+                }
+            }
+
+            impl<'program> ::fandango::visitor::VisitableChildren<TypeMut<'program>> for TypeMut<'program> {
+                fn visit_each<V>(self, visitor: V) -> ::fandango::visitor::VisitResult<V, TypeMut<'program>>
+                where
+                    V: ::fandango::visitor::Visitor<TypeMut<'program>, Continue = V>
+                {
+                    match self {
+                        #(TypeMut::#node_names(n) => n.visit_each(visitor)),*
+                    }
+                }
+
+                fn visit_each_reverse<V>(self, visitor: V) -> ::fandango::visitor::VisitResult<V, TypeMut<'program>>
+                where
+                    V: ::fandango::visitor::Visitor<TypeMut<'program>, Continue = V>
+                {
+                    match self {
+                        #(TypeMut::#node_names(n) => n.visit_each_reverse(visitor)),*
+                    }
+                }
+
+                fn visit_each_reverse_from<V>(self, visitor: V, idx: usize) -> ::fandango::visitor::VisitResult<V, TypeMut<'program>>
+                where
+                    V: ::fandango::visitor::Visitor<TypeMut<'program>, Continue=V>
+                {
+                    match self {
+                        #(TypeMut::#node_names(n) => n.visit_each_reverse_from(visitor, idx)),*
+                    }
+                }
+
+                fn visit_each_from<V>(self, visitor: V, idx: usize) -> ::fandango::visitor::VisitResult<V, TypeMut<'program>>
+                where
+                    V: ::fandango::visitor::Visitor<TypeMut<'program>, Continue=V>
+                {
+                    match self {
+                        #(TypeMut::#node_names(n) => n.visit_each_from(visitor, idx)),*
+                    }
+                }
+
+                fn visit_nth<V>(self, visitor: V, idx: usize) -> ::fandango::visitor::MaybeVisitResult<V, TypeMut<'program>>
+                where
+                    V: ::fandango::visitor::Visitor<TypeMut<'program>>
+                {
+                    match self {
+                        #(TypeMut::#node_names(n) => n.visit_nth(visitor, idx)),*
+                    }
+                }
+            }
+
+            #(
+                impl ::fandango::typing::StaticDiscriminable for #node_names
+                {
+                    const DISCRIMINANT: usize = #discriminants;
+                }
+
+                impl ::fandango::typing::Discriminable for #node_names
+                {
+                    fn discriminant(&self) -> usize {
+                        <Self as ::fandango::typing::StaticDiscriminable>::DISCRIMINANT
+                    }
+                }
+            )*
+
+            #grammar
+        })
+    }
 }
