@@ -258,23 +258,28 @@ where
         N: Node<TypeMut<'program> = T>,
         T: From<&'program mut N> + AsNodeMut<N>,
     {
-        if self.count == self.target {
-            return Ok(ControlFlow::Break(VecDeque::from([idx])));
-        }
-        self.count += 1;
-        let starting_at = self.from.pop_front().unwrap_or(0);
-        let traversal = if FORWARD {
-            T::from(node).visit_each_from(self, starting_at)?
-        } else {
-            T::from(node).visit_each_reverse_from(self, starting_at)?
-        };
-        match traversal {
-            ControlFlow::Continue(visitor) => Ok(ControlFlow::Continue(visitor)),
-            ControlFlow::Break(mut b) => {
-                b.push_front(idx);
-                Ok(ControlFlow::Break(b))
+        let mut traversal = if let Some(starting_at) = self.from.pop_front() {
+            if FORWARD {
+                T::from(node).visit_each_from(self, starting_at)
+            } else {
+                T::from(node).visit_each_reverse_from(self, starting_at)
             }
+        } else {
+            if self.count == self.target {
+                Ok(ControlFlow::Break(VecDeque::new()))
+            } else {
+                self.count += 1;
+                if FORWARD {
+                    T::from(node).visit_each(self)
+                } else {
+                    T::from(node).visit_each_reverse(self)
+                }
+            }
+        };
+        if let Ok(ControlFlow::Break(trace)) = &mut traversal {
+            trace.push_front(idx);
         }
+        traversal
     }
 }
 
