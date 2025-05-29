@@ -33,13 +33,9 @@ mod defs {
     pub fn perform_benchmark<B>(c: &mut Criterion)
     where
         B: BenchmarkSuite<StdSampler, StdGenerator>,
-        B::Start: Node
-            + Clone
-            + Ord
-            + AsStaticNode
-            + for<'a> CountNodes<'a>
-            + GoTo<'a, Value = <B::Start as Node>::TypeMut<'a>>,
         // boilerplate since we're doing this generically
+        B::Start: Node + Clone + Ord + AsStaticNode,
+        for<'a> B::Start: CountNodes<'a> + GoTo<'a, Value = <B::Start as Node>::TypeMut<'a>>,
         for<'a> NonterminalVisitor: Visitor<
                 <B::Start as Node>::TypeMut<'a>,
                 Continue = NonterminalVisitor,
