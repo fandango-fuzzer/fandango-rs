@@ -2,8 +2,8 @@ use fandango_core::lang::FandangoNode;
 use fandango_core::lang::Operator;
 use pest::Span;
 use petgraph::graph::DiGraph;
-use petgraph::visit::EdgeRef;
-use petgraph::{algo, graph};
+use petgraph::visit::{EdgeRef, IntoNodeReferences};
+use petgraph::{Direction, algo, graph};
 use proc_macro2::{Ident, Literal, TokenStream};
 use quote::{format_ident, quote};
 use std::collections::hash_map::Entry;
@@ -82,28 +82,44 @@ where
             .find(|&n| matches!(self.node_weight(n).unwrap(), FandangoNode::Nonterminal(nt) if nt.name() == "start"))
             .expect("No start node?");
 
-        let vec_pruned = self.filter_map(
-            |_n, w| Some(*w),
-            |e, w| {
-                self.edge_endpoints(e).and_then(|(n1, _)| {
-                    (!matches!(
-                        self.node_weight(n1).unwrap(),
-                        FandangoNode::Operator(Operator::Kleene(_))
-                            | FandangoNode::Operator(Operator::Plus(_))
-                            | FandangoNode::Operator(Operator::Repeat(_, _, _))
-                    ))
-                    .then_some(*w)
+        let needs_indirection = if cfg!(no_opt_indirect) {
+            let vec_pruned = self.filter_map(
+                |_n, w| Some(*w),
+                |e, w| {
+                    self.edge_endpoints(e).and_then(|(n1, _)| {
+                        (!matches!(
+                            self.node_weight(n1).unwrap(),
+                            FandangoNode::Operator(Operator::Kleene(_))
+                                | FandangoNode::Operator(Operator::Plus(_))
+                                | FandangoNode::Operator(Operator::Repeat(_, _, _))
+                        ))
+                        .then_some(*w)
+                    })
+                },
+            );
+            algo::greedy_feedback_arc_set(&vec_pruned)
+                .map(|e| {
+                    (
+                        *vec_pruned.node_weight(e.source()).unwrap(),
+                        *vec_pruned.node_weight(e.target()).unwrap(),
+                    )
                 })
-            },
-        );
-        let needs_indirection = algo::greedy_feedback_arc_set(&vec_pruned)
-            .map(|e| {
-                (
-                    *vec_pruned.node_weight(e.source()).unwrap(),
-                    *vec_pruned.node_weight(e.target()).unwrap(),
-                )
-            })
-            .collect::<HashSet<_>>();
+                .collect::<HashSet<_>>()
+        } else {
+            self.node_references()
+                .filter_map(|(n, weight)| match weight {
+                    FandangoNode::Nonterminal(_) => Some(n),
+                    _ => None,
+                })
+                .flat_map(|n| self.edges_directed(n, Direction::Incoming))
+                .map(|e| {
+                    (
+                        *self.node_weight(e.source()).unwrap(),
+                        *self.node_weight(e.target()).unwrap(),
+                    )
+                })
+                .collect()
+        };
 
         let mut edges = self.edges(start_node);
         let e = edges

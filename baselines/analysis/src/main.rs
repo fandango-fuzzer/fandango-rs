@@ -68,6 +68,8 @@ const OPERATIONS: &'static [&'static str] = &[
 
 const FORMAL_NAMES: &'static [&'static str] = &["Generate", "Fix", "Check", "Mutate", "Crossover"];
 
+const ABLATION: &'static [&'static str] = &["generate", "mutate", "crossover"];
+
 fn main() {
     let mut results = HashMap::new();
     for operation in OPERATIONS {
@@ -330,5 +332,23 @@ fn main() {
             " & {:.2} days \\\\",
             isla_time.as_secs_f64() / (24 * 60 * 60) as f64
         );
+    }
+
+    println!();
+
+    for operation in ABLATION {
+        print!("\\textit{{{operation}}}");
+        for target in TARGETS {
+            let model = results.get(&(target, operation)).unwrap();
+            let dynamic = format!("{operation} dynamic");
+            let reference = dynamic.as_str(); // easier than fixing the rest...
+            let dynamic = results.get(&(target, &reference)).unwrap();
+            if !operation.starts_with("crossover") {
+                print!(" & {:.2}$\\times$", dynamic.params()[0] / model.params()[0])
+            } else {
+                print!(" & {:.2}$\\times$", dynamic.intercept() / model.intercept())
+            }
+        }
+        println!(" \\\\");
     }
 }

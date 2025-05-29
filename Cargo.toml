@@ -6,7 +6,7 @@ authors.workspace = true
 
 [dependencies]
 fandango-core = { path = "core" }
-fandango-derive = { path = "derive" }
+fandango-derive = { path = "derive", default-features = false }
 
 pest.workspace = true
 pest_derive.workspace = true
@@ -61,3 +61,7 @@ bindings_with_variant_name = "allow"
 type_alias_bounds = "allow"
 
 missing_docs = "warn"
+
+# allows for non-optimal indirection
+# hidden as CFG because there is no use case for this
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(no_opt_indirect)'] }
