@@ -25,11 +25,8 @@ mod static_defs {
     use alloc::collections::VecDeque;
     use alloc::vec::Vec;
     use common::{BenchmarkSuite, StdGenerator, StdSampler};
-    use fandango::dynamic::{DynamicNode, DynamicSampler};
     use fandango::generation::Generated;
-    use fandango::typing::AsStaticNode;
     use fandango::visitor::Visitor;
-    use fandango_targets::operators::mutate;
     use fandango_targets::{Checker, crossover, csv};
 
     impl BenchmarkSuite<StdSampler, StdGenerator> for Benchmark {
@@ -56,45 +53,13 @@ mod static_defs {
                 .violations()
         }
 
-        fn mutate(
-            item: &mut Self::Start,
-            choices: &mut Vec<VecDeque<usize>>,
-            sampler: &mut StdSampler,
-            generator: &mut StdGenerator,
-        ) -> bool {
-            mutate(item, choices, sampler, generator).unwrap().is_some()
-        }
-
         fn crossover(
             item: &mut Self::Start,
             other: &mut Self::Start,
-            choices: &mut Vec<VecDeque<usize>>,
+            mut choice: VecDeque<usize>,
             sampler: &mut StdSampler,
         ) -> bool {
-            crossover!(
-                csv::nonterminal_csv_string_list,
-                item,
-                other,
-                choices,
-                sampler
-            )
-            .unwrap()
-        }
-
-        fn crossover_dynamic(
-            item: &mut DynamicNode,
-            other: &mut DynamicNode,
-            choices: &mut Vec<VecDeque<usize>>,
-            sampler: &mut DynamicSampler<StdSampler>,
-        ) -> bool {
-            crossover!(
-                dynamic csv::nonterminal_csv_string_list::static_definition(),
-                item,
-                other,
-                choices,
-                sampler
-            )
-            .unwrap()
+            crossover!(item, other, choice, sampler).unwrap()
         }
     }
 }

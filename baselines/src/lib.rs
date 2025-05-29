@@ -18,20 +18,22 @@ mod defs {
     use core::time::Duration;
     use criterion::{BatchSize, BenchmarkId, Criterion, Throughput};
     use fandango::dynamic::{DynamicNode, DynamicSampler};
-    use fandango::generation::Generated;
+    use fandango::generation::{Generated, InPlaceGenerated};
     use fandango::tuple_list::tuple_list;
-    use fandango::typing::{AsNodeMut, AsStaticNode, Node};
+    use fandango::typing::{AsNode, AsNodeMut, AsStaticNode, Node};
+    use fandango::visitor::navigation::{Advance, CountNodes, GoTo};
     use fandango::visitor::write::WriteVisitor;
     use fandango::visitor::{VisitableChildren, Visitor};
-    use fandango_targets::operators::{DepthLimiter, NonterminalVisitor, mutate_dynamic};
-    use rand::SeedableRng;
+    use fandango_targets::crossover;
+    use fandango_targets::operators::{DepthLimiter, NonterminalVisitor};
     use rand::seq::IndexedRandom;
+    use rand::{RngCore, SeedableRng};
 
     /// Do the benchmark! Set `B` to your desired baseline.
     pub fn perform_benchmark<B>(c: &mut Criterion)
     where
         B: BenchmarkSuite<StdSampler, StdGenerator>,
-        B::Start: Node + Clone + Ord + AsStaticNode,
+        B::Start: Node + Clone + Ord + AsStaticNode + for<'a> CountNodes<'a>,
         // boilerplate since we're doing this generically
         for<'a> NonterminalVisitor: Visitor<
                 <B::Start as Node>::TypeMut<'a>,
@@ -46,7 +48,9 @@ mod defs {
             >,
         for<'a> <B::Start as Node>::TypeMut<'a>: VisitableChildren<<B::Start as Node>::TypeMut<'a>>
             + AsNodeMut<B::Start>
-            + From<&'a mut B::Start>,
+            + From<&'a mut B::Start>
+            + GoTo<'a, Value = <B::Start as Node>::TypeMut<'a>>
+            + InPlaceGenerated<StdSampler, StdGenerator>,
     {
         let mut group = c.benchmark_group(B::NAME);
         group.warm_up_time(Duration::from_millis(100));
@@ -190,7 +194,7 @@ mod defs {
             // mutate a generated input
             // the generator and sampler are unconstrained for this operation
             group.bench_function(BenchmarkId::new("mutate", size), |b| {
-                b.iter_batched_ref(
+                b.iter_batched(
                     || {
                         let mut sample = B::generate(
                             &mut StdSampler::seed_from_u64(
@@ -198,16 +202,21 @@ mod defs {
                             ),
                             &mut setup_generator,
                         );
-                        let choices = B::check(&mut sample);
-                        (sample, choices, global.clone())
+
+                        let count = sample.count_nodes();
+                        let choice = Advance::forward(global.next_u64() as usize % count)
+                            .visit(&mut sample, 0)
+                            .unwrap()
+                            .break_value()
+                            .unwrap();
+
+                        (sample, choice, global.clone())
                     },
-                    |(value, choices, local)| {
-                        B::mutate(
-                            black_box(value),
-                            black_box(choices),
-                            black_box(local),
-                            &mut generator,
-                        )
+                    |(mut value, mut choice, mut local)| {
+                        let idx = choice.pop_front().unwrap();
+                        let depth = choice.len();
+                        let mut mutated = value.go_to(idx, choice).unwrap();
+                        mutated.generate_in_place(black_box(&mut local), &mut generator, depth);
                     },
                     BatchSize::SmallInput,
                 )
@@ -216,14 +225,11 @@ mod defs {
             // mutate a generated input
             // the generator and sampler are unconstrained for this operation
             group.bench_function(BenchmarkId::new("mutate dynamic", size), |b| {
-                b.iter_batched_ref(
+                b.iter_batched(
                     || {
                         let seed = seeds.choose(&mut global).copied().unwrap();
-                        let mut sample =
-                            B::generate(&mut StdSampler::seed_from_u64(seed), &mut setup_generator);
-                        let choices = B::check(&mut sample);
 
-                        let sample = DynamicNode::generate(
+                        let mut sample = DynamicNode::generate(
                             &mut DynamicSampler::new(
                                 <B::Start as AsStaticNode>::static_root(),
                                 <B::Start as AsStaticNode>::static_definition(),
@@ -233,22 +239,27 @@ mod defs {
                             &mut setup_generator,
                             0,
                         );
-                        (sample, choices, global.clone())
+
+                        let count = sample.count_nodes();
+                        let choice = Advance::forward(global.next_u64() as usize % count)
+                            .visit(&mut sample, 0)
+                            .unwrap()
+                            .break_value()
+                            .unwrap();
+
+                        (sample, choice, global.clone())
                     },
-                    |(value, choices, local)| {
-                        mutate_dynamic(
-                            black_box(value),
-                            black_box(choices),
-                            &mut DynamicSampler::new(
-                                <B::Start as AsStaticNode>::static_root(),
-                                <B::Start as AsStaticNode>::static_definition(),
-                                &nonterminals,
-                                black_box(local),
-                            ),
-                            &mut generator,
-                        )
-                        .unwrap()
-                        .is_some()
+                    |(mut value, mut choice, mut local)| {
+                        let idx = choice.pop_front().unwrap();
+                        let depth = choice.len();
+                        let mutated = value.go_to(idx, choice).unwrap();
+                        let mut sampler = DynamicSampler::new(
+                            mutated.root(),
+                            mutated.definition(),
+                            &nonterminals,
+                            black_box(&mut local),
+                        );
+                        mutated.generate_in_place(&mut sampler, &mut generator, depth);
                     },
                     BatchSize::SmallInput,
                 )
@@ -257,7 +268,7 @@ mod defs {
             // crossover a generated input using another sampled input
             // the sampler and base input are unconstrained for this operation
             group.bench_function(BenchmarkId::new("crossover", size), |b| {
-                b.iter_batched_ref(
+                b.iter_batched(
                     || {
                         let mut sample = B::generate(
                             &mut StdSampler::seed_from_u64(
@@ -265,18 +276,24 @@ mod defs {
                             ),
                             &mut setup_generator,
                         );
-                        let choices = B::check(&mut sample);
+
+                        let count = sample.count_nodes();
+                        let choice = Advance::forward(global.next_u64() as usize % count)
+                            .visit(&mut sample, 0)
+                            .unwrap()
+                            .break_value()
+                            .unwrap();
 
                         let other = B::generate(&mut global, &mut setup_generator);
 
-                        (sample, other, choices, global.clone())
+                        (sample, other, choice, global.clone())
                     },
-                    |(value, base, choices, local)| {
+                    |(mut value, mut base, choice, mut local)| {
                         B::crossover(
-                            black_box(value),
-                            black_box(base),
-                            black_box(choices),
-                            black_box(local),
+                            black_box(&mut value),
+                            black_box(&mut base),
+                            black_box(choice),
+                            black_box(&mut local),
                         )
                     },
                     BatchSize::SmallInput,
@@ -286,14 +303,10 @@ mod defs {
             // crossover a generated input using another sampled input
             // the sampler and base input are unconstrained for this operation
             group.bench_function(BenchmarkId::new("crossover dynamic", size), |b| {
-                b.iter_batched_ref(
+                b.iter_batched(
                     || {
                         let seed = seeds.choose(&mut global).copied().unwrap();
-                        let mut sample =
-                            B::generate(&mut StdSampler::seed_from_u64(seed), &mut setup_generator);
-                        let choices = B::check(&mut sample);
-
-                        let sample = DynamicNode::generate(
+                        let mut sample = DynamicNode::generate(
                             &mut DynamicSampler::new(
                                 <B::Start as AsStaticNode>::static_root(),
                                 <B::Start as AsStaticNode>::static_definition(),
@@ -303,6 +316,13 @@ mod defs {
                             &mut setup_generator,
                             0,
                         );
+
+                        let count = sample.count_nodes();
+                        let choice = Advance::forward(global.next_u64() as usize % count)
+                            .visit(&mut sample, 0)
+                            .unwrap()
+                            .break_value()
+                            .unwrap();
 
                         let other = DynamicNode::generate(
                             &mut DynamicSampler::new(
@@ -315,20 +335,10 @@ mod defs {
                             0,
                         );
 
-                        (sample, other, choices, global.clone())
+                        (sample, other, choice, global.clone())
                     },
-                    |(value, base, choices, local)| {
-                        B::crossover_dynamic(
-                            black_box(value),
-                            black_box(base),
-                            black_box(choices),
-                            &mut DynamicSampler::new(
-                                <B::Start as AsStaticNode>::static_root(),
-                                <B::Start as AsStaticNode>::static_definition(),
-                                &nonterminals,
-                                black_box(local),
-                            ),
-                        )
+                    |(mut value, mut base, mut choice, mut local)| {
+                        crossover!(&mut value, &mut base, choice, &mut local)
                     },
                     BatchSize::SmallInput,
                 )

@@ -32,3 +32,34 @@ where
         }
     }
 }
+
+/// Swaps a visited node with this opaque node.
+pub struct SwapVisitor<T> {
+    replacement: T,
+}
+
+impl<T> SwapVisitor<T> {
+    /// Swap this node with that node!
+    pub fn new(replacement: T) -> Self {
+        Self { replacement }
+    }
+}
+
+impl<T> Visitor<T> for SwapVisitor<T> {
+    type Continue = Infallible;
+    type Break = T;
+    type Error = T;
+
+    fn visit<'program, N>(mut self, node: &'program mut N, _idx: usize) -> VisitResult<Self, T>
+    where
+        N: Node<TypeMut<'program> = T>,
+        T: From<&'program mut N> + AsNodeMut<N>,
+    {
+        if let Some(replacement) = self.replacement.as_node_mut() {
+            core::mem::swap(node, replacement);
+            Ok(ControlFlow::Break(self.replacement))
+        } else {
+            Err(self.replacement)
+        }
+    }
+}

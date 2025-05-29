@@ -31,10 +31,8 @@ const OPERATIONS: &'static [&'static str] = &[
     "fix",
     "check",
     "mutate",
-    "crossover",
     "generate dynamic",
     "mutate dynamic",
-    "crossover dynamic",
 ];
 
 const FORMAL_NAMES: &'static [&'static str] = &["Generate", "Fix", "Check", "Mutate", "Crossover"];

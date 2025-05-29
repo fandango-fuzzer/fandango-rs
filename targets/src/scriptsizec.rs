@@ -27,13 +27,14 @@ mod defs {
 #[cfg(feature = "static_defs")]
 mod defs {
     use crate::Checker;
-    use alloc::collections::{BTreeSet, VecDeque};
+    use alloc::collections::VecDeque;
     use alloc::vec::Vec;
     use core::convert::Infallible;
     use core::ops::ControlFlow;
     use fandango::Fandango;
     use fandango::typing::{AsNodeMut, AsNodeRef, Node};
     use fandango::visitor::{VisitResult, VisitableChildren, Visitor};
+    use hashbrown::HashSet;
 
     /// Base for the ScriptSizeC grammar stored in ssc.fan.
     #[derive(Fandango)]
@@ -48,7 +49,7 @@ mod defs {
         violations: Vec<VecDeque<usize>>,
     }
 
-    impl ConstraintVisitor<BTreeSet<nonterminal_id>> {
+    impl ConstraintVisitor<HashSet<nonterminal_id>> {
         /// Construct this visitor in the form that was originally evaluated in FANDANGO.
         #[deprecated(note = "The ScriptSizeC grammar originally does not implement scoping.")]
         pub fn evaluated() -> Self {
@@ -62,7 +63,7 @@ mod defs {
         }
     }
 
-    impl<T> Visitor<T> for ConstraintVisitor<BTreeSet<nonterminal_id>>
+    impl<T> Visitor<T> for ConstraintVisitor<HashSet<nonterminal_id>>
     where
         T: VisitableChildren<T> + AsNodeRef<nonterminal_declaration> + AsNodeRef<nonterminal_id>,
     {
@@ -113,17 +114,17 @@ mod defs {
         scope: S,
     }
 
-    impl ConstraintFixer<BTreeSet<nonterminal_id>> {
+    impl ConstraintFixer<HashSet<nonterminal_id>> {
         /// Construct this fixer in the form that was originally evaluated in FANDANGO.
         #[deprecated(note = "The ScriptSizeC grammar originally does not implement scoping.")]
         pub fn evaluated() -> Self {
             Self {
-                scope: BTreeSet::new(),
+                scope: HashSet::new(),
             }
         }
     }
 
-    impl<T> Visitor<T> for ConstraintFixer<BTreeSet<nonterminal_id>> {
+    impl<T> Visitor<T> for ConstraintFixer<HashSet<nonterminal_id>> {
         type Continue = Self;
         type Break = Infallible;
         type Error = Infallible;

@@ -250,16 +250,16 @@ where
     T: VisitableChildren<T>,
 {
     type Continue = Self;
-    type Break = T;
+    type Break = VecDeque<usize>;
     type Error = Infallible;
 
-    fn visit<'program, N>(mut self, node: &'program mut N, _: usize) -> VisitResult<Self, T>
+    fn visit<'program, N>(mut self, node: &'program mut N, idx: usize) -> VisitResult<Self, T>
     where
         N: Node<TypeMut<'program> = T>,
         T: From<&'program mut N> + AsNodeMut<N>,
     {
         if self.count == self.target {
-            return Ok(ControlFlow::Break(T::from(node)));
+            return Ok(ControlFlow::Break(VecDeque::from([idx])));
         }
         self.count += 1;
         let starting_at = self.from.pop_front().unwrap_or(0);
@@ -270,7 +270,10 @@ where
         };
         match traversal {
             ControlFlow::Continue(visitor) => Ok(ControlFlow::Continue(visitor)),
-            b => Ok(b),
+            ControlFlow::Break(mut b) => {
+                b.push_front(idx);
+                Ok(ControlFlow::Break(b))
+            }
         }
     }
 }

@@ -19,15 +19,16 @@ static_defs = [
 fandango.workspace = true
 fandango-targets.workspace = true
 
-csv = { path = "csv" }
-rest = { path = "rest" }
-scriptsizec = { path = "scriptsizec" }
-xml = { path = "xml" }
-
 common = { path = "common" }
 
 criterion.workspace = true
 rand.workspace = true
+
+[dev-dependencies]
+csv = { path = "csv" }
+rest = { path = "rest" }
+scriptsizec = { path = "scriptsizec" }
+xml = { path = "xml" }
 
 [profile.release]
 codegen-units = 1

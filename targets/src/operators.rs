@@ -16,13 +16,11 @@ use core::convert::Infallible;
 use core::marker::PhantomData;
 use core::ops::ControlFlow;
 #[allow(deprecated)]
-use fandango::dynamic::{DefinitionOf, DynamicNode, HasDynamicSampler};
-use fandango::generation::{Generated, Generator, GeneratorTuple, InPlaceGenerated, Sampler};
+use fandango::dynamic::{DefinitionOf, HasDynamicSampler};
+use fandango::generation::{Generated, Generator, GeneratorTuple, Sampler};
 use fandango::graph::IntoGraph;
 use fandango::lang::{FandangoNode, Program};
-use fandango::typing::{AsNode, AsNodeMut, Node, StaticDiscriminable};
-use fandango::visitor::error::InvalidPath;
-use fandango::visitor::navigation::GoTo;
+use fandango::typing::{AsNodeMut, Node, StaticDiscriminable};
 use fandango::visitor::{VisitResult, VisitableChildren, Visitor};
 use fandango::{impl_definition_of, impl_has_dynamic_sampler};
 use hashbrown::HashMap;
@@ -255,69 +253,6 @@ where
     }
 }
 
-/// Mutate a node, FANDANGO-style.
-pub fn mutate<'a, N, S, G>(
-    mutated: &'a mut N,
-    choices: &mut Vec<VecDeque<usize>>,
-    sampler: &mut S,
-    generator: &mut G,
-) -> Result<Option<N::TypeMut<'a>>, InvalidPath>
-where
-    N: Node + for<'b> GoTo<'b, Value = N::TypeMut<'b>>,
-    for<'b> N::TypeMut<'b>: InPlaceGenerated<S, G>,
-    S: Sampler<N>,
-{
-    if choices.is_empty() {
-        return Ok(None);
-    }
-
-    // pick any path for mutation
-    let mut path = choices.swap_remove(sampler.sample() % choices.len());
-
-    // prune paths which are invalidated; that is, removing paths which start with this one
-    choices.retain(|v| v.len() < path.len() || v.iter().zip(&path).any(|(a, b)| a != b));
-
-    let depth = path.len() - 1; // retain depth info
-    let idx = path.pop_front().unwrap();
-    let mut node = mutated.go_to(idx, path)?;
-
-    node.generate_in_place(sampler, generator, depth);
-
-    Ok(Some(node))
-}
-
-/// Mutate a node dynamically, FANDANGO-style.
-#[allow(deprecated)]
-pub fn mutate_dynamic<'a, S, G>(
-    mutated: &'a mut DynamicNode,
-    choices: &mut Vec<VecDeque<usize>>,
-    sampler: &mut S,
-    generator: &mut G,
-) -> Result<Option<&'a mut DynamicNode>, InvalidPath>
-where
-    DynamicNode: InPlaceGenerated<S, G>,
-    S: Sampler<DynamicNode> + HasDynamicSampler,
-{
-    if choices.is_empty() {
-        return Ok(None);
-    }
-
-    // pick any path for mutation
-    let mut path = choices.swap_remove(sampler.sample() % choices.len());
-
-    // prune paths which are invalidated; that is, removing paths which start with this one
-    choices.retain(|v| v.len() < path.len() || v.iter().zip(&path).any(|(a, b)| a != b));
-
-    let depth = path.len() - 1; // retain depth info
-    let idx = path.pop_front().unwrap();
-    let node = mutated.go_to(idx, path)?;
-
-    sampler.with_definition(node.definition());
-    node.generate_in_place(sampler, generator, depth);
-
-    Ok(Some(node))
-}
-
 /// Scans a set of nodes for all instances of a given discriminant.
 pub struct NodeScan {
     discriminant: usize,
@@ -371,24 +306,16 @@ where
 /// Due to limitations of the Rust type system, we have to keep this as a macro for now. :(
 #[macro_export]
 macro_rules! crossover {
-    (@ $discriminant:expr, $crossed:ty, $mutated:expr, $base:expr, $choices:ident, $sampler:expr) => {
+    ($mutated:expr, $base:expr, $choice:ident, $sampler:expr) => {{
         (|| {
-            let mut filtered = ::alloc::vec::Vec::new();
-            for path in $choices.iter() {
-                let mut cloned = path.clone();
-                let idx = cloned.pop_front().unwrap();
-                let mut node = ::fandango::visitor::navigation::GoTo::go_to($mutated, idx, cloned)?;
+            let idx = $choice.pop_front().unwrap();
+            let depth = $choice.len();
+            let mut node = ::fandango::visitor::navigation::GoTo::go_to($mutated, idx, $choice)?;
 
-                use ::fandango::typing::Discriminable;
-                if node.discriminant() == $discriminant {
-                    filtered.push(path);
-                }
-            }
-            if filtered.is_empty() {
-                return Ok(false);
-            }
+            use ::fandango::typing::Discriminable;
+            let discriminant = node.discriminant();
 
-            let mut base_choices = $crate::operators::NodeScan::new($discriminant)
+            let mut base_choices = $crate::operators::NodeScan::new(discriminant)
                 .visit($base, 0)
                 .unwrap()
                 .continue_value()
@@ -398,53 +325,21 @@ macro_rules! crossover {
                 return Result::<bool, ::fandango::visitor::error::InvalidPath>::Ok(false);
             }
 
-            // pick any path for mutation
-            let mut path = filtered
-                .swap_remove(
-                    ::fandango::generation::Sampler::<$crossed>::sample($sampler) % filtered.len(),
-                )
-                .clone();
             let mut base_path = base_choices
                 .swap_remove(
-                    ::fandango::generation::Sampler::<$crossed>::sample($sampler)
-                        % base_choices.len(),
+                    ::fandango::generation::Sampler::<()>::sample($sampler) % base_choices.len(),
                 )
                 .clone();
-
-            // prune paths which are invalidated; that is, removing paths which start with this one
-            $choices.retain(|v| v.len() < path.len() || v.iter().zip(&path).any(|(a, b)| a != b));
-
-            let idx = path.pop_front().unwrap();
-            let mut node = ::fandango::visitor::navigation::GoTo::go_to($mutated, idx, path)?;
 
             let _ = base_path.pop_front().unwrap();
             let mut base = ::fandango::visitor::navigation::GoTo::go_to($base, idx, base_path)?;
 
-            ::fandango::visitor::assignment::AssignmentVisitor(
-                ::fandango::typing::AsNodeMut::<$crossed>::as_node_mut(&mut base)
-                    .cloned()
-                    .unwrap(),
-            )
-            .visit(
-                ::fandango::typing::AsNodeMut::<$crossed>::as_node_mut(&mut node).unwrap(),
-                idx,
-            )
-            .unwrap()
-            .break_value()
-            .unwrap();
+            let mut swapper = ::fandango::visitor::assignment::SwapVisitor::new(base);
+
+            let _ = ::fandango::visitor::VisitWith::visit_with(&mut node, swapper, idx).unwrap();
 
             Ok(true)
         })()
-    };
-
-    ($crossed:ty, $mutated:expr, $base:expr, $choices:ident, $sampler:expr) => {{
-        let discriminant = <$crossed as ::fandango::typing::StaticDiscriminable>::DISCRIMINANT;
-        $crate::crossover!(@ discriminant, $crossed, $mutated, $base, $choices, $sampler)
-    }};
-
-    (dynamic $crossed:expr, $mutated:expr, $base:expr, $choices:ident, $sampler:expr) => {{
-        let discriminant = ::fandango::dynamic::DynamicDiscriminant::computed_discriminant(&$crossed);
-        $crate::crossover!(@ discriminant, ::fandango::dynamic::DynamicNode, $mutated, $base, $choices, $sampler)
     }};
 }
 

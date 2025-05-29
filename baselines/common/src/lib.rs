@@ -32,12 +32,12 @@ mod static_defs {
     use crate::DynamicBenchmarkSuite;
     use alloc::collections::VecDeque;
     use alloc::vec::Vec;
-    use fandango::dynamic::{DynamicNode, DynamicSampler};
+    use fandango::typing::Node;
 
     /// Trait which each benchmark target will implement, for consistency.
     pub trait BenchmarkSuite<S, G>: DynamicBenchmarkSuite {
         /// The start node type (often, `nonterminal_start`) used by the benchmark.
-        type Start;
+        type Start: Node;
 
         /// Generate a start node.
         fn generate(sampler: &mut S, generator: &mut G) -> Self::Start;
@@ -50,30 +50,12 @@ mod static_defs {
         /// Check a given start node's constraints and return any violations as paths.
         fn check(item: &mut Self::Start) -> Vec<VecDeque<usize>>;
 
-        /// Mutate the given start node at the given points, where possible.
-        fn mutate(
-            item: &mut Self::Start,
-            choices: &mut Vec<VecDeque<usize>>,
-            sampler: &mut S,
-            generator: &mut G,
-        ) -> bool;
-
         /// Crossover the given start node at the given points with the provided base.
         fn crossover(
             item: &mut Self::Start,
             other: &mut Self::Start,
-            choices: &mut Vec<VecDeque<usize>>,
+            choice: VecDeque<usize>,
             sampler: &mut S,
-        ) -> bool;
-
-        /// Crossover the given dynamic node at the given points with the provided base.
-        ///
-        /// Since the crossover targets are specific to each benchmark, we split these out.
-        fn crossover_dynamic(
-            item: &mut DynamicNode,
-            other: &mut DynamicNode,
-            choices: &mut Vec<VecDeque<usize>>,
-            sampler: &mut DynamicSampler<S>,
         ) -> bool;
     }
 }

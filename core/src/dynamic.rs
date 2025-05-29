@@ -7,7 +7,7 @@
 use crate::generation::{DefaultGenerated, Generated, GeneratorTuple, InPlaceGenerated, Sampler};
 use crate::lang::{Operator, Symbol};
 use crate::typing::{AsNode, AsNodeMut, Discriminable, Node};
-use crate::visitor::{MaybeVisitResult, VisitResult, VisitableChildren, Visitor};
+use crate::visitor::{MaybeVisitResult, VisitResult, VisitWith, VisitableChildren, Visitor};
 use alloc::boxed::Box;
 use alloc::vec;
 use alloc::vec::Vec;
@@ -544,5 +544,19 @@ impl<'a> VisitableChildren<&'a mut DynamicNode> for &'a mut DynamicNode {
             None => Err(visitor),
             Some(child) => Ok(visitor.visit(child, idx)),
         }
+    }
+}
+
+impl<'a, V> VisitWith<'a, V> for &'a mut DynamicNode
+where
+    V: Visitor<&'a mut DynamicNode>,
+{
+    type Visited = &'a mut DynamicNode;
+
+    fn visit_with(&'a mut self, visitor: V, idx: usize) -> VisitResult<V, Self::Visited>
+    where
+        V: Visitor<Self::Visited>,
+    {
+        visitor.visit(self, idx)
     }
 }

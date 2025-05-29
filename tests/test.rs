@@ -21,7 +21,9 @@ mod simple {
     use fandango_core::generation::{Generated, InPlaceGenerated};
     use fandango_core::typing::{AsNode, AsStaticNode, Structured};
     use fandango_core::visitor::Visitor;
-    use fandango_core::visitor::navigation::{Advance, CountNodes, CountNodesWith, FindVisitor};
+    use fandango_core::visitor::navigation::{
+        Advance, CountNodes, CountNodesWith, FindVisitor, GoTo,
+    };
     use fandango_core::visitor::write::WriteVisitor;
     use fandango_core::visitor_chain;
     use rand::Rng;
@@ -131,6 +133,8 @@ mod simple {
                 .visit(&mut start, 0)?
                 .break_value()
                 .unwrap();
+            let idx = target.pop_front().unwrap();
+            let target = start.go_to(target, idx);
             let old_count = target.count_nodes();
             target.generate_in_place(&mut rng, &mut generators, 0);
             let new_count = target.count_nodes();
@@ -165,10 +169,12 @@ mod simple {
         for _ in 0..100_000 {
             let old_start = start.clone();
             let selection = sampler.inner().random_range(0..count);
-            let target = Advance::forward(selection)
+            let mut target = Advance::forward(selection)
                 .visit(&mut start, 0)?
                 .break_value()
                 .unwrap();
+            let idx = target.pop_front().unwrap();
+            let target = start.go_to(target, idx);
             let old_count = target.count_nodes();
             let definition = target.definition();
             sampler.with_definition(definition);
