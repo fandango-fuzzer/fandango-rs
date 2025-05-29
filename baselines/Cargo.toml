@@ -59,6 +59,7 @@ missing_docs = "warn"
 fandango = { path = ".." }
 fandango-targets = { path = "../targets", default-features = false }
 
+serde_csv = { version = "1.3.1", package = "csv" } # rename due to conflict
 criterion = { version = "0.6.0", features = ["html_reports"] }
 hashbrown = { version = "0.15.2", default-features = false }
 linfa = "0.7.1"
