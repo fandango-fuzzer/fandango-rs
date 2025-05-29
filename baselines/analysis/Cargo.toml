@@ -7,7 +7,6 @@ edition = "2024"
 linfa.workspace = true
 linfa-linear.workspace = true
 ndarray.workspace = true
-plotters.workspace = true
 serde = { workspace = true, features = ["derive"] }
 serde_csv.workspace = true
 serde_json.workspace = true

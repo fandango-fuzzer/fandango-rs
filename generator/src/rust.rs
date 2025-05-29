@@ -83,6 +83,20 @@ where
             .expect("No start node?");
 
         let needs_indirection = if cfg!(no_opt_indirect) {
+            self.node_references()
+                .filter_map(|(n, weight)| match weight {
+                    FandangoNode::Nonterminal(_) => Some(n),
+                    _ => None,
+                })
+                .flat_map(|n| self.edges_directed(n, Direction::Incoming))
+                .map(|e| {
+                    (
+                        *self.node_weight(e.source()).unwrap(),
+                        *self.node_weight(e.target()).unwrap(),
+                    )
+                })
+                .collect()
+        } else {
             let vec_pruned = self.filter_map(
                 |_n, w| Some(*w),
                 |e, w| {
@@ -105,20 +119,6 @@ where
                     )
                 })
                 .collect::<HashSet<_>>()
-        } else {
-            self.node_references()
-                .filter_map(|(n, weight)| match weight {
-                    FandangoNode::Nonterminal(_) => Some(n),
-                    _ => None,
-                })
-                .flat_map(|n| self.edges_directed(n, Direction::Incoming))
-                .map(|e| {
-                    (
-                        *self.node_weight(e.source()).unwrap(),
-                        *self.node_weight(e.target()).unwrap(),
-                    )
-                })
-                .collect()
         };
 
         let mut edges = self.edges(start_node);
