@@ -1,3 +1,5 @@
+//! Analysis for all the things! Run this to reproduce the tables in the paper.
+
 use linfa::Dataset;
 use linfa::traits::Fit;
 use linfa_linear::FittedLinearRegression;
@@ -15,14 +17,12 @@ use std::{fs, iter};
 #[derive(Debug, Copy, Clone, Deserialize)]
 struct FandangoSample {
     nodes: usize,
-    time: f64,
 }
 
 #[derive(Debug, Copy, Clone, Deserialize)]
 struct FandangoProfiling {
     initial_population: FandangoRecord,
     evaluate_individual_constr: FandangoRecord,
-    evaluate_individual: FandangoRecord,
     select_elites: FandangoRecord,
     tournament_selection: FandangoRecord,
     filling: FandangoRecord,
@@ -39,17 +39,16 @@ struct FandangoRecord {
 
 #[derive(Debug, Clone, Deserialize)]
 struct ExperimentSamples {
-    sampling_mode: String,
     iters: Vec<f64>,
     times: Vec<f64>,
 }
 
-const TARGETS: &'static [&'static str] = &["csv", "rest", "scriptsizec", "xml"];
-const FANDANGO_NAMES: &'static [&'static str] = &["csv", "rest", "c", "xml"];
+const TARGETS: &[&str] = &["csv", "rest", "scriptsizec", "xml"];
+const FANDANGO_NAMES: &[&str] = &["csv", "rest", "c", "xml"];
 
-const FANDANGO_SPEEDUP: &'static [f64] = &[1355.0, 146.0, 29.0, 48.0, 183.0];
+const FANDANGO_SPEEDUP: &[f64] = &[1355.0, 146.0, 29.0, 48.0, 183.0];
 
-const OPERATIONS: &'static [&'static str] = &[
+const OPERATIONS: &[&str] = &[
     "generate",
     "fix",
     "check",
@@ -60,9 +59,9 @@ const OPERATIONS: &'static [&'static str] = &[
     "crossover dynamic",
 ];
 
-const FORMAL_NAMES: &'static [&'static str] = &["Generate", "Fix", "Check", "Mutate", "Crossover"];
+const FORMAL_NAMES: &[&str] = &["Generate", "Fix", "Check", "Mutate", "Crossover"];
 
-const ABLATION: &'static [&'static str] = &["generate", "mutate", "crossover"];
+const ABLATION: &[&str] = &["generate", "mutate", "crossover"];
 
 fn regress(operation: &str, path: &Path) -> FittedLinearRegression<f64> {
     let mut samples = Vec::new();
@@ -316,7 +315,7 @@ fn main() {
     for operation in ABLATION {
         print!("\\textit{{{operation}}}");
         for target in TARGETS {
-            let model = indirect.get(&(target, &operation)).unwrap();
+            let model = indirect.get(&(target, operation)).unwrap();
             if !operation.starts_with("crossover") {
                 print!(" & {:.2}{{\\tiny /node}}", model.params()[0])
             } else {

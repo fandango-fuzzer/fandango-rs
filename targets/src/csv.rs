@@ -23,7 +23,6 @@ mod defs {
 #[cfg(feature = "static_defs")]
 mod defs {
     use crate::Checker;
-    use alloc::boxed::Box;
     use alloc::collections::VecDeque;
     use alloc::vec::Vec;
     use core::convert::Infallible;
@@ -173,31 +172,42 @@ mod defs {
                 if let nonterminal_csv_records_0::variant_0(seq) = &mut tree.child_0 {
                     // this is horrible, but the compiler should be smart enough to see this
                     // is not needed and directly replace... hopefully
+                    #[allow(unused_mut)]
                     let mut exchange = nonterminal_raw_field {
-                        child_0: nonterminal_raw_field_0::variant_0(nonterminal_simple_field {
-                            child_0: Box::new(nonterminal_simple_field_0 {
-                                child_0: nonterminal_spaces {
-                                    child_0: nonterminal_spaces_0::variant_0(
-                                        nonterminal_spaces_0_0,
-                                    ),
-                                },
-                                child_1: nonterminal_simple_characters {
-                                    child_0: nonterminal_simple_characters_0::variant_1(
-                                        nonterminal_simple_character {
-                                            child_0: nonterminal_simple_character_0::variant_0(
-                                                nonterminal_simple_character_0_0,
-                                            ),
-                                        },
-                                    ),
-                                },
-                                child_2: nonterminal_spaces {
-                                    child_0: nonterminal_spaces_0::variant_0(
-                                        nonterminal_spaces_0_0,
-                                    ),
-                                },
-                            }),
-                        }),
+                        child_0: nonterminal_raw_field_0::variant_0(
+                            nonterminal_simple_field {
+                                child_0: nonterminal_simple_field_0 {
+                                    child_0: nonterminal_spaces {
+                                        child_0: nonterminal_spaces_0::variant_0(
+                                            nonterminal_spaces_0_0,
+                                        ),
+                                    }
+                                    .into(),
+                                    child_1: nonterminal_simple_characters {
+                                        child_0: nonterminal_simple_characters_0::variant_1(
+                                            nonterminal_simple_character {
+                                                child_0: nonterminal_simple_character_0::variant_0(
+                                                    nonterminal_simple_character_0_0,
+                                                ),
+                                            }
+                                            .into(),
+                                        ),
+                                    }
+                                    .into(),
+                                    child_2: nonterminal_spaces {
+                                        child_0: nonterminal_spaces_0::variant_0(
+                                            nonterminal_spaces_0_0,
+                                        ),
+                                    }
+                                    .into(),
+                                }
+                                .into(),
+                            }
+                            .into(),
+                        ),
                     };
+                    #[cfg(no_opt_indirect)]
+                    let mut exchange = alloc::boxed::Box::new(exchange);
 
                     let (base, mut remaining) = seq.children_mut();
                     let base = count_fields(&base.child_0.child_0);
@@ -216,7 +226,7 @@ mod defs {
                                 mem::swap(inplace, &mut exchange);
                                 exchange = match mem::replace(
                                     &mut tmp.child_0,
-                                    nonterminal_csv_string_list_0::variant_1(Box::new(
+                                    nonterminal_csv_string_list_0::variant_1(
                                         nonterminal_csv_string_list_0_1 {
                                             child_0: exchange,
                                             child_1: nonterminal_csv_string_list_0_1_1,
@@ -226,11 +236,14 @@ mod defs {
                                                         self.sampler,
                                                         self.generator,
                                                         0,
-                                                    ),
+                                                    )
+                                                    .into(),
                                                 ),
-                                            },
-                                        },
-                                    )),
+                                            }
+                                            .into(),
+                                        }
+                                        .into(),
+                                    ),
                                 ) {
                                     nonterminal_csv_string_list_0::variant_0(inner) => inner,
                                     _ => unreachable!("Impossible case by construction."),

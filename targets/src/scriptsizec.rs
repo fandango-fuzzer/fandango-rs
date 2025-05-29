@@ -49,7 +49,13 @@ mod defs {
         violations: Vec<VecDeque<usize>>,
     }
 
-    impl ConstraintVisitor<HashSet<nonterminal_id>> {
+    #[cfg(no_opt_indirect)]
+    type EvaluatedScope = HashSet<alloc::boxed::Box<nonterminal_id>>;
+
+    #[cfg(not(no_opt_indirect))]
+    type EvaluatedScope = HashSet<nonterminal_id>;
+
+    impl ConstraintVisitor<EvaluatedScope> {
         /// Construct this visitor in the form that was originally evaluated in FANDANGO.
         #[deprecated(note = "The ScriptSizeC grammar originally does not implement scoping.")]
         pub fn evaluated() -> Self {
@@ -63,7 +69,7 @@ mod defs {
         }
     }
 
-    impl<T> Visitor<T> for ConstraintVisitor<HashSet<nonterminal_id>>
+    impl<T> Visitor<T> for ConstraintVisitor<EvaluatedScope>
     where
         T: VisitableChildren<T> + AsNodeRef<nonterminal_declaration> + AsNodeRef<nonterminal_id>,
     {
@@ -114,7 +120,7 @@ mod defs {
         scope: S,
     }
 
-    impl ConstraintFixer<HashSet<nonterminal_id>> {
+    impl ConstraintFixer<EvaluatedScope> {
         /// Construct this fixer in the form that was originally evaluated in FANDANGO.
         #[deprecated(note = "The ScriptSizeC grammar originally does not implement scoping.")]
         pub fn evaluated() -> Self {
@@ -124,7 +130,7 @@ mod defs {
         }
     }
 
-    impl<T> Visitor<T> for ConstraintFixer<HashSet<nonterminal_id>> {
+    impl<T> Visitor<T> for ConstraintFixer<EvaluatedScope> {
         type Continue = Self;
         type Break = Infallible;
         type Error = Infallible;

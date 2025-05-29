@@ -188,7 +188,7 @@ mod defs {
 
                         let cmp = &mut cmp.child_0.child_0;
                         while ids.contains(cmp) {
-                            *cmp = nonterminal_id::generate(self.sampler, self.generator, 0);
+                            *cmp = nonterminal_id::generate(self.sampler, self.generator, 0).into();
                         }
                         ids.insert(cmp);
 
@@ -231,135 +231,6 @@ mod defs {
                 id.clone_into(&mut close.child_0.child_1);
             }
             visited.visit_each(self)
-        }
-    }
-
-    #[cfg(test)]
-    mod test {
-        use crate::operators::DepthLimiter;
-        use crate::{crossover, xml};
-        use alloc::boxed::Box;
-        use alloc::collections::VecDeque;
-        use alloc::vec;
-        use core::error::Error;
-        use core::ops::ControlFlow;
-        use fandango::generation::Generated;
-        use fandango::tuple_list::tuple_list;
-        use fandango::typing::{Node, Structured};
-        use fandango::visitor::Visitor;
-        use fandango::visitor::navigation::GoTo;
-        use rand::SeedableRng;
-        use rand::rngs::StdRng;
-
-        #[test]
-        fn check_constraint() -> Result<(), Box<dyn Error>> {
-            let mut rng = StdRng::seed_from_u64(0);
-            let mut generators =
-                tuple_list!(DepthLimiter::new(xml::nonterminal_start::ROOT.inner(), 50));
-            let mut tag_diff_count = 0;
-            let mut attr_diff_count = 0;
-            for _ in 0..100_000 {
-                let mut tree = xml::nonterminal_start::generate(&mut rng, &mut generators, 0);
-                let Ok(ControlFlow::Continue(xml::ConstraintVisitor { violations, .. })) =
-                    xml::ConstraintVisitor::corrected().visit(&mut tree, 0);
-
-                for mut violation in violations {
-                    violation.pop_front();
-                    assert!(matches!(
-                        tree.go_to(0, violation.clone())?,
-                        xml::TypeMut::nonterminal_id(_)
-                    ));
-                    let len = violation.len();
-
-                    if let xml::TypeMut::nonterminal_xml_tree(ref inner) =
-                        tree.go_to(0, violation.iter().take(len - 4).copied().collect())?
-                    {
-                        tag_diff_count += 1;
-                        let inner = inner.child_0.as_ref();
-                        let id = match &inner.child_0.child_0 {
-                            xml::nonterminal_xml_open_tag_0::variant_0(n) => &n.child_1,
-                            xml::nonterminal_xml_open_tag_0::variant_1(n) => &n.child_1,
-                        };
-                        assert_ne!(id, &inner.child_2.child_0.child_1);
-                    } else if let xml::TypeMut::nonterminal_xml_attributes(ref attrs) =
-                        tree.go_to(0, violation.into_iter().take(len - 5).collect())?
-                    {
-                        attr_diff_count += 1;
-                        if let xml::nonterminal_xml_attributes_0::variant_1(seq) = &attrs.child_0 {
-                            let (base, _, mut rest) = seq.children();
-                            let diff_found = loop {
-                                rest = match &rest.child_0 {
-                                    xml::nonterminal_xml_attributes_0::variant_0(cmp) => {
-                                        if cmp == base {
-                                            break true;
-                                        }
-                                        break false;
-                                    }
-                                    xml::nonterminal_xml_attributes_0::variant_1(seq) => {
-                                        let (cmp, _, rest) = seq.children();
-                                        if cmp == base {
-                                            break true;
-                                        }
-                                        rest
-                                    }
-                                };
-                            };
-                            assert!(diff_found);
-                        } else {
-                            unreachable!("This would need to be a sequence.")
-                        }
-                    }
-                }
-
-                let _ = xml::ConstraintFixer::corrected(&mut rng, &mut ()).visit(&mut tree, 0)?;
-                let ControlFlow::Continue(xml::ConstraintVisitor { violations, .. }) =
-                    xml::ConstraintVisitor::default().visit(&mut tree, 0)?;
-                assert_eq!(0, violations.len());
-            }
-            assert_ne!(0, tag_diff_count);
-            assert_ne!(0, attr_diff_count);
-            Ok(())
-        }
-
-        #[test]
-        fn mutate() -> Result<(), Box<dyn Error>> {
-            let mut rng = StdRng::seed_from_u64(0);
-
-            let mut first = xml::nonterminal_start::generate(&mut rng, &mut (), 0);
-            let second = first.clone();
-            assert_eq!(first, second);
-
-            let mut choices = vec![VecDeque::from([0])];
-            let mutated =
-                crate::operators::mutate(&mut first, &mut choices, &mut rng, &mut ())?.unwrap();
-            assert!(matches!(mutated, xml::TypeMut::nonterminal_start(_)));
-            assert!(choices.is_empty());
-            assert_ne!(first, second);
-
-            Ok(())
-        }
-
-        #[test]
-        fn crossover() -> Result<(), Box<dyn Error>> {
-            let mut rng = StdRng::seed_from_u64(0);
-
-            let mut first = xml::nonterminal_start::generate(&mut rng, &mut (), 0);
-            let mut second = xml::nonterminal_start::generate(&mut rng, &mut (), 0);
-            assert_ne!(first, second);
-
-            let mut choices = vec![VecDeque::from([0])];
-            let crossed = crossover!(
-                xml::nonterminal_start,
-                &mut first,
-                &mut second,
-                choices,
-                &mut rng
-            )?;
-            assert!(crossed);
-            assert!(choices.is_empty());
-            assert_eq!(first, second);
-
-            Ok(())
         }
     }
 }

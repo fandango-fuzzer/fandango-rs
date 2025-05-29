@@ -57,7 +57,7 @@ mod defs {
     pub struct ConstraintVisitor<const FIXED: bool> {
         path: VecDeque<usize>,
         violations: Vec<VecDeque<usize>>,
-        labels: HashSet<nonterminal_id>,
+        labels: Labels,
     }
 
     impl ConstraintVisitor<false> {
@@ -74,9 +74,14 @@ mod defs {
         }
     }
 
+    #[cfg(no_opt_indirect)]
+    type Labels = HashSet<alloc::boxed::Box<nonterminal_id>>;
+    #[cfg(not(no_opt_indirect))]
+    type Labels = HashSet<nonterminal_id>;
+
     #[derive(Debug, Default)]
     struct RestConstraintContextVisitor<const FIXED: bool> {
-        labels: HashSet<nonterminal_id>,
+        labels: Labels,
     }
 
     #[derive(Debug, Default)]
@@ -97,6 +102,16 @@ mod defs {
         fn flush(&mut self) -> Result<(), Self::Error> {
             Ok(())
         }
+    }
+
+    #[cfg(no_opt_indirect)]
+    fn visited_form<N>(node: &mut alloc::boxed::Box<N>) -> &mut N {
+        node.as_mut()
+    }
+
+    #[cfg(not(no_opt_indirect))]
+    fn visited_form<N>(node: &mut N) -> &mut N {
+        node
     }
 
     impl<T> Visitor<T> for ConstraintVisitor<false>
@@ -132,13 +147,13 @@ mod defs {
 
             if let Some(title) = AsNodeMut::<nonterminal_section_title>::as_node_mut(&mut visited) {
                 if WriteVisitor::new(LengthCounter::default())
-                    .visit(&mut title.child_0.child_0, 0)?
+                    .visit(visited_form(&mut title.child_0.child_0), 0)?
                     .continue_value()
                     .unwrap()
                     .output()
                     .count
                     > WriteVisitor::new(LengthCounter::default())
-                        .visit(&mut title.child_0.child_2, 0)?
+                        .visit(visited_form(&mut title.child_0.child_2), 0)?
                         .continue_value()
                         .unwrap()
                         .output()
