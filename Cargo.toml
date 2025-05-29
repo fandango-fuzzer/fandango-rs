@@ -13,7 +13,6 @@ pest_derive.workspace = true
 tuple_list.workspace = true
 
 [dev-dependencies]
-criterion.workspace = true
 rand = { workspace = true, features = ["default"] }
 
 [profile.release]
@@ -62,13 +61,3 @@ bindings_with_variant_name = "allow"
 type_alias_bounds = "allow"
 
 missing_docs = "warn"
-
-[[bench]]
-name = "generation"
-path = "benches/generate.rs"
-harness = false
-
-[[bench]]
-name = "bytegen"
-path = "benches/bytegen.rs"
-harness = false

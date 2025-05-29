@@ -264,16 +264,14 @@ where
             } else {
                 T::from(node).visit_each_reverse_from(self, starting_at)
             }
+        } else if self.count == self.target {
+            Ok(ControlFlow::Break(VecDeque::new()))
         } else {
-            if self.count == self.target {
-                Ok(ControlFlow::Break(VecDeque::new()))
+            self.count += 1;
+            if FORWARD {
+                T::from(node).visit_each(self)
             } else {
-                self.count += 1;
-                if FORWARD {
-                    T::from(node).visit_each(self)
-                } else {
-                    T::from(node).visit_each_reverse(self)
-                }
+                T::from(node).visit_each_reverse(self)
             }
         };
         if let Ok(ControlFlow::Break(trace)) = &mut traversal {
