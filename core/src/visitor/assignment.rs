@@ -24,12 +24,13 @@ where
         N: Node<TypeMut<'program> = T>,
         T: From<&'program mut N> + AsNodeMut<N>,
     {
-        match T::from(node).as_node_mut() {
-            Some(inner) if node.discriminant() == self.0.discriminant() => {
-                *node = self.0;
+        let mut visited = T::from(node);
+        match <T as AsNodeMut<U>>::as_node_mut(&mut visited) {
+            Some(inner) if inner.discriminant() == self.0.discriminant() => {
+                *inner = self.0;
                 Ok(ControlFlow::Break(()))
             }
-            None => Err(self),
+            _ => Err(self),
         }
     }
 }

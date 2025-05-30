@@ -118,6 +118,12 @@ fn main() {
             let model = regress(operation, &path);
 
             indirect.insert((target, operation), model);
+
+            let path =
+                PathBuf::from_iter([".", "target", "criterion-unoptimized", target, operation]);
+            let model = regress(operation, &path);
+
+            unoptimized.insert((target, operation), model);
         }
     }
 
