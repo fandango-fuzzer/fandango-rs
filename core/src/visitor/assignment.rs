@@ -1,6 +1,6 @@
 //! Utility visitors for manipulating the value of nodes directly.
 
-use crate::typing::{AsNodeMut, Node};
+use crate::typing::{AsNodeMut, Discriminable, Node};
 use crate::visitor::{VisitResult, Visitor};
 use core::convert::Infallible;
 use core::ops::ControlFlow;
@@ -12,6 +12,7 @@ pub struct AssignmentVisitor<N>(pub N);
 
 impl<U, T> Visitor<T> for AssignmentVisitor<U>
 where
+    U: Discriminable,
     T: AsNodeMut<U>,
 {
     type Continue = Infallible;
@@ -24,11 +25,11 @@ where
         T: From<&'program mut N> + AsNodeMut<N>,
     {
         match T::from(node).as_node_mut() {
-            None => Err(self),
-            Some(node) => {
+            Some(inner) if node.discriminant() == self.0.discriminant() => {
                 *node = self.0;
                 Ok(ControlFlow::Break(()))
             }
+            None => Err(self),
         }
     }
 }
@@ -45,7 +46,10 @@ impl<T> SwapVisitor<T> {
     }
 }
 
-impl<T> Visitor<T> for SwapVisitor<T> {
+impl<T> Visitor<T> for SwapVisitor<T>
+where
+    T: Discriminable,
+{
     type Continue = Infallible;
     type Break = T;
     type Error = T;
@@ -55,11 +59,12 @@ impl<T> Visitor<T> for SwapVisitor<T> {
         N: Node<TypeMut<'program> = T>,
         T: From<&'program mut N> + AsNodeMut<N>,
     {
-        if let Some(replacement) = self.replacement.as_node_mut() {
-            core::mem::swap(node, replacement);
-            Ok(ControlFlow::Break(self.replacement))
-        } else {
-            Err(self.replacement)
+        match self.replacement.as_node_mut() {
+            Some(replacement) if replacement.discriminant() == node.discriminant() => {
+                core::mem::swap(node, replacement);
+                Ok(ControlFlow::Break(self.replacement))
+            }
+            _ => Err(self.replacement),
         }
     }
 }
