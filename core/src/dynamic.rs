@@ -557,3 +557,9 @@ where
         visitor.visit(self, idx)
     }
 }
+
+impl Discriminable for &'_ mut DynamicNode {
+    fn discriminant(&self) -> usize {
+        DynamicNode::discriminant(self)
+    }
+}
