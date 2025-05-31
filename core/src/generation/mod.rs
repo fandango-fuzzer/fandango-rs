@@ -6,7 +6,7 @@ use crate::dynamic::DefinitionOf;
 use crate::lang::FandangoNode;
 use crate::typing::AsStaticNode;
 use alloc::boxed::Box;
-use rand::Rng;
+use rand::{Rng, SeedableRng};
 
 /// Sampler definition, allowing for tuning of the random generation. See [`util::Flattener`]'s
 /// source code for an example of how this might be used.
@@ -23,6 +23,9 @@ pub trait Sampler<N> {
     fn sample_alternative(&mut self, count: usize) -> usize;
     /// Sample an arbitrary usize, without any tagging information.
     fn sample(&mut self) -> usize;
+
+    /// Resets the seed with the provided value.
+    fn reseed(&mut self, seed: u64);
 }
 
 /// The default upper bound on the number of repetitions when an unmodified [`Rng`] is used as a
@@ -31,7 +34,7 @@ pub const DEFAULT_UPPER_COUNT: usize = 5;
 
 impl<N, R> Sampler<N> for R
 where
-    R: Rng,
+    R: Rng + SeedableRng,
 {
     fn sample_kleene(&mut self) -> usize {
         self.random_range(0..DEFAULT_UPPER_COUNT)
@@ -55,6 +58,10 @@ where
 
     fn sample(&mut self) -> usize {
         self.next_u64() as usize
+    }
+
+    fn reseed(&mut self, seed: u64) {
+        *self = R::seed_from_u64(seed)
     }
 }
 

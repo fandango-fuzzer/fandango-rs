@@ -33,6 +33,7 @@ pub struct FandangoDerivation {
     offsets: BTreeMap<usize, PathBuf>,
     parse: bool,
     dynamic: bool,
+    serde: bool,
 }
 
 impl FandangoDerivation {
@@ -108,9 +109,12 @@ impl FandangoDerivation {
         self.parse
     }
 
-    /// Determines whether we are in dynamic mode (i.e. no static definitions) or typed mode.
-    pub fn dynamic(&self) -> bool {
+    fn dynamic(&self) -> bool {
         self.dynamic
+    }
+
+    fn serde(&self) -> bool {
+        self.serde
     }
 }
 
@@ -123,6 +127,7 @@ impl Parse for FandangoDerivation {
         let mut offsets = BTreeMap::new();
         let mut parse = true;
         let mut dynamic = false;
+        let mut serde = false;
         for attr in derived.attrs {
             let span = attr.span();
             if let Meta::List(v) = attr.meta {
@@ -180,6 +185,14 @@ impl Parse for FandangoDerivation {
                                         dynamic = b.value();
                                         continue;
                                     }
+                                } else if ident == "serde" {
+                                    if let Expr::Lit(ExprLit {
+                                        lit: Lit::Bool(b), ..
+                                    }) = arg.value
+                                    {
+                                        serde = b.value();
+                                        continue;
+                                    }
                                 }
                                 return Err(syn::Error::new(span, "Invalid fandango list."));
                             }
@@ -210,6 +223,7 @@ impl Parse for FandangoDerivation {
             offsets,
             parse,
             dynamic,
+            serde,
         })
     }
 }
@@ -227,7 +241,10 @@ pub fn derive_fandango_or_emit_error(
 
     let mut mapped_names = HashMap::new();
     graph
-        .emit_rust((&mut mapped_names, source.parse()), &mut tokenized)
+        .emit_rust(
+            (&mut mapped_names, source.parse(), source.serde()),
+            &mut tokenized,
+        )
         .unwrap();
 
     let node_names = mapped_names.values().cloned().collect::<Vec<_>>();
@@ -304,9 +321,8 @@ pub fn derive_fandango_or_emit_error(
                     use ::fandango::Parser;
 
                     let (grammar,) = ::fandango::parse_pairs_as!(#ident::parse(Rule::start, source)?, (Rule::start,));
-                    let source = ::alloc::rc::Rc::new(::alloc::borrow::Cow::Borrowed(source));
 
-                    nonterminal_start::try_from((source, grammar))
+                    nonterminal_start::try_from(grammar)
                 }
             }
         });

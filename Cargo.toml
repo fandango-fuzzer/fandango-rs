@@ -33,7 +33,7 @@ overflow-checks = false
 workspace = true
 
 [workspace]
-members = [".", "core", "derive", "targets", "generator"]
+members = [".", "core", "derive", "targets", "generator", "libafl"]
 resolver = "3"
 
 [workspace.package]
@@ -42,10 +42,10 @@ edition = "2024"
 authors = ["Addison Crump <addison.crump@cispa.de>"]
 
 [workspace.dependencies]
-criterion = { version = "0.6.0", features = ["html_reports"] }
 either = { version = "1.13", default-features = false }
 embedded-io = { version = "0.6.1", features = ["alloc"] }
 hashbrown = "0.15.2"
+libafl = { version = "0.15.3", default-features = false }
 pest = { version = "2.7", default-features = false }
 pest_derive = { version = "2.7", default-features = false }
 pest_generator = { version = "2.7", default-features = false }
@@ -53,6 +53,7 @@ petgraph = { version = "0.8.1", default-features = false }
 proc-macro2 = "1.0"
 quote = "1.0"
 rand = { version = "0.9.0", default-features = false }
+serde = { version = "1.0", default-features = false }
 syn = "2.0"
 tuple_list = "0.1.3"
 

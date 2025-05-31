@@ -208,6 +208,10 @@ where
     fn sample(&mut self) -> usize {
         self.sampler.sample()
     }
+
+    fn reseed(&mut self, seed: u64) {
+        self.sampler.reseed(seed)
+    }
 }
 
 impl<N, W, S, T> Generator<N, W, S> for Flattener<T>
@@ -316,6 +320,10 @@ mod dynamic_impls {
 
         fn sample(&mut self) -> usize {
             self.sampler.sample()
+        }
+
+        fn reseed(&mut self, seed: u64) {
+            self.sampler.reseed(seed)
         }
     }
 

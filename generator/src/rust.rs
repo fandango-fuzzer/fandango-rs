@@ -63,6 +63,7 @@ impl<'graph, 'program, 'source>
     IntoRustSource<(
         &'graph mut HashMap<FandangoNode<'program, 'source>, Ident>,
         bool,
+        bool,
     )> for DiGraph<FandangoNode<'program, 'source>, Span<'source>>
 where
     'program: 'graph,
@@ -71,8 +72,9 @@ where
 
     fn emit_rust(
         &self,
-        (mapped_names, emit_parse_glue): (
+        (mapped_names, emit_parse_glue, serde): (
             &'graph mut HashMap<FandangoNode<'program, 'source>, Ident>,
+            bool,
             bool,
         ),
         output: &mut TokenStream,
@@ -161,9 +163,18 @@ where
         };
 
         let from = from_boilerplate(&name);
+        let derives = if serde {
+            quote! {
+                #[derive(Clone, Debug, Eq, PartialEq, Ord, PartialOrd, Hash, ::serde::Serialize, ::serde::Deserialize)]
+            }
+        } else {
+            quote! {
+                #[derive(Clone, Debug, Eq, PartialEq, Ord, PartialOrd, Hash)]
+            }
+        };
 
         output.extend(quote! {
-            #[derive(Clone, Debug, Eq, PartialEq, Ord, PartialOrd, Hash)]
+            #derives
             #[allow(missing_docs)]
             pub struct #name {
                 pub child_0: #child_type,
@@ -243,17 +254,17 @@ where
             output.extend(quote! {
                 pub type ParseError = ::alloc::boxed::Box<::fandango::error::Error<Rule>>;
 
-                impl ::core::convert::TryFrom<(::alloc::rc::Rc<::alloc::borrow::Cow<'_, str>>, ::fandango::iterators::Pair<'_, Rule>)> for #name {
+                impl ::core::convert::TryFrom<::fandango::iterators::Pair<'_, Rule>> for #name {
                     type Error = ParseError;
 
-                    fn try_from((source, value): (::alloc::rc::Rc<::alloc::borrow::Cow<'_, str>>, ::fandango::iterators::Pair<'_, Rule>)) -> Result<Self, Self::Error> {
+                    fn try_from(value: ::fandango::iterators::Pair<'_, Rule>) -> Result<Self, Self::Error> {
                         debug_assert_eq!(value.as_rule(), Rule::#pest_name);
 
                         let span = value.as_span();
                         let (inner,_) = ::fandango::parse_pairs_as!(value.into_inner(), (Rule::#pest_child_name,Rule::EOI));
 
                         Ok(Self {
-                            child_0: #child_name::try_from((source.clone(), inner))?.into(),
+                            child_0: #child_name::try_from(inner)?.into(),
                         })
                     }
                 }
@@ -270,6 +281,7 @@ where
                 self,
                 &needs_indirection,
                 emit_parse_glue,
+                &derives,
             ),
             output,
         )
@@ -287,6 +299,7 @@ type FandangoGenContext<'names, 'graph, 'program, 'source> = (
         FandangoNode<'program, 'source>,
     )>,
     bool,
+    &'names TokenStream,
 );
 
 impl<'program, 'source> IntoRustSource<FandangoGenContext<'_, '_, 'program, 'source>>
@@ -299,8 +312,16 @@ impl<'program, 'source> IntoRustSource<FandangoGenContext<'_, '_, 'program, 'sou
         ctx: FandangoGenContext<'_, '_, 'program, 'source>,
         output: &mut TokenStream,
     ) -> Result<(), Self::OutputError> {
-        let (name, pest_name, node_weight, mapped_names, graph, needs_indirection, emit_parse_glue) =
-            ctx;
+        let (
+            name,
+            pest_name,
+            node_weight,
+            mapped_names,
+            graph,
+            needs_indirection,
+            emit_parse_glue,
+            derives,
+        ) = ctx;
         match mapped_names.entry(node_weight) {
             Entry::Occupied(_) => return Ok(()),
             Entry::Vacant(e) => {
@@ -397,7 +418,7 @@ impl<'program, 'source> IntoRustSource<FandangoGenContext<'_, '_, 'program, 'sou
                     quote! { unimplemented!("Pest currently does not support byte-like grammars: https://github.com/pest-parser/pest/issues/244") }
                 };
                 output.extend(quote! {
-                    #[derive(Clone, Debug, Eq, PartialEq, Ord, PartialOrd, Hash)]
+                    #derives
                     #[allow(missing_docs)]
                     pub struct #name;
 
@@ -461,10 +482,10 @@ impl<'program, 'source> IntoRustSource<FandangoGenContext<'_, '_, 'program, 'sou
                 });
                 if emit_parse_glue {
                     output.extend(quote! {
-                        impl ::core::convert::TryFrom<(::alloc::rc::Rc<::alloc::borrow::Cow<'_, str>>, ::fandango::iterators::Pair<'_, Rule>)> for #name {
+                        impl ::core::convert::TryFrom<::fandango::iterators::Pair<'_, Rule>> for #name {
                             type Error = ParseError;
 
-                            fn try_from((source, value): (::alloc::rc::Rc<::alloc::borrow::Cow<'_, str>>, ::fandango::iterators::Pair<'_, Rule>)) -> Result<Self, Self::Error> {
+                            fn try_from(value: ::fandango::iterators::Pair<'_, Rule>) -> Result<Self, Self::Error> {
                                 #parse_routine
                             }
                         }
@@ -478,7 +499,7 @@ impl<'program, 'source> IntoRustSource<FandangoGenContext<'_, '_, 'program, 'sou
                 let indices = (0..children.len()).collect::<Vec<_>>();
                 let count = children.len();
                 output.extend(quote! {
-                    #[derive(Clone, Debug, Eq, PartialEq, Ord, PartialOrd, Hash)]
+                    #derives
                     #[allow(missing_docs)]
                     pub enum #name {
                         #( #child_variants ( #child_field_types ) ),*
@@ -566,19 +587,19 @@ impl<'program, 'source> IntoRustSource<FandangoGenContext<'_, '_, 'program, 'sou
                 });
                 if emit_parse_glue {
                     output.extend(quote! {
-                        impl ::core::convert::TryFrom<(::alloc::rc::Rc<::alloc::borrow::Cow<'_, str>>, ::fandango::iterators::Pair<'_, Rule>)> for #name {
+                        impl ::core::convert::TryFrom<::fandango::iterators::Pair<'_, Rule>> for #name {
                             type Error = ParseError;
 
-                            fn try_from((source, value): (::alloc::rc::Rc<::alloc::borrow::Cow<'_, str>>, ::fandango::iterators::Pair<'_, Rule>)) -> Result<Self, Self::Error> {
+                            fn try_from(value: ::fandango::iterators::Pair<'_, Rule>) -> Result<Self, Self::Error> {
                                 debug_assert_eq!(value.as_rule(), Rule::#pest_name);
 
                                 let mut children = value.into_inner();
-                                let child_0 = children.next().expect("Expected exactly one descendent.");
-                                debug_assert!(children.next().is_none(), "Expected exactly one descendent.");
+                                let child_0 = children.next().expect("Expected exactly one descendant.");
+                                debug_assert!(children.next().is_none(), "Expected exactly one descendant.");
 
                                 Ok(match child_0.as_rule() {
                                     #(Rule::#pest_child_names => #name::#child_variants(
-                                        #child_types::try_from((source, child_0))?.into()
+                                        #child_types::try_from(child_0)?.into()
                                     )),*,
                                     _ => unimplemented!("Not a child of this alternative.")
                                 })
@@ -644,7 +665,7 @@ impl<'program, 'source> IntoRustSource<FandangoGenContext<'_, '_, 'program, 'sou
                 };
 
                 output.extend(quote! {
-                    #[derive(Clone, Debug, Eq, PartialEq, Ord, PartialOrd, Hash)]
+                    #derives
                     #[allow(missing_docs)]
                     pub struct #name {
                         pub child_0: #(#child_field_types)*
@@ -746,17 +767,17 @@ impl<'program, 'source> IntoRustSource<FandangoGenContext<'_, '_, 'program, 'sou
                 });
                 if emit_parse_glue {
                     output.extend(quote! {
-                        impl ::core::convert::TryFrom<(::alloc::rc::Rc<::alloc::borrow::Cow<'_, str>>, ::fandango::iterators::Pair<'_, Rule>)> for #name {
+                        impl ::core::convert::TryFrom<::fandango::iterators::Pair<'_, Rule>> for #name {
                             type Error = ParseError;
 
-                            fn try_from((source, value): (::alloc::rc::Rc<::alloc::borrow::Cow<'_, str>>, ::fandango::iterators::Pair<'_, Rule>)) -> Result<Self, Self::Error> {
+                            fn try_from(value: ::fandango::iterators::Pair<'_, Rule>) -> Result<Self, Self::Error> {
                                 debug_assert_eq!(value.as_rule(), Rule::#pest_name);
 
                                 let span = value.as_span();
                                 let child_0 = value.into_inner().map(|value| {
                                     debug_assert_eq!(value.as_rule(), #(Rule::#pest_child_names),*);
 
-                                    Ok(#(#child_types::try_from((source.clone(), value))?.into()),*)
+                                    Ok(#(#child_types::try_from(value)?.into()),*)
                                 }).collect::<Result<_, Self::Error>>()?;
 
                                 #range_check_fail
@@ -784,7 +805,7 @@ impl<'program, 'source> IntoRustSource<FandangoGenContext<'_, '_, 'program, 'sou
                 prefixes_rev.reverse();
 
                 output.extend(quote! {
-                    #[derive(Clone, Debug, Eq, PartialEq, Ord, PartialOrd, Hash)]
+                    #derives
                     #[allow(missing_docs)]
                     pub struct #name {
                         #( pub #child_names: #child_field_types ),*
@@ -889,17 +910,17 @@ impl<'program, 'source> IntoRustSource<FandangoGenContext<'_, '_, 'program, 'sou
                 });
                 if emit_parse_glue {
                     output.extend(quote! {
-                        impl ::core::convert::TryFrom<(::alloc::rc::Rc<::alloc::borrow::Cow<'_, str>>, ::fandango::iterators::Pair<'_, Rule>)> for #name {
+                        impl ::core::convert::TryFrom<::fandango::iterators::Pair<'_, Rule>> for #name {
                             type Error = ParseError;
 
-                            fn try_from((source, value): (::alloc::rc::Rc<::alloc::borrow::Cow<'_, str>>, ::fandango::iterators::Pair<'_, Rule>)) -> Result<Self, Self::Error> {
+                            fn try_from(value: ::fandango::iterators::Pair<'_, Rule>) -> Result<Self, Self::Error> {
                                 debug_assert_eq!(value.as_rule(), Rule::#pest_name);
 
                                 let span = value.as_span();
                                 let (#(#child_names),*,) = ::fandango::parse_pairs_as!(value.into_inner(), (#(#pest_child_names),*,));
 
                                 Ok(Self {
-                                    #(#child_names: #child_types::try_from((source.clone(), #child_names))?.into()),*,
+                                    #(#child_names: #child_types::try_from(#child_names)?.into()),*,
                                 })
                             }
                         }
@@ -919,6 +940,7 @@ impl<'program, 'source> IntoRustSource<FandangoGenContext<'_, '_, 'program, 'sou
                     graph,
                     needs_indirection,
                     emit_parse_glue,
+                    derives,
                 ),
                 output,
             )?;

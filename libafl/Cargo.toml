@@ -1,0 +1,14 @@
+[package]
+name = "libafl_fandango"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+
+[dependencies]
+fandango = { path = ".." }
+
+libafl.workspace = true
+serde = { workspace = true, features = ["derive"] }
+
+[lints]
+workspace = true

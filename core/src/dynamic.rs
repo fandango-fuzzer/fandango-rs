@@ -255,6 +255,10 @@ where
     fn sample(&mut self) -> usize {
         self.inner.sample()
     }
+
+    fn reseed(&mut self, seed: u64) {
+        self.inner.reseed(seed)
+    }
 }
 
 impl<S, G> DefaultGenerated<S, G> for DynamicNode
