@@ -206,13 +206,13 @@ where
 /// Advance in the tree in pre-order traversal, forwards or backwards, and return the `n`th node. If
 /// the tree has fewer nodes than `n`, the number of nodes which were traversed.
 #[derive(Debug, Clone)]
-pub struct Advance<const FORWARD: bool> {
+pub struct Advance<const FORWARD: bool, const REF: bool> {
     count: usize,
     target: usize,
     from: VecDeque<usize>,
 }
 
-impl<const FORWARD: bool> Advance<FORWARD> {
+impl<const FORWARD: bool, const REF: bool> Advance<FORWARD, REF> {
     fn new(target: usize) -> Self {
         Self {
             count: 0,
@@ -222,7 +222,7 @@ impl<const FORWARD: bool> Advance<FORWARD> {
     }
 }
 
-impl<const FORWARD: bool> StartingFrom for Advance<FORWARD> {
+impl<const FORWARD: bool, const REF: bool> StartingFrom for Advance<FORWARD, REF> {
     type WithPath = Self;
 
     fn starting_from(mut self, from: VecDeque<usize>) -> Self::WithPath {
@@ -231,21 +231,35 @@ impl<const FORWARD: bool> StartingFrom for Advance<FORWARD> {
     }
 }
 
-impl Advance<true> {
-    /// Advance forwards within the tree.
+impl Advance<true, false> {
+    /// Advance forwards within the tree and return a path.
     pub fn forward(target: usize) -> Self {
         Self::new(target)
     }
 }
 
-impl Advance<false> {
-    /// Advance backwards within the tree.
+impl Advance<true, true> {
+    /// Advance forwards within the tree and return a reference.
+    pub fn forward_ref(target: usize) -> Self {
+        Self::new(target)
+    }
+}
+
+impl Advance<false, false> {
+    /// Advance backwards within the tree and return a path.
     pub fn backwards(target: usize) -> Self {
         Self::new(target)
     }
 }
 
-impl<T, const FORWARD: bool> Visitor<T> for Advance<FORWARD>
+impl Advance<false, true> {
+    /// Advance backwards within the tree and return a tree.
+    pub fn backwards_ref(target: usize) -> Self {
+        Self::new(target)
+    }
+}
+
+impl<T, const FORWARD: bool> Visitor<T> for Advance<FORWARD, false>
 where
     T: VisitableChildren<T>,
 {
@@ -278,6 +292,38 @@ where
             trace.push_front(idx);
         }
         traversal
+    }
+}
+
+impl<T, const FORWARD: bool> Visitor<T> for Advance<FORWARD, true>
+where
+    T: VisitableChildren<T>,
+{
+    type Continue = Self;
+    type Break = T;
+    type Error = Infallible;
+
+    fn visit<'program, N>(mut self, node: &'program mut N, _idx: usize) -> VisitResult<Self, T>
+    where
+        N: Node<TypeMut<'program> = T>,
+        T: From<&'program mut N> + AsNodeMut<N>,
+    {
+        if let Some(starting_at) = self.from.pop_front() {
+            if FORWARD {
+                T::from(node).visit_each_from(self, starting_at)
+            } else {
+                T::from(node).visit_each_reverse_from(self, starting_at)
+            }
+        } else if self.count == self.target {
+            Ok(ControlFlow::Break(T::from(node)))
+        } else {
+            self.count += 1;
+            if FORWARD {
+                T::from(node).visit_each(self)
+            } else {
+                T::from(node).visit_each_reverse(self)
+            }
+        }
     }
 }
 

@@ -6,7 +6,7 @@
 
 use crate::generation::{DefaultGenerated, Generated, GeneratorTuple, InPlaceGenerated, Sampler};
 use crate::lang::{Operator, Symbol};
-use crate::typing::{AsNode, AsNodeMut, Discriminable, Node};
+use crate::typing::{AsNode, AsNodeMut, Discriminable, DiscriminantLookup, Node};
 use crate::visitor::{MaybeVisitResult, VisitResult, VisitWith, VisitableChildren, Visitor};
 use alloc::boxed::Box;
 use alloc::vec;
@@ -404,21 +404,15 @@ impl AsNode for DynamicNode {
     }
 }
 
-/// Computes the discriminan
-pub trait DynamicDiscriminant {
-    /// Computes the dynamic discriminant for this value.
-    fn computed_discriminant(&self) -> usize;
-}
-
-impl DynamicDiscriminant for FandangoNode {
-    fn computed_discriminant(&self) -> usize {
-        DefaultHashBuilder::default().hash_one(self) as usize
+impl DiscriminantLookup for DynamicNode {
+    fn lookup_discriminant(node: &crate::lang::FandangoNode) -> usize {
+        DefaultHashBuilder::default().hash_one(node) as usize
     }
 }
 
 impl Discriminable for DynamicNode {
     fn discriminant(&self) -> usize {
-        self.definition.computed_discriminant()
+        DynamicNode::lookup_discriminant(&self.definition)
     }
 }
 

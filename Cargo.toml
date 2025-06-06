@@ -46,6 +46,8 @@ either = { version = "1.13", default-features = false }
 embedded-io = { version = "0.6.1", features = ["alloc"] }
 hashbrown = "0.15.2"
 libafl = { version = "0.15.3", default-features = false }
+libafl_bolts = { version = "0.15.3", default-features = false }
+mappable-rc = { version = "0.1.1", default-features = false }
 pest = { version = "2.7", default-features = false }
 pest_derive = { version = "2.7", default-features = false }
 pest_generator = { version = "2.7", default-features = false }

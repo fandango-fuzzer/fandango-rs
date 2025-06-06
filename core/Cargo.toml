@@ -7,11 +7,13 @@ authors.workspace = true
 [dependencies]
 either = { workspace = true }
 embedded-io.workspace = true
-hashbrown.workspace = true
+hashbrown = { workspace = true, features = ["serde"] }
+mappable-rc.workspace = true
 pest.workspace = true
 pest_derive.workspace = true
 petgraph = { workspace = true, features = ["graphmap"] }
 rand.workspace = true
+serde = { workspace = true, features = ["alloc"] }
 tuple_list.workspace = true
 
 [lints]

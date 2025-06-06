@@ -3,11 +3,10 @@
 #![no_std]
 #![allow(deprecated)] // for DynamicNode
 
+extern crate alloc;
 use fandango::Parser;
 use fandango::parse_pairs_as;
 use fandango_core::typing::Node;
-
-extern crate alloc;
 
 mod simple {
     use super::*;
@@ -15,20 +14,22 @@ mod simple {
     use alloc::string::String;
     use alloc::vec::Vec;
     use core::error::Error;
+    use core::num::NonZeroUsize;
     use fandango::Fandango;
     use fandango_core::dynamic::{DynamicNode, DynamicSampler, HasDynamicSampler};
     use fandango_core::generation::util::Flattener;
     use fandango_core::generation::{Generated, InPlaceGenerated};
     use fandango_core::typing::{AsNode, AsStaticNode, Structured};
     use fandango_core::visitor::Visitor;
+    use fandango_core::visitor::kpath::{KPathUpdate, KPaths};
     use fandango_core::visitor::navigation::{
         Advance, CountNodes, CountNodesWith, FindVisitor, GoTo,
     };
     use fandango_core::visitor::write::WriteVisitor;
     use fandango_core::visitor_chain;
     use rand::Rng;
+    use rand::SeedableRng;
     use rand::rngs::StdRng;
-    use rand::{SeedableRng, rng};
     use tuple_list::tuple_list;
 
     #[derive(Fandango)]
@@ -118,7 +119,7 @@ mod simple {
 
     #[test]
     fn mutate() -> Result<(), Box<dyn Error>> {
-        let mut rng = rng();
+        let mut rng = StdRng::seed_from_u64(0);
         let mut start = nonterminal_start::generate(&mut rng, &mut (), 0);
 
         let mut generators = ();
@@ -151,7 +152,7 @@ mod simple {
 
     #[test]
     fn mutate_dynamic() -> Result<(), Box<dyn Error>> {
-        let mut rng = rng();
+        let mut rng = StdRng::seed_from_u64(0);
         let nonterminals = nonterminal_start::ROOT.inner().nonterminals();
         let mut sampler = DynamicSampler::new(
             nonterminal_start::static_root(),
@@ -193,7 +194,7 @@ mod simple {
 
     #[test]
     fn generate() -> Result<(), Box<dyn Error>> {
-        let mut rng = rng();
+        let mut rng = StdRng::seed_from_u64(0);
         let mut start = nonterminal_start::generate(&mut rng, &mut (), 0);
 
         let serialized = String::from_utf8(
@@ -212,7 +213,7 @@ mod simple {
 
     #[test]
     fn generate_unflattened() -> Result<(), Box<dyn Error>> {
-        let mut rng = rng();
+        let mut rng = StdRng::seed_from_u64(0);
 
         let mut buf = Vec::new();
         let mut distribution = [0usize; 10];
@@ -238,7 +239,7 @@ mod simple {
 
     #[test]
     fn generate_flattened() -> Result<(), Box<dyn Error>> {
-        let mut rng = rng();
+        let mut rng = StdRng::seed_from_u64(0);
 
         let flattener = Flattener::flatten::<nonterminal_digit>()?;
 
@@ -268,7 +269,7 @@ mod simple {
 
     #[test]
     fn generate_flattened_dynamic() -> Result<(), Box<dyn Error>> {
-        let mut rng = rng();
+        let mut rng = StdRng::seed_from_u64(0);
         let nonterminals = nonterminal_digit::ROOT.inner().nonterminals();
         let mut sampler = DynamicSampler::new(
             nonterminal_digit::static_root(),
@@ -339,6 +340,33 @@ mod simple {
 
         Ok(())
     }
+
+    #[test]
+    fn kpath() -> Result<(), Box<dyn Error>> {
+        let mut rng = StdRng::seed_from_u64(0);
+        let mut kpath = KPaths::new::<TypeMut<'static>>(
+            NonZeroUsize::new(5).unwrap(),
+            nonterminal_start::ROOT.inner(),
+        );
+
+        let mut updater = KPathUpdate::inserting(&mut kpath);
+
+        let (mut zero, _total) = updater.kpaths().k_paths();
+
+        while zero != 0 {
+            let mut start = nonterminal_start::generate(&mut rng, &mut (), 0);
+
+            updater = updater
+                .visit(&mut start, 0)
+                .unwrap()
+                .continue_value()
+                .unwrap();
+
+            zero = updater.kpaths().k_paths().0;
+        }
+
+        Ok(())
+    }
 }
 
 mod pest_renamed {
@@ -373,17 +401,19 @@ mod xml {
     use alloc::string::String;
     use alloc::vec::Vec;
     use core::error::Error;
+    use core::num::NonZeroUsize;
     use fandango_core::generation::{DefaultGenerated, Generated};
     use fandango_core::typing::{AsNodeMut, AsStaticNode, Node, Structured};
     use fandango_core::visitor::assignment::AssignmentVisitor;
 
     use fandango_core::dynamic::{DynamicNode, DynamicSampler};
     use fandango_core::visitor::Visitor;
+    use fandango_core::visitor::kpath::{KPathUpdate, KPaths};
     use fandango_core::visitor::navigation::CountNodes;
     use fandango_core::visitor::write::WriteVisitor;
     use fandango_derive::Fandango;
+    use rand::SeedableRng;
     use rand::rngs::StdRng;
-    use rand::{SeedableRng, rng};
 
     #[allow(dead_code)]
     #[derive(Fandango)]
@@ -392,7 +422,7 @@ mod xml {
 
     #[test]
     fn generate() -> Result<(), Box<dyn Error>> {
-        let mut rng = rng();
+        let mut rng = StdRng::seed_from_u64(0);
         let mut start = nonterminal_start::generate_default(&mut rng, &mut (), 0);
 
         let serialized = String::from_utf8(
@@ -422,7 +452,7 @@ mod xml {
 
     #[test]
     fn find_replace() -> Result<(), Box<dyn Error>> {
-        let mut rng = rng();
+        let mut rng = StdRng::seed_from_u64(0);
         let mut first = nonterminal_start::generate_default(&mut rng, &mut (), 0);
         let mut second = nonterminal_start::generate_default(&mut rng, &mut (), 0);
         while first == second {
@@ -477,6 +507,33 @@ mod xml {
 
             assert_eq!(static_ser, dyn_ser);
             assert_eq!(static_start.count_nodes(), dyn_start.count_nodes());
+        }
+
+        Ok(())
+    }
+
+    #[test]
+    fn kpath() -> Result<(), Box<dyn Error>> {
+        let mut rng = StdRng::seed_from_u64(0);
+        let mut kpath = KPaths::new::<TypeMut<'static>>(
+            NonZeroUsize::new(5).unwrap(),
+            nonterminal_start::ROOT.inner(),
+        );
+
+        let mut updater = KPathUpdate::inserting(&mut kpath);
+
+        let (mut zero, _total) = updater.kpaths().k_paths();
+
+        while zero != 0 {
+            let mut start = nonterminal_start::generate(&mut rng, &mut (), 0);
+
+            updater = updater
+                .visit(&mut start, 0)
+                .unwrap()
+                .continue_value()
+                .unwrap();
+
+            zero = updater.kpaths().k_paths().0;
         }
 
         Ok(())

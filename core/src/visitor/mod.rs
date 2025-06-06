@@ -2,6 +2,7 @@
 
 pub mod assignment;
 pub mod error;
+pub mod kpath;
 pub mod navigation;
 pub mod write;
 

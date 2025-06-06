@@ -376,6 +376,30 @@ pub fn derive_fandango_or_emit_error(
                 }
             }
 
+            impl ::fandango::typing::DiscriminantLookup for Type<'_> {
+                fn lookup_discriminant(node: &::fandango::lang::FandangoNode<'static, 'static>) -> usize {
+                    use ::fandango::typing::{AsStaticNode, StaticDiscriminable};
+                    #(
+                        if node == &#node_names::static_definition() {
+                            return #node_names::DISCRIMINANT;
+                        }
+                    )*
+                    panic!("Could not find a discriminant for the provided node type. Wrong grammar?");
+                }
+            }
+
+            impl ::fandango::typing::NodeLookup for Type<'_> {
+                fn lookup_node(discriminant: usize) -> ::fandango::lang::FandangoNode<'static, 'static> {
+                    use ::fandango::typing::AsStaticNode;
+                    match discriminant {
+                        #(
+                            #discriminants => #node_names::static_definition(),
+                        )*
+                        _ => panic!("Could not find a discriminant for the provided node type. Wrong grammar?")
+                    }
+                }
+            }
+
             #(
                 impl<'program> ::fandango::typing::AsNodeRef<#node_names> for Type<'program> {
                     fn as_node(&self) -> Option<&#node_names> {
@@ -400,6 +424,18 @@ pub fn derive_fandango_or_emit_error(
                             Self::#node_names(n) => n.discriminant(),
                         )*
                     }
+                }
+            }
+
+            impl<'a> ::fandango::typing::DiscriminantLookup for TypeMut<'a> {
+                fn lookup_discriminant(node: &::fandango::lang::FandangoNode<'static, 'static>) -> usize {
+                    <Type::<'a> as ::fandango::typing::DiscriminantLookup>::lookup_discriminant(node)
+                }
+            }
+
+            impl<'a> ::fandango::typing::NodeLookup for TypeMut<'a> {
+                fn lookup_node(discriminant: usize) -> ::fandango::lang::FandangoNode<'static, 'static> {
+                    <Type::<'a> as ::fandango::typing::NodeLookup>::lookup_node(discriminant)
                 }
             }
 

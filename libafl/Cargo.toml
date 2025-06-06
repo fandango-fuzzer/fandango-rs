@@ -4,11 +4,20 @@ version.workspace = true
 edition.workspace = true
 authors.workspace = true
 
+[features]
+default = ["std"]
+std = ["libafl/std", "libafl_bolts/std", "libafl_bolts/serdeany_autoreg"]
+
 [dependencies]
 fandango = { path = ".." }
 
-libafl.workspace = true
-serde = { workspace = true, features = ["derive"] }
+libafl = { workspace = true, features = ["rand_trait"] }
+libafl_bolts = { workspace = true, features = ["rand_trait"] }
+mappable-rc.workspace = true
+serde = { workspace = true, features = ["alloc", "derive"] }
+
+[dev-dependencies]
+rand = { workspace = true, features = ["std_rng"] }
 
 [lints]
 workspace = true

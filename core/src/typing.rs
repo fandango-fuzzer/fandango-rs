@@ -84,6 +84,8 @@ pub trait Node: Sized + AsNode + Discriminable + Clone {
     ///  - `From<&'program mut N>`
     ///  - `From<&'program mut Box<N>>`
     ///  - `From<N::TypeMut<'program>>`
+    ///  - `DiscriminantLookup`
+    ///  - `NodeLookup`
     type Type<'program>
     where
         Self: 'program;
@@ -93,7 +95,8 @@ pub trait Node: Sized + AsNode + Discriminable + Clone {
     ///  - `From<&'program mut Box<N>>`
     ///  - [`crate::visitor::VisitWith`]
     ///  - [`crate::generation::InPlaceGenerated`]
-    ///  - `OpaqueType`
+    ///  - `DiscriminantLookup`
+    ///  - `NodeLookup`
     type TypeMut<'program>
     where
         Self: 'program;
@@ -182,4 +185,19 @@ pub trait AsNodeMut<N> {
     /// Downcast this opaque node into a mutable concrete node reference, if this opaque node
     /// contains that node.
     fn as_node_mut(&mut self) -> Option<&mut N>;
+}
+
+/// Trait for opaque types to lookup the discriminant associated with the provided [`FandangoNode`].
+pub trait DiscriminantLookup {
+    /// Get the discriminant!
+    fn lookup_discriminant(node: &FandangoNode<'static, 'static>) -> usize;
+}
+
+/// Trait for opaque types to look up the [`FandangoNode`] for the provided discriminant.
+///
+/// This is only implementable for static implementations at this time. [`DynamicNode`] can
+/// implement [`DiscriminantLookup`], but not [`NodeLookup`]. Use wisely.
+pub trait NodeLookup {
+    /// Get the node!
+    fn lookup_node(discriminant: usize) -> FandangoNode<'static, 'static>;
 }

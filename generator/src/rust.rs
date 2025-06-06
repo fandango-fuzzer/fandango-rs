@@ -629,10 +629,10 @@ impl<'program, 'source> IntoRustSource<FandangoGenContext<'_, '_, 'program, 'sou
                 };
                 let child_type = match op {
                     Operator::Repeat(_, _, _) | Operator::Kleene(_) | Operator::Plus(_) => {
-                        quote! { Vec<#(#child_types),*> }
+                        quote! { ::alloc::vec::Vec<#(#child_types),*> }
                     }
                     Operator::Option(_) => {
-                        quote! { Option<#(#child_types),*> }
+                        quote! { ::core::option::Option<#(#child_types),*> }
                     }
                     Operator::Symbol(_) => {
                         unimplemented!("Unexpected symbol; should be elided.")
@@ -687,7 +687,7 @@ impl<'program, 'source> IntoRustSource<FandangoGenContext<'_, '_, 'program, 'sou
                         where
                             V: ::fandango::visitor::Visitor<TypeMut<'program>, Continue = V>
                         {
-                            for (i, child) in self.children_mut().iter_mut().enumerate() {
+                            for (i, child) in ::fandango::typing::Node::children_mut(self).iter_mut().enumerate() {
                                 visitor = match visitor.visit(#prefix(child), i)? {
                                     ::core::ops::ControlFlow::Continue(visitor) => visitor,
                                     c => return Ok(c),
@@ -700,7 +700,7 @@ impl<'program, 'source> IntoRustSource<FandangoGenContext<'_, '_, 'program, 'sou
                         where
                             V: ::fandango::visitor::Visitor<TypeMut<'program>, Continue = V>
                         {
-                            for (i, child) in self.children_mut().iter_mut().enumerate().rev() {
+                            for (i, child) in ::fandango::typing::Node::children_mut(self).iter_mut().enumerate().rev() {
                                 visitor = match visitor.visit(#prefix(child), i)? {
                                     ::core::ops::ControlFlow::Continue(visitor) => visitor,
                                     c => return Ok(c),
@@ -713,7 +713,7 @@ impl<'program, 'source> IntoRustSource<FandangoGenContext<'_, '_, 'program, 'sou
                         where
                             V: ::fandango::visitor::Visitor<TypeMut<'program>, Continue=V>
                         {
-                            for (i, child) in self.children_mut().iter_mut().skip(idx).enumerate().rev() {
+                            for (i, child) in ::fandango::typing::Node::children_mut(self).iter_mut().skip(idx).enumerate().rev() {
                                 visitor = match visitor.visit(#prefix(child), i)? {
                                     ::core::ops::ControlFlow::Continue(visitor) => visitor,
                                     c => return Ok(c),
@@ -726,7 +726,7 @@ impl<'program, 'source> IntoRustSource<FandangoGenContext<'_, '_, 'program, 'sou
                         where
                             V: ::fandango::visitor::Visitor<TypeMut<'program>, Continue=V>
                         {
-                            for (i, child) in self.children_mut().iter_mut().skip(idx).enumerate() {
+                            for (i, child) in ::fandango::typing::Node::children_mut(self).iter_mut().skip(idx).enumerate() {
                                 visitor = match visitor.visit(#prefix(child), i)? {
                                     ::core::ops::ControlFlow::Continue(visitor) => visitor,
                                     c => return Ok(c),
@@ -743,7 +743,7 @@ impl<'program, 'source> IntoRustSource<FandangoGenContext<'_, '_, 'program, 'sou
                         where
                             V: ::fandango::visitor::Visitor<TypeMut<'program>>
                         {
-                            if let Some(node) = self.children_mut().iter_mut().nth(idx) {
+                            if let Some(node) = ::fandango::typing::Node::children_mut(self).iter_mut().nth(idx) {
                                 Ok(visitor.visit(#prefix(node), idx))
                             } else {
                                 Err(visitor)
