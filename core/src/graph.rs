@@ -10,13 +10,16 @@ use crate::lang::{
     Statement, Symbol,
 };
 use alloc::collections::VecDeque;
+use alloc::vec::Vec;
 use core::iter;
 use core::ops::Deref;
 use hashbrown::HashMap;
 use pest::Span;
-use petgraph::graph;
 use petgraph::graph::DiGraph;
 use petgraph::graphmap::NodeTrait;
+use petgraph::prelude::EdgeRef;
+use petgraph::visit::IntoNodeReferences;
+use petgraph::{Direction, graph};
 
 /// Traverse this type's children, potentially recursively, for use with grammar graph creation.
 #[allow(unused_variables)]
@@ -612,6 +615,92 @@ pub trait IntoNode {
 
     /// Perform the conversion!
     fn into_node(self) -> Self::Node;
+}
+
+/// Computes the shortest derivation trees available from each node, returning the indices with the
+/// minimum possible path.
+pub fn shortest_path<'program, 'source>(
+    graph: &DiGraph<FandangoNode<'program, 'source>, Span<'source>>,
+) -> HashMap<FandangoNode<'program, 'source>, Vec<usize>> {
+    let mut depths = graph
+        .node_references()
+        .filter_map(|(idx, node)| matches!(node, FandangoNode::String(_)).then_some((idx, 0usize)))
+        .collect::<HashMap<_, _>>();
+    let mut queue = VecDeque::from_iter(
+        depths
+            .keys()
+            .copied()
+            .flat_map(|term| graph.edges_directed(term, Direction::Incoming))
+            .map(|e| e.source()),
+    );
+    let mut alternatives = HashMap::new();
+
+    loop {
+        let mut unchanged = true;
+        let mut next_queue = VecDeque::new();
+
+        for next in queue {
+            if depths.contains_key(&next) {
+                continue;
+            }
+            let mut children = graph
+                .edges(next)
+                .map(|e| (e.weight().start(), depths.get(&e.target()).copied()))
+                .collect::<Vec<_>>();
+            children.sort_by_key(|(s, _)| *s);
+
+            let mut depth = None;
+            match graph.node_weight(next).unwrap() {
+                FandangoNode::Alternative(_) => {
+                    let (choices, alt_depth) = children.into_iter().enumerate().fold(
+                        (Vec::new(), usize::MAX),
+                        |(mut current, max_len), (idx, (_, len))| {
+                            if let Some(len) = len {
+                                if len < max_len {
+                                    current.clear();
+                                    current.push(idx);
+                                    return (current, len);
+                                } else if len == max_len {
+                                    current.push(idx);
+                                }
+                            }
+                            (current, max_len)
+                        },
+                    );
+                    alternatives.insert(next, choices);
+                    depth = Some(alt_depth);
+                }
+                _ => {
+                    if let Some(children) = children
+                        .into_iter()
+                        .map(|(_, c)| c)
+                        .collect::<Option<Vec<_>>>()
+                    {
+                        depth = children.into_iter().min();
+                    }
+                }
+            }
+            if let Some(depth) = depth {
+                next_queue.extend(
+                    graph
+                        .edges_directed(next, Direction::Incoming)
+                        .map(|e| e.source()),
+                );
+                unchanged &= depths.insert(next, depth) == Some(depth);
+            }
+        }
+
+        queue = next_queue;
+        if unchanged {
+            break;
+        }
+    }
+
+    let shortest_path = alternatives
+        .into_iter()
+        .map(|(idx, paths)| (*graph.node_weight(idx).unwrap(), paths))
+        .collect();
+    shortest_path
 }
 
 #[cfg(test)]

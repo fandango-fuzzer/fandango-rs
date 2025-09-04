@@ -42,7 +42,7 @@ mod defs {
     use core::ops::ControlFlow;
     use embedded_io::{ErrorType, Write};
     use fandango::Fandango;
-    use fandango::typing::{AsNodeMut, AsNodeRef, Node};
+    use fandango::typing::{AsNodeMut, AsNodeRef, Node, Nth};
     use fandango::visitor::write::WriteVisitor;
     use fandango::visitor::{VisitResult, VisitableChildren, Visitor};
     use hashbrown::HashSet;
@@ -147,13 +147,13 @@ mod defs {
 
             if let Some(title) = AsNodeMut::<nonterminal_section_title>::as_node_mut(&mut visited) {
                 if WriteVisitor::new(LengthCounter::default())
-                    .visit(visited_form(&mut title.child_0.child_0), 0)?
+                    .visit(visited_form(title.nth_mut::<0>().nth_mut::<0>()), 0)?
                     .continue_value()
                     .unwrap()
                     .output()
                     .count
                     > WriteVisitor::new(LengthCounter::default())
-                        .visit(visited_form(&mut title.child_0.child_2), 0)?
+                        .visit(visited_form(title.nth_mut::<0>().nth_mut::<2>()), 0)?
                         .continue_value()
                         .unwrap()
                         .output()
@@ -166,7 +166,7 @@ mod defs {
             } else if let Some(internal) =
                 AsNodeRef::<nonterminal_internal_reference>::as_node(&visited)
             {
-                if !self.labels.contains(&internal.child_0.child_1) {
+                if !self.labels.contains(internal.nth::<0>().nth::<1>()) {
                     let mut path = self.path.clone();
                     path.extend([0, 1]);
                     self.violations.push(path);
@@ -174,7 +174,7 @@ mod defs {
             } else if let Some(internal) =
                 AsNodeRef::<nonterminal_internal_reference_nospace>::as_node(&visited)
             {
-                if !self.labels.contains(&internal.child_0.child_0) {
+                if !self.labels.contains(internal.nth::<0>().nth::<0>()) {
                     let mut path = self.path.clone();
                     path.extend([0, 0]);
                     self.violations.push(path);
@@ -203,7 +203,7 @@ mod defs {
         {
             let visited = T::from(node);
             if let Some(label) = visited.as_node() {
-                self.labels.insert(label.child_0.child_1.clone());
+                self.labels.insert(label.nth::<0>().nth::<1>().clone());
             }
             visited.visit_each(self)
         }

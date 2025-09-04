@@ -32,7 +32,7 @@ mod defs {
     use core::convert::Infallible;
     use core::ops::ControlFlow;
     use fandango::Fandango;
-    use fandango::typing::{AsNodeMut, AsNodeRef, Node};
+    use fandango::typing::{AsNodeMut, AsNodeRef, Downcast, Node, Nth};
     use fandango::visitor::{VisitResult, VisitableChildren, Visitor};
     use hashbrown::HashSet;
 
@@ -84,16 +84,10 @@ mod defs {
         {
             self.path.push_back(idx);
             let visited = T::from(node);
-            if let Some(decl) = AsNodeRef::<nonterminal_declaration>::as_node(&visited) {
-                let (id, path) = match &decl.child_0 {
-                    nonterminal_declaration_0::variant_0(nonterminal_declaration_0_0 {
-                        child_1: id,
-                        ..
-                    }) => (id, [0, 0, 1]),
-                    nonterminal_declaration_0::variant_1(nonterminal_declaration_0_1 {
-                        child_1: id,
-                        ..
-                    }) => (id, [0, 1, 1]),
+            if let Some(decl) = visited.downcast::<nonterminal_declaration>() {
+                let (id, path) = match decl.nth::<0>() {
+                    nonterminal_declaration_0::variant_0(child) => (child.nth::<1>(), [0, 0, 1]),
+                    nonterminal_declaration_0::variant_1(child) => (child.nth::<1>(), [0, 1, 1]),
                 };
                 if self.scope.contains(id) {
                     let mut violation = self.path.clone();
@@ -102,7 +96,7 @@ mod defs {
                 } else {
                     self.scope.insert(id.clone());
                 }
-            } else if let Some(id) = AsNodeRef::<nonterminal_id>::as_node(&visited) {
+            } else if let Some(id) = visited.downcast::<nonterminal_id>() {
                 if !self.scope.contains(id) {
                     self.violations.push(self.path.clone());
                 }

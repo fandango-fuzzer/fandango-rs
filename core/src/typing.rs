@@ -173,6 +173,8 @@ where
 
 /// Trait automatically implemented for opaque nodes which allows for downcasting of immutable
 /// references to concrete nodes.
+///
+/// Prefer [`Downcast`].
 pub trait AsNodeRef<N> {
     /// Downcast this opaque node into a immutable concrete node reference, if this opaque node
     /// contains that node.
@@ -181,10 +183,46 @@ pub trait AsNodeRef<N> {
 
 /// Trait automatically implemented for opaque nodes which allows for downcasting of mutable
 /// references to concrete nodes.
+///
+/// Prefer [`DowncastMut`].
 pub trait AsNodeMut<N> {
     /// Downcast this opaque node into a mutable concrete node reference, if this opaque node
     /// contains that node.
     fn as_node_mut(&mut self) -> Option<&mut N>;
+}
+
+/// Downcast this opaque node into a concrete node, as possible.
+pub trait Downcast {
+    /// Perform the downcast.
+    fn downcast<N>(&self) -> Option<&N>
+    where
+        Self: AsNodeRef<N>;
+}
+
+impl<T> Downcast for T {
+    fn downcast<N>(&self) -> Option<&N>
+    where
+        Self: AsNodeRef<N>,
+    {
+        self.as_node()
+    }
+}
+
+/// Downcast this opaque node into a mutable concrete node, as possible.
+pub trait DowncastMut {
+    /// Perform the downcast.
+    fn downcast_mut<N>(&mut self) -> Option<&mut N>
+    where
+        Self: AsNodeMut<N>;
+}
+
+impl<T> DowncastMut for T {
+    fn downcast_mut<N>(&mut self) -> Option<&mut N>
+    where
+        Self: AsNodeMut<N>,
+    {
+        self.as_node_mut()
+    }
 }
 
 /// Trait for opaque types to lookup the discriminant associated with the provided [`FandangoNode`].
@@ -200,4 +238,57 @@ pub trait DiscriminantLookup {
 pub trait NodeLookup {
     /// Get the node!
     fn lookup_node(discriminant: usize) -> FandangoNode<'static, 'static>;
+}
+
+/// Accessor trait for children/variants of nodes.
+///
+/// You don't want to use this directly. Use [`Nth`] instead.
+pub trait ChildAccessor<const N: usize>: Node {
+    /// The (immutable) child reference to the [`N`]th child.
+    type Child<'a>
+    where
+        Self: 'a;
+    /// The (mutable) child reference to the [`N`]th child.
+    type ChildMut<'a>
+    where
+        Self: 'a;
+
+    /// Access the child node at position [`N`] immutably.
+    fn child(&self) -> Self::Child<'_>;
+    /// Access the child node at position [`N`] mutably.
+    fn child_mut(&mut self) -> Self::ChildMut<'_>;
+}
+
+/// Accessor for valid [`N`]th child (or, for alternations, variant).
+///
+/// This trait is defined automatically for all nodes with children.
+pub trait Nth {
+    /// Access the [`N`]th child immutably -- if available.
+    fn nth<const N: usize>(&self) -> Self::Child<'_>
+    where
+        Self: ChildAccessor<N>;
+
+    /// Access the [`N`]th child mutably -- if available.
+    fn nth_mut<const N: usize>(&mut self) -> Self::ChildMut<'_>
+    where
+        Self: ChildAccessor<N>;
+}
+
+impl<T> Nth for T
+where
+    T: Node,
+{
+    fn nth<const N: usize>(&self) -> <Self as ChildAccessor<N>>::Child<'_>
+    where
+        Self: ChildAccessor<N>,
+    {
+        self.child()
+    }
+
+    fn nth_mut<const N: usize>(&mut self) -> <Self as ChildAccessor<N>>::ChildMut<'_>
+    where
+        Self: ChildAccessor<N>,
+    {
+        self.child_mut()
+    }
 }

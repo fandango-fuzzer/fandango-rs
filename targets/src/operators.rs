@@ -18,14 +18,12 @@ use core::ops::ControlFlow;
 #[allow(deprecated)]
 use fandango::dynamic::{DefinitionOf, HasDynamicSampler};
 use fandango::generation::{Generated, Generator, GeneratorTuple, Sampler};
-use fandango::graph::IntoGraph;
+use fandango::graph::{IntoGraph, shortest_path};
 use fandango::lang::{FandangoNode, Program};
 use fandango::typing::{AsNodeMut, Node, StaticDiscriminable};
 use fandango::visitor::{VisitResult, VisitableChildren, Visitor};
 use fandango::{impl_definition_of, impl_has_dynamic_sampler};
 use hashbrown::HashMap;
-use petgraph::Direction;
-use petgraph::visit::{EdgeRef, IntoNodeReferences};
 
 /// A generator which restricts the depth of the generated grammar.
 ///
@@ -37,91 +35,15 @@ pub struct DepthLimiter<SP> {
     shortest_path: SP,
 }
 
-impl<'program, 'source> DepthLimiter<HashMap<FandangoNode<'program, 'source>, Vec<usize>>> {
+impl<'program, 'source> DepthLimiter<HashMap<FandangoNode<'program, 'source>, Vec<usize>>>
+where
+    'program: 'source,
+{
     /// Produce a new depth limiter for the given opaque type.
     pub fn new(program: &'program Program<'source>, max_depth: usize) -> Self {
         let (_nonterminals, graph) = program.into_graph();
 
-        let mut depths = graph
-            .node_references()
-            .filter_map(|(idx, node)| {
-                matches!(node, FandangoNode::String(_)).then_some((idx, 0usize))
-            })
-            .collect::<HashMap<_, _>>();
-        let mut queue = VecDeque::from_iter(
-            depths
-                .keys()
-                .copied()
-                .flat_map(|term| graph.edges_directed(term, Direction::Incoming))
-                .map(|e| e.source()),
-        );
-        let mut alternatives = HashMap::new();
-
-        loop {
-            let mut unchanged = true;
-            let mut next_queue = VecDeque::new();
-
-            for next in queue {
-                if depths.contains_key(&next) {
-                    continue;
-                }
-                let mut children = graph
-                    .edges(next)
-                    .map(|e| (e.weight().start(), depths.get(&e.target()).copied()))
-                    .collect::<Vec<_>>();
-                children.sort_by_key(|(s, _)| *s);
-
-                let mut depth = None;
-                match graph.node_weight(next).unwrap() {
-                    FandangoNode::Alternative(_) => {
-                        let (choices, alt_depth) = children.into_iter().enumerate().fold(
-                            (Vec::new(), usize::MAX),
-                            |(mut current, max_len), (idx, (_, len))| {
-                                if let Some(len) = len {
-                                    if len < max_len {
-                                        current.clear();
-                                        current.push(idx);
-                                        return (current, len);
-                                    } else if len == max_len {
-                                        current.push(idx);
-                                    }
-                                }
-                                (current, max_len)
-                            },
-                        );
-                        alternatives.insert(next, choices);
-                        depth = Some(alt_depth);
-                    }
-                    _ => {
-                        if let Some(children) = children
-                            .into_iter()
-                            .map(|(_, c)| c)
-                            .collect::<Option<Vec<_>>>()
-                        {
-                            depth = children.into_iter().min();
-                        }
-                    }
-                }
-                if let Some(depth) = depth {
-                    next_queue.extend(
-                        graph
-                            .edges_directed(next, Direction::Incoming)
-                            .map(|e| e.source()),
-                    );
-                    unchanged &= depths.insert(next, depth) == Some(depth);
-                }
-            }
-
-            queue = next_queue;
-            if unchanged {
-                break;
-            }
-        }
-
-        let shortest_path = alternatives
-            .into_iter()
-            .map(|(idx, paths)| (*graph.node_weight(idx).unwrap(), paths))
-            .collect();
+        let shortest_path = shortest_path(&graph);
         Self {
             max_depth,
             shortest_path,
@@ -202,13 +124,6 @@ where
     S: DefinitionOf<N>,
 {
     impl_definition_of!(inner);
-}
-
-struct FirstStep<T>(T);
-impl<T> FromIterator<T> for FirstStep<T> {
-    fn from_iter<I: IntoIterator<Item = T>>(iter: I) -> Self {
-        FirstStep(iter.into_iter().nth(1).unwrap())
-    }
 }
 
 trait ShortestPath<N, S> {

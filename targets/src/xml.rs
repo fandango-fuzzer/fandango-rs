@@ -32,7 +32,7 @@ mod defs {
     use core::ops::ControlFlow;
     use fandango::Fandango;
     use fandango::generation::Generated;
-    use fandango::typing::{AsNodeMut, AsNodeRef, Node};
+    use fandango::typing::{AsNodeMut, AsNodeRef, ChildAccessor, Downcast, DowncastMut, Node, Nth};
     use fandango::visitor::{VisitResult, VisitableChildren, Visitor};
 
     /// Base for the XML grammar stored in xml.fan.
@@ -82,22 +82,22 @@ mod defs {
         {
             self.path.push_back(idx);
             let visited = T::from(node);
-            if let Some(tree) = AsNodeRef::<nonterminal_xml_tree>::as_node(&visited) {
-                let (open, _, close) = tree.child_0.children();
-                let id = match &open.child_0 {
-                    nonterminal_xml_open_tag_0::variant_0(n) => &n.child_1,
-                    nonterminal_xml_open_tag_0::variant_1(n) => &n.child_1,
+            if let Some(tree) = visited.downcast::<nonterminal_xml_tree>() {
+                let (open, _, close) = tree.child().children();
+                let id = match open.child() {
+                    nonterminal_xml_open_tag_0::variant_0(n) => n.nth::<1>(),
+                    nonterminal_xml_open_tag_0::variant_1(n) => n.nth::<1>(),
                 };
-                if id != &close.child_0.child_1 {
+                if id != close.child().nth::<1>() {
                     let mut violation = self.path.clone();
                     violation.extend([0, 2, 0, 1]); // interior path to actual node
                     self.violations.push(violation);
                 }
-            } else if let Some(tree) = AsNodeRef::<nonterminal_xml_attributes>::as_node(&visited) {
-                if let nonterminal_xml_attributes_0::variant_1(seq) = &tree.child_0 {
+            } else if let Some(tree) = visited.downcast::<nonterminal_xml_attributes>() {
+                if let nonterminal_xml_attributes_0::variant_1(seq) = tree.child() {
                     let (base, _, mut rest) = seq.children();
                     loop {
-                        let (cmp, maybe_rest) = match &rest.child_0 {
+                        let (cmp, maybe_rest) = match rest.child() {
                             nonterminal_xml_attributes_0::variant_0(cmp) => (cmp, None),
                             nonterminal_xml_attributes_0::variant_1(seq) => {
                                 let (cmp, _, rest) = seq.children();
@@ -163,22 +163,20 @@ mod defs {
             T: From<&'program mut N> + AsNodeMut<N>,
         {
             let mut visited = T::from(node);
-            if let Some(tree) = AsNodeMut::<nonterminal_xml_tree>::as_node_mut(&mut visited) {
-                let (open, _, close) = tree.child_0.children_mut();
-                let id = match &open.child_0 {
-                    nonterminal_xml_open_tag_0::variant_0(n) => &n.child_1,
-                    nonterminal_xml_open_tag_0::variant_1(n) => &n.child_1,
+            if let Some(tree) = visited.downcast_mut::<nonterminal_xml_tree>() {
+                let (open, _, close) = tree.child_mut().children_mut();
+                let id = match open.child() {
+                    nonterminal_xml_open_tag_0::variant_0(n) => n.nth::<1>(),
+                    nonterminal_xml_open_tag_0::variant_1(n) => n.nth::<1>(),
                 };
-                id.clone_into(&mut close.child_0.child_1);
-            } else if let Some(tree) =
-                AsNodeMut::<nonterminal_xml_attributes>::as_node_mut(&mut visited)
-            {
-                if let nonterminal_xml_attributes_0::variant_1(seq) = &mut tree.child_0 {
+                id.clone_into(close.child_mut().nth_mut::<1>());
+            } else if let Some(tree) = visited.downcast_mut::<nonterminal_xml_attributes>() {
+                if let nonterminal_xml_attributes_0::variant_1(seq) = tree.child_mut() {
                     let (base, _, mut rest) = seq.children_mut();
                     let mut ids = BTreeSet::new();
-                    ids.insert(&mut base.child_0.child_0);
+                    ids.insert(base.child_mut().nth_mut::<0>());
                     loop {
-                        let (cmp, maybe_rest) = match &mut rest.child_0 {
+                        let (cmp, maybe_rest) = match rest.child_mut() {
                             nonterminal_xml_attributes_0::variant_0(cmp) => (cmp, None),
                             nonterminal_xml_attributes_0::variant_1(seq) => {
                                 let (cmp, _, rest) = seq.children_mut();
@@ -186,7 +184,7 @@ mod defs {
                             }
                         };
 
-                        let cmp = &mut cmp.child_0.child_0;
+                        let cmp = cmp.child_mut().nth_mut::<0>();
                         while ids.contains(cmp) {
                             *cmp = nonterminal_id::generate(self.sampler, self.generator, 0).into();
                         }
@@ -223,12 +221,12 @@ mod defs {
         {
             let mut visited = T::from(node);
             if let Some(tree) = AsNodeMut::<nonterminal_xml_tree>::as_node_mut(&mut visited) {
-                let (open, _, close) = tree.child_0.children_mut();
-                let id = match &open.child_0 {
-                    nonterminal_xml_open_tag_0::variant_0(n) => &n.child_1,
-                    nonterminal_xml_open_tag_0::variant_1(n) => &n.child_1,
+                let (open, _, close) = tree.child_mut().children_mut();
+                let id = match open.child() {
+                    nonterminal_xml_open_tag_0::variant_0(n) => n.nth::<1>(),
+                    nonterminal_xml_open_tag_0::variant_1(n) => n.nth::<1>(),
                 };
-                id.clone_into(&mut close.child_0.child_1);
+                id.clone_into(close.child_mut().nth_mut::<1>());
             }
             visited.visit_each(self)
         }

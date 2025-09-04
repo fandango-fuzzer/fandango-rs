@@ -1,13 +1,14 @@
+use fandango_core::graph::shortest_path;
 use fandango_core::lang::FandangoNode;
 use fandango_core::lang::Operator;
+use hashbrown::hash_map::Entry;
+use hashbrown::{HashMap, HashSet};
 use pest::Span;
 use petgraph::graph::DiGraph;
 use petgraph::visit::{EdgeRef, IntoNodeReferences};
 use petgraph::{Direction, algo, graph};
 use proc_macro2::{Ident, Literal, TokenStream};
 use quote::{format_ident, quote};
-use std::collections::hash_map::Entry;
-use std::collections::{HashMap, HashSet};
 use std::convert::Infallible;
 
 /// Produces a Rust source tree using the provided context.
@@ -173,11 +174,14 @@ where
             }
         };
 
+        let shortest_paths = shortest_path(self);
+
         output.extend(quote! {
             #derives
+            #[derive(Default)]
             #[allow(missing_docs)]
             pub struct #name {
-                pub child_0: #child_type,
+                child_0: #child_type,
             }
 
             impl ::fandango::typing::Node for #name {
@@ -248,6 +252,19 @@ where
                 }
             }
 
+            impl ::fandango::typing::ChildAccessor<0> for #name {
+                type Child<'a> = &'a #child_type;
+                type ChildMut<'a> = &'a mut #child_type;
+
+                fn child(&self) -> Self::Child<'_> {
+                    &self.child_0
+                }
+
+                fn child_mut(&mut self) -> Self::ChildMut<'_> {
+                    &mut self.child_0
+                }
+            }
+
             #from
         });
         if emit_parse_glue {
@@ -282,6 +299,7 @@ where
                 &needs_indirection,
                 emit_parse_glue,
                 &derives,
+                &shortest_paths,
             ),
             output,
         )
@@ -300,6 +318,7 @@ type FandangoGenContext<'names, 'graph, 'program, 'source> = (
     )>,
     bool,
     &'names TokenStream,
+    &'names HashMap<FandangoNode<'program, 'source>, Vec<usize>>,
 );
 
 impl<'program, 'source> IntoRustSource<FandangoGenContext<'_, '_, 'program, 'source>>
@@ -321,6 +340,7 @@ impl<'program, 'source> IntoRustSource<FandangoGenContext<'_, '_, 'program, 'sou
             needs_indirection,
             emit_parse_glue,
             derives,
+            shortest_paths,
         ) = ctx;
         match mapped_names.entry(node_weight) {
             Entry::Occupied(_) => return Ok(()),
@@ -366,24 +386,43 @@ impl<'program, 'source> IntoRustSource<FandangoGenContext<'_, '_, 'program, 'sou
             })
             .collect::<Vec<_>>();
 
-        let (child_field_types, visit_prefixes) = children
+        let (
+            child_ref_types,
+            child_mut_types,
+            child_field_types,
+            ref_visit_prefixes,
+            visit_prefixes,
+        ) = children
             .iter()
             .zip(&child_types)
             .map(|((_, _, child, _), name)| {
                 let base = quote! { #name };
                 match node_weight {
                     FandangoNode::Operator(op) => match op {
-                        Operator::Kleene(_) | Operator::Plus(_) | Operator::Repeat(_, _, _) => {
-                            (quote! { ::alloc::vec::Vec<#base> }, quote! {})
-                        }
+                        Operator::Kleene(_) | Operator::Plus(_) | Operator::Repeat(_, _, _) => (
+                            quote! { ::core::option::Option<&'a #base> },
+                            quote! { ::core::option::Option<&'a mut #base> },
+                            quote! { ::alloc::vec::Vec<#base> },
+                            quote! {},
+                            quote! {},
+                        ),
                         Operator::Option(_) => {
                             if needs_indirection.contains(&(node_weight, *child)) {
                                 (
+                                    quote! { ::core::option::Option<&'a #base> },
+                                    quote! { ::core::option::Option<&'a mut #base> },
                                     quote! { ::core::option::Option<::alloc::boxed::Box<#base>> },
+                                    quote! { ::core::ops::Deref::deref },
                                     quote! { ::core::ops::DerefMut::deref_mut },
                                 )
                             } else {
-                                (quote! { ::core::option::Option<#base> }, quote! {})
+                                (
+                                    quote! { ::core::option::Option<&'a #base> },
+                                    quote! { ::core::option::Option<&'a mut #base> },
+                                    quote! { ::core::option::Option<#base> },
+                                    quote! {},
+                                    quote! {},
+                                )
                             }
                         }
                         Operator::Symbol(_) => {
@@ -393,16 +432,25 @@ impl<'program, 'source> IntoRustSource<FandangoGenContext<'_, '_, 'program, 'sou
                     _ => {
                         if needs_indirection.contains(&(node_weight, *child)) {
                             (
+                                quote! { &'a #base },
+                                quote! { &'a mut #base },
                                 quote! { ::alloc::boxed::Box<#base> },
+                                quote! { ::core::ops::Deref::deref },
                                 quote! { ::core::ops::DerefMut::deref_mut },
                             )
                         } else {
-                            (base, quote! {})
+                            (
+                                quote! { &'a #base },
+                                quote! { &'a mut #base },
+                                base,
+                                quote! {},
+                                quote! {},
+                            )
                         }
                     }
                 }
             })
-            .collect::<(Vec<_>, Vec<_>)>();
+            .collect::<(Vec<_>, Vec<_>, Vec<_>, Vec<_>, Vec<_>)>();
 
         match node_weight {
             FandangoNode::String(orig) => {
@@ -419,6 +467,7 @@ impl<'program, 'source> IntoRustSource<FandangoGenContext<'_, '_, 'program, 'sou
                 };
                 output.extend(quote! {
                     #derives
+                    #[derive(Default)]
                     #[allow(missing_docs)]
                     pub struct #name;
 
@@ -498,11 +547,22 @@ impl<'program, 'source> IntoRustSource<FandangoGenContext<'_, '_, 'program, 'sou
                     .collect::<Vec<_>>();
                 let indices = (0..children.len()).collect::<Vec<_>>();
                 let count = children.len();
+                let child_range = 0usize..;
+
+                let shortest = shortest_paths.get(&node_weight).unwrap();
+                let default_choice = shortest[0];
+                let default = &child_variants[default_choice];
                 output.extend(quote! {
                     #derives
                     #[allow(missing_docs)]
                     pub enum #name {
                         #( #child_variants ( #child_field_types ) ),*
+                    }
+
+                    impl Default for #name {
+                        fn default() -> Self {
+                            Self::#default(Default::default())
+                        }
                     }
 
                     impl ::fandango::typing::Node for #name {
@@ -582,6 +642,27 @@ impl<'program, 'source> IntoRustSource<FandangoGenContext<'_, '_, 'program, 'sou
                             }
                         }
                     }
+
+                    #(
+                        impl ::fandango::typing::ChildAccessor<#child_range> for #name {
+                            type Child<'a> = Option<#child_ref_types>;
+                            type ChildMut<'a> = Option<#child_mut_types>;
+
+                            fn child(&self) -> Self::Child<'_> {
+                                match self {
+                                    #name::#child_variants(n) => Some(#ref_visit_prefixes(n)),
+                                    _ => None,
+                                }
+                            }
+
+                            fn child_mut(&mut self) -> Self::ChildMut<'_> {
+                                match self {
+                                    #name::#child_variants(n) => Some(#visit_prefixes(n)),
+                                    _ => None,
+                                }
+                            }
+                        }
+                    )*
 
                     #from
                 });
@@ -663,12 +744,78 @@ impl<'program, 'source> IntoRustSource<FandangoGenContext<'_, '_, 'program, 'sou
                         unimplemented!("Unexpected symbol; should be elided.")
                     }
                 };
+                let default = match op {
+                    Operator::Repeat(_, start, _) => {
+                        quote! {
+                            (0..#start).map(|_| Default::default()).collect()
+                        }
+                    }
+                    Operator::Plus(_) => {
+                        quote! {
+                            (0..1).map(|_| Default::default()).collect()
+                        }
+                    }
+                    _ => {
+                        quote! {
+                            Default::default()
+                        }
+                    }
+                };
+                let child_accessor = match op {
+                    Operator::Kleene(_) | Operator::Plus(_) | Operator::Repeat(_, _, _) => {
+                        quote! {
+                            #(
+                                impl<const N: usize> ::fandango::typing::ChildAccessor<N> for #name {
+                                    type Child<'a> = #child_ref_types;
+                                    type ChildMut<'a> = #child_mut_types;
+
+                                    fn child(&self) -> Self::Child<'_> {
+                                        #ref_visit_prefixes(self.child_0.get(N))
+                                    }
+
+                                    fn child_mut(&mut self) -> Self::ChildMut<'_> {
+                                        #visit_prefixes(self.child_0.get_mut(N))
+                                    }
+                                }
+                            )*
+                        }
+                    }
+                    Operator::Option(_) => {
+                        quote! {
+                            #(
+                                impl ::fandango::typing::ChildAccessor<0> for #name {
+                                    type Child<'a> = #child_ref_types;
+                                    type ChildMut<'a> = #child_mut_types;
+
+                                    fn child(&self) -> Self::Child<'_> {
+                                        #ref_visit_prefixes(self.child_0.as_ref(N))
+                                    }
+
+                                    fn child_mut(&mut self) -> Self::ChildMut<'_> {
+                                        #visit_prefixes(self.child_0.as_mut(N))
+                                    }
+                                }
+                            )*
+                        }
+                    }
+                    Operator::Symbol(_) => {
+                        unimplemented!("Unexpected symbol; should be elided.")
+                    }
+                };
 
                 output.extend(quote! {
                     #derives
                     #[allow(missing_docs)]
                     pub struct #name {
-                        pub child_0: #(#child_field_types)*
+                        child_0: #(#child_field_types)*
+                    }
+
+                    impl Default for #name {
+                        fn default() -> Self {
+                            Self {
+                                child_0: #default,
+                            }
+                        }
                     }
 
                     impl ::fandango::typing::Node for #name {
@@ -763,6 +910,8 @@ impl<'program, 'source> IntoRustSource<FandangoGenContext<'_, '_, 'program, 'sou
                         }
                     }
 
+                    #child_accessor
+
                     #from
                 });
                 if emit_parse_glue {
@@ -804,11 +953,14 @@ impl<'program, 'source> IntoRustSource<FandangoGenContext<'_, '_, 'program, 'sou
                 let mut prefixes_rev = visit_prefixes.clone();
                 prefixes_rev.reverse();
 
+                let child_range = 0usize..;
+
                 output.extend(quote! {
                     #derives
+                    #[derive(Default)]
                     #[allow(missing_docs)]
                     pub struct #name {
-                        #( pub #child_names: #child_field_types ),*
+                        #( #child_names: #child_field_types ),*
                     }
 
                     impl ::fandango::typing::Node for #name {
@@ -906,6 +1058,21 @@ impl<'program, 'source> IntoRustSource<FandangoGenContext<'_, '_, 'program, 'sou
                         }
                     }
 
+                    #(
+                        impl ::fandango::typing::ChildAccessor<#child_range> for #name {
+                            type Child<'a> = #child_ref_types;
+                            type ChildMut<'a> = #child_mut_types;
+
+                            fn child(&self) -> Self::Child<'_> {
+                                #ref_visit_prefixes(&self.#child_names)
+                            }
+
+                            fn child_mut(&mut self) -> Self::ChildMut<'_> {
+                                #visit_prefixes(&mut self.#child_names)
+                            }
+                        }
+                    )*
+
                     #from
                 });
                 if emit_parse_glue {
@@ -941,6 +1108,7 @@ impl<'program, 'source> IntoRustSource<FandangoGenContext<'_, '_, 'program, 'sou
                     needs_indirection,
                     emit_parse_glue,
                     derives,
+                    shortest_paths,
                 ),
                 output,
             )?;

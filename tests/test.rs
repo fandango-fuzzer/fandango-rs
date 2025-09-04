@@ -19,7 +19,7 @@ mod simple {
     use fandango_core::dynamic::{DynamicNode, DynamicSampler, HasDynamicSampler};
     use fandango_core::generation::util::Flattener;
     use fandango_core::generation::{Generated, InPlaceGenerated};
-    use fandango_core::typing::{AsNode, AsStaticNode, Structured};
+    use fandango_core::typing::{AsNode, AsStaticNode, Nth, Structured};
     use fandango_core::visitor::Visitor;
     use fandango_core::visitor::kpath::{KPathUpdate, KPaths};
     use fandango_core::visitor::navigation::{
@@ -436,6 +436,16 @@ mod xml {
         extern crate std;
 
         std::println!("{serialized}");
+        Ok(())
+    }
+
+    #[test]
+    fn default() -> Result<(), Box<dyn Error>> {
+        let default_tree = nonterminal_start::default();
+
+        extern crate std;
+        std::println!("{default_tree:?}");
+
         Ok(())
     }
 
