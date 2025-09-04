@@ -19,9 +19,12 @@ rand = { version = "0.9.0", default-features = false, features = ["std_rng"] }
 [profile.dev]
 opt-level = "z" # needed because a lot of dependencies are not used
 strip = true
+lto = true
 
 [profile.release]
+opt-level = "z" # needed because a lot of dependencies are not used
 strip = true
+lto = true
 
 [workspace]
 members = ["."]

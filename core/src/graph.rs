@@ -696,11 +696,10 @@ pub fn shortest_path<'program, 'source>(
         }
     }
 
-    let shortest_path = alternatives
+    alternatives
         .into_iter()
         .map(|(idx, paths)| (*graph.node_weight(idx).unwrap(), paths))
-        .collect();
-    shortest_path
+        .collect()
 }
 
 #[cfg(test)]
