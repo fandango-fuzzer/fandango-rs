@@ -1,5 +1,6 @@
 //! Generator routines for FANDANGO. See [`Generated::generate`] for details on how to use them.
 
+pub mod enumerate;
 pub mod util;
 
 use crate::dynamic::DefinitionOf;

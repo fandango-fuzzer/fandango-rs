@@ -93,6 +93,8 @@ pub struct DynamicSampler<'sampler, S> {
 ///
 /// Sadly, it is not possible to auto-impl this via e.g. [`core::ops::DerefMut`] due to conflicting
 /// trait implementations with [`rand::Rng`].
+///
+/// Use [`impl_has_dynamic_sampler`] for easy implementation on samplers which wrap others.
 pub trait HasDynamicSampler {
     /// The root node of the grammar (i.e., the [`crate::lang::Program`] node).
     fn root(&self) -> FandangoNode;
@@ -153,6 +155,8 @@ macro_rules! impl_has_dynamic_sampler {
 
 /// Get the definition of a node `N`. Allows for static or dynamic checking, according to what's
 /// appropriate.
+///
+/// Use [`impl_definition_of`] for easy implementation on samplers which wrap others.
 pub trait DefinitionOf<N> {
     /// The root of the given node.
     fn root_of(&self) -> crate::lang::FandangoNode<'static, 'static>;

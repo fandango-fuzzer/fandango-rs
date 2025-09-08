@@ -18,7 +18,7 @@ mod simple {
     use fandango_core::dynamic::{DynamicNode, DynamicSampler, HasDynamicSampler};
     use fandango_core::generation::util::Flattener;
     use fandango_core::generation::{Generated, InPlaceGenerated};
-    use fandango_core::typing::{AsNode, AsStaticNode, Nth, Structured};
+    use fandango_core::typing::{AsNode, AsStaticNode, Structured};
     use fandango_core::visitor::Visitor;
     use fandango_core::visitor::kpath::{KPathUpdate, KPaths};
     use fandango_core::visitor::navigation::{
@@ -401,12 +401,16 @@ mod xml {
     use alloc::string::String;
     use alloc::vec::Vec;
     use core::error::Error;
+    use core::hash::BuildHasher;
     use core::num::NonZeroUsize;
     use fandango_core::generation::{DefaultGenerated, Generated};
     use fandango_core::typing::{AsNodeMut, AsStaticNode, Node, Structured};
     use fandango_core::visitor::assignment::AssignmentVisitor;
+    use hashbrown::DefaultHashBuilder;
+    use hashbrown::HashSet;
 
     use fandango_core::dynamic::{DynamicNode, DynamicSampler};
+    use fandango_core::generation::enumerate::EnumerationSampler;
     use fandango_core::visitor::Visitor;
     use fandango_core::visitor::kpath::{KPathUpdate, KPaths};
     use fandango_core::visitor::navigation::CountNodes;
@@ -545,6 +549,34 @@ mod xml {
 
             zero = updater.kpaths().k_paths().0;
         }
+
+        Ok(())
+    }
+
+    #[test]
+    fn enumeration() -> Result<(), Box<dyn Error>> {
+        let rng = StdRng::seed_from_u64(0);
+        let mut sampler = EnumerationSampler::new(nonterminal_start::ROOT.inner(), rng, 0);
+
+        let mut hashes = HashSet::new();
+
+        for i in 0..(1 << 20) {
+            sampler = sampler.with_stack(i);
+            let start = nonterminal_start::generate(&mut sampler, &mut (), 0);
+
+            assert!(hashes.insert(DefaultHashBuilder::default().hash_one(&start)));
+        }
+
+        sampler = sampler.with_stack(1 << 60);
+        let mut start = nonterminal_start::generate(&mut sampler, &mut (), 0);
+        let output = WriteVisitor::new(Vec::new())
+            .visit(&mut start, 0)?
+            .continue_value()
+            .unwrap()
+            .output();
+
+        extern crate std;
+        std::println!("{}", str::from_utf8(&output)?);
 
         Ok(())
     }

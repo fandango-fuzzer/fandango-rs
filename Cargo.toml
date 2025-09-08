@@ -13,6 +13,7 @@ pest_derive.workspace = true
 tuple_list.workspace = true
 
 [dev-dependencies]
+hashbrown.workspace = true
 rand = { workspace = true, features = ["default"] }
 
 [profile.release]
@@ -44,10 +45,12 @@ authors = ["Addison Crump <addison.crump@cispa.de>"]
 [workspace.dependencies]
 either = { version = "1.13", default-features = false }
 embedded-io = { version = "0.6.1", features = ["alloc"] }
-hashbrown = "0.15.2"
+hashbrown = "0.16.0"
 libafl = { version = "0.15.3", default-features = false }
 libafl_bolts = { version = "0.15.3", default-features = false }
 mappable-rc = { version = "0.1.1", default-features = false }
+num-integer = { version = "0.1.46", default-features = false }
+num-traits = { version = "0.2.19", default-features = false }
 pest = { version = "2.7", default-features = false }
 pest_derive = { version = "2.7", default-features = false }
 pest_generator = { version = "2.7", default-features = false }
