@@ -4,7 +4,6 @@
 #![allow(deprecated)] // for DynamicNode
 
 extern crate alloc;
-use fandango::Parser;
 use fandango::parse_pairs_as;
 use fandango_core::typing::Node;
 
@@ -372,6 +371,7 @@ mod simple {
 mod pest_renamed {
     use super::*;
     use fandango::Fandango;
+    use pest::Parser;
 
     #[derive(Fandango)]
     #[fandango(grammar = "tests/grammars/pest-renamed.fan")]

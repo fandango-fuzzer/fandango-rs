@@ -311,7 +311,6 @@ dependencies = [
  "embedded-io 0.6.1",
  "fandango",
  "hashbrown 0.15.5",
- "petgraph",
  "rand",
 ]
 

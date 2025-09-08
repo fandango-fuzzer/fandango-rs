@@ -23,7 +23,6 @@ fandango = { path = ".." }
 
 embedded-io.workspace = true
 hashbrown.workspace = true
-petgraph.workspace = true
 
 [lints]
 workspace = true

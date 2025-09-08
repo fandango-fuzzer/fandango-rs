@@ -395,7 +395,6 @@ dependencies = [
  "embedded-io",
  "fandango",
  "hashbrown",
- "petgraph",
 ]
 
 [[package]]

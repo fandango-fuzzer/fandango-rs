@@ -13,10 +13,10 @@ use pest::error::{InputLocation, LineColLocation};
 use quote::{format_ident, quote};
 use std::borrow::Cow;
 use std::collections::BTreeMap;
-use std::env;
 use std::fs::File;
 use std::io::Read;
 use std::path::{Path, PathBuf};
+use std::{env, fs};
 use syn::parse::{Parse, ParseStream};
 use syn::spanned::Spanned;
 use syn::{DeriveInput, Expr, ExprLit, Lit, Meta, MetaNameValue, Token};
@@ -24,7 +24,7 @@ use syn::{DeriveInput, Expr, ExprLit, Lit, Meta, MetaNameValue, Token};
 use crate::pest::IntoPestSource;
 use crate::rust::IntoRustSource;
 use crate::structure::tokenize_metadata;
-use proc_macro2::{Ident, TokenStream, TokenTree};
+use proc_macro2::{Ident, TokenStream};
 use syn::punctuated::Punctuated;
 
 /// A `#[derive]`-style derivation of a FANDANGO grammar.
@@ -99,10 +99,10 @@ impl FandangoDerivation {
         };
 
         let error = error.with_path(&composed_filename);
-        let stringified = error.to_string();
+        let stringified = format!("Parse error: {error}");
 
         quote! {
-            compile_error!("Parse error: {}", #stringified)
+            compile_error!(#stringified)
         }
     }
 
@@ -234,6 +234,13 @@ pub fn derive_fandango_or_emit_error(
     source: FandangoDerivation,
 ) -> Result<TokenStream, TokenStream> {
     let parsed = Program::try_from(&source.merged).map_err(|e| source.to_compile_error(e))?;
+    let files = source.offsets.values().map(|f| {
+        fs::canonicalize(f.as_path())
+            .expect("Couldn't canonicalize a source path?")
+            .to_str()
+            .expect("Filename was not UTF-8 compatible.")
+            .to_string()
+    });
 
     let input = parsed.statements()[0].span().get_input();
 
@@ -267,6 +274,9 @@ pub fn derive_fandango_or_emit_error(
         #(#referenced)*
 
         const SOURCE: &'static str = #input;
+        const SOURCE_FILES: &'static [&'static str] = &[#(
+            include_str!(#files)
+        ),*];
 
         #[allow(missing_docs)]
         pub const STRUCTURE: &'static ::fandango::lang::Tagged<
@@ -296,31 +306,15 @@ pub fn derive_fandango_or_emit_error(
                 pub struct #ident;
             };
 
-            let grammar = pest_generator::derive_parser(mocked, false);
+            let mut grammar = pest_generator::derive_parser(mocked, false);
             // rewrite: we don't want to force people to import other dependencies
-            let mut grammar = grammar
-                .into_iter()
-                .map(|e| match e {
-                    TokenTree::Ident(ident) => {
-                        if ident == "pest" || ident == "pest_derive" {
-                            TokenTree::Ident(Ident::new(
-                                "fandango",
-                                proc_macro2::Span::mixed_site(),
-                            ))
-                        } else {
-                            TokenTree::Ident(ident)
-                        }
-                    }
-                    other => other,
-                })
-                .collect::<TokenStream>();
             grammar.extend(quote! {
             impl #ident {
                 #[allow(missing_docs)]
                 pub fn extract(
                     source: &str
                 ) -> ::core::result::Result<nonterminal_start, ParseError> {
-                    use ::fandango::Parser;
+                    use ::pest::Parser;
 
                     let (grammar,) = ::fandango::parse_pairs_as!(#ident::parse(Rule::start, source)?, (Rule::start,));
 

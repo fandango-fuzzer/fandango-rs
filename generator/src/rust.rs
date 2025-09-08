@@ -269,12 +269,12 @@ where
         });
         if emit_parse_glue {
             output.extend(quote! {
-                pub type ParseError = ::alloc::boxed::Box<::fandango::error::Error<Rule>>;
+                pub type ParseError = ::alloc::boxed::Box<::pest::error::Error<Rule>>;
 
-                impl ::core::convert::TryFrom<::fandango::iterators::Pair<'_, Rule>> for #name {
+                impl ::core::convert::TryFrom<::pest::iterators::Pair<'_, Rule>> for #name {
                     type Error = ParseError;
 
-                    fn try_from(value: ::fandango::iterators::Pair<'_, Rule>) -> Result<Self, Self::Error> {
+                    fn try_from(value: ::pest::iterators::Pair<'_, Rule>) -> Result<Self, Self::Error> {
                         debug_assert_eq!(value.as_rule(), Rule::#pest_name);
 
                         let span = value.as_span();
@@ -531,10 +531,10 @@ impl<'program, 'source> IntoRustSource<FandangoGenContext<'_, '_, 'program, 'sou
                 });
                 if emit_parse_glue {
                     output.extend(quote! {
-                        impl ::core::convert::TryFrom<::fandango::iterators::Pair<'_, Rule>> for #name {
+                        impl ::core::convert::TryFrom<::pest::iterators::Pair<'_, Rule>> for #name {
                             type Error = ParseError;
 
-                            fn try_from(value: ::fandango::iterators::Pair<'_, Rule>) -> Result<Self, Self::Error> {
+                            fn try_from(value: ::pest::iterators::Pair<'_, Rule>) -> Result<Self, Self::Error> {
                                 #parse_routine
                             }
                         }
@@ -668,10 +668,10 @@ impl<'program, 'source> IntoRustSource<FandangoGenContext<'_, '_, 'program, 'sou
                 });
                 if emit_parse_glue {
                     output.extend(quote! {
-                        impl ::core::convert::TryFrom<::fandango::iterators::Pair<'_, Rule>> for #name {
+                        impl ::core::convert::TryFrom<::pest::iterators::Pair<'_, Rule>> for #name {
                             type Error = ParseError;
 
-                            fn try_from(value: ::fandango::iterators::Pair<'_, Rule>) -> Result<Self, Self::Error> {
+                            fn try_from(value: ::pest::iterators::Pair<'_, Rule>) -> Result<Self, Self::Error> {
                                 debug_assert_eq!(value.as_rule(), Rule::#pest_name);
 
                                 let mut children = value.into_inner();
@@ -916,10 +916,10 @@ impl<'program, 'source> IntoRustSource<FandangoGenContext<'_, '_, 'program, 'sou
                 });
                 if emit_parse_glue {
                     output.extend(quote! {
-                        impl ::core::convert::TryFrom<::fandango::iterators::Pair<'_, Rule>> for #name {
+                        impl ::core::convert::TryFrom<::pest::iterators::Pair<'_, Rule>> for #name {
                             type Error = ParseError;
 
-                            fn try_from(value: ::fandango::iterators::Pair<'_, Rule>) -> Result<Self, Self::Error> {
+                            fn try_from(value: ::pest::iterators::Pair<'_, Rule>) -> Result<Self, Self::Error> {
                                 debug_assert_eq!(value.as_rule(), Rule::#pest_name);
 
                                 let span = value.as_span();
@@ -1077,10 +1077,10 @@ impl<'program, 'source> IntoRustSource<FandangoGenContext<'_, '_, 'program, 'sou
                 });
                 if emit_parse_glue {
                     output.extend(quote! {
-                        impl ::core::convert::TryFrom<::fandango::iterators::Pair<'_, Rule>> for #name {
+                        impl ::core::convert::TryFrom<::pest::iterators::Pair<'_, Rule>> for #name {
                             type Error = ParseError;
 
-                            fn try_from(value: ::fandango::iterators::Pair<'_, Rule>) -> Result<Self, Self::Error> {
+                            fn try_from(value: ::pest::iterators::Pair<'_, Rule>) -> Result<Self, Self::Error> {
                                 debug_assert_eq!(value.as_rule(), Rule::#pest_name);
 
                                 let span = value.as_span();
