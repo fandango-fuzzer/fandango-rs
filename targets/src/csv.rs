@@ -90,8 +90,8 @@ mod defs {
         {
             self.path.push_back(idx);
             let visited = T::from(node);
-            if let Some(tree) = visited.as_node() {
-                if let Some(seq) = tree.nth::<0>().nth::<0>() {
+            if let Some(tree) = visited.as_node()
+                && let Some(seq) = tree.nth::<0>().nth::<0>() {
                     let base = count_fields(seq.nth::<0>().nth::<0>().nth::<0>());
                     // because this is a universal equality, we can just check this pairwise
                     if let Some(seq) = seq.nth::<1>().nth::<0>().nth::<0>() {
@@ -103,7 +103,6 @@ mod defs {
                         }
                     }
                 }
-            }
             let result = visited.visit_each(self);
             let Ok(ControlFlow::Continue(mut visitor)) = result;
             visitor.path.pop_back();
@@ -183,13 +182,12 @@ mod defs {
                                             self.sampler,
                                             self.generator,
                                             0,
-                                        )
-                                        .into(),
+                                        ),
                                     );
 
                                 mem::swap(inplace, new.nth_mut::<0>());
                                 *tmp.nth_mut::<0>() =
-                                    nonterminal_csv_string_list_0::variant_1(new.into()).into();
+                                    nonterminal_csv_string_list_0::variant_1(new.into());
                             }
                             tmp = tmp
                                 .child_mut()

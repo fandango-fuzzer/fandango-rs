@@ -33,11 +33,11 @@ impl<N> DerivationTree<N> {
         }
     }
 
-    pub fn node(&self) -> Ref<N> {
+    pub fn node(&self) -> Ref<'_, N> {
         self.node.borrow()
     }
 
-    pub fn node_mut(&self) -> RefMut<N> {
+    pub fn node_mut(&self) -> RefMut<'_, N> {
         self.node.borrow_mut()
     }
 }

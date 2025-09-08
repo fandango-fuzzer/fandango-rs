@@ -93,8 +93,8 @@ mod defs {
                     violation.extend([0, 2, 0, 1]); // interior path to actual node
                     self.violations.push(violation);
                 }
-            } else if let Some(tree) = visited.downcast::<nonterminal_xml_attributes>() {
-                if let nonterminal_xml_attributes_0::variant_1(seq) = tree.child() {
+            } else if let Some(tree) = visited.downcast::<nonterminal_xml_attributes>()
+                && let nonterminal_xml_attributes_0::variant_1(seq) = tree.child() {
                     let (base, _, mut rest) = seq.children();
                     loop {
                         let (cmp, maybe_rest) = match rest.child() {
@@ -116,7 +116,6 @@ mod defs {
                         }
                     }
                 }
-            }
             let result = visited.visit_each(self);
             let Ok(ControlFlow::Continue(mut visitor)) = result;
             visitor.path.pop_back();
@@ -186,7 +185,7 @@ mod defs {
 
                         let cmp = cmp.child_mut().nth_mut::<0>();
                         while ids.contains(cmp) {
-                            *cmp = nonterminal_id::generate(self.sampler, self.generator, 0).into();
+                            *cmp = nonterminal_id::generate(self.sampler, self.generator, 0);
                         }
                         ids.insert(cmp);
 

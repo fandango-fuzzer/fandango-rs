@@ -131,9 +131,9 @@ impl Parse for FandangoDerivation {
         let mut serde = false;
         for attr in derived.attrs {
             let span = attr.span();
-            if let Meta::List(v) = attr.meta {
-                if let Some(ident) = v.path.get_ident() {
-                    if ident == "fandango" {
+            if let Meta::List(v) = attr.meta
+                && let Some(ident) = v.path.get_ident()
+                    && ident == "fandango" {
                         let args = v.parse_args_with(
                             Punctuated::<MetaNameValue, Token![,]>::parse_terminated,
                         )?;
@@ -186,21 +186,18 @@ impl Parse for FandangoDerivation {
                                         dynamic = b.value();
                                         continue;
                                     }
-                                } else if ident == "serde" {
-                                    if let Expr::Lit(ExprLit {
+                                } else if ident == "serde"
+                                    && let Expr::Lit(ExprLit {
                                         lit: Lit::Bool(b), ..
                                     }) = arg.value
                                     {
                                         serde = b.value();
                                         continue;
                                     }
-                                }
                                 return Err(syn::Error::new(span, "Invalid fandango list."));
                             }
                         }
                     }
-                }
-            }
         }
         if offsets.is_empty() {
             return Err(syn::Error::new(

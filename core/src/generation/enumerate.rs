@@ -21,7 +21,7 @@ use crate::{impl_definition_of, impl_has_dynamic_sampler};
 use hashbrown::HashMap;
 use num_integer::{Integer, Roots};
 use num_traits::ops::overflowing::{OverflowingMul, OverflowingSub};
-use num_traits::{Euclid, One, Unsigned, WrappingShl, Zero};
+use num_traits::{Euclid, Unsigned, WrappingShl};
 
 struct IntegerizedStack<T> {
     value: T,
@@ -109,7 +109,14 @@ where
 impl<N, S, T> Sampler<N> for EnumerationSampler<S, T>
 where
     S: DefinitionOf<N>,
-    T: Unsigned + Integer + Roots + OverflowingMul + OverflowingSub + WrappingShl + Euclid + From<usize>,
+    T: Unsigned
+        + Integer
+        + Roots
+        + OverflowingMul
+        + OverflowingSub
+        + WrappingShl
+        + Euclid
+        + From<usize>,
     usize: From<T>,
 {
     fn sample_kleene(&mut self) -> usize {

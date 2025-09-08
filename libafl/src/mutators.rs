@@ -93,7 +93,7 @@ mod test {
     use fandango::generation::Generated;
     use libafl::corpus::NopCorpus;
     use libafl::mutators::Mutator;
-    use libafl::state::{HasCorpus, StdState};
+    use libafl::state::StdState;
     use libafl_bolts::rands::StdRand;
     use rand::SeedableRng;
     use rand::rngs::StdRng;
