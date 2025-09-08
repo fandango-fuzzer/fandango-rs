@@ -403,19 +403,20 @@ mod xml {
     use core::error::Error;
     use core::hash::BuildHasher;
     use core::num::NonZeroUsize;
-    use fandango_core::generation::{DefaultGenerated, Generated};
-    use fandango_core::typing::{AsNodeMut, AsStaticNode, Node, Structured};
-    use fandango_core::visitor::assignment::AssignmentVisitor;
-    use hashbrown::DefaultHashBuilder;
-    use hashbrown::HashSet;
-
     use fandango_core::dynamic::{DynamicNode, DynamicSampler};
     use fandango_core::generation::enumerate::EnumerationSampler;
+    use fandango_core::generation::{DefaultGenerated, Generated};
+    use fandango_core::typing::{AsNodeMut, AsStaticNode, Node, Structured};
     use fandango_core::visitor::Visitor;
+    use fandango_core::visitor::assignment::AssignmentVisitor;
     use fandango_core::visitor::kpath::{KPathUpdate, KPaths};
     use fandango_core::visitor::navigation::CountNodes;
     use fandango_core::visitor::write::WriteVisitor;
     use fandango_derive::Fandango;
+    use hashbrown::DefaultHashBuilder;
+    use hashbrown::HashSet;
+    use num_bigint::BigUint;
+    use num_traits::Zero;
     use rand::SeedableRng;
     use rand::rngs::StdRng;
 
@@ -554,7 +555,7 @@ mod xml {
     }
 
     #[test]
-    fn enumeration() -> Result<(), Box<dyn Error>> {
+    fn num_to_structure() -> Result<(), Box<dyn Error>> {
         let rng = StdRng::seed_from_u64(0);
         let mut sampler = EnumerationSampler::new(nonterminal_start::ROOT.inner(), rng, 0);
 
@@ -562,9 +563,16 @@ mod xml {
 
         for i in 0..(1 << 20) {
             sampler = sampler.with_stack(i);
-            let start = nonterminal_start::generate(&mut sampler, &mut (), 0);
+            let mut start = nonterminal_start::generate(&mut sampler, &mut (), 0);
 
             assert!(hashes.insert(DefaultHashBuilder::default().hash_one(&start)));
+
+            sampler = sampler
+                .visit(&mut start, 0)
+                .unwrap()
+                .continue_value()
+                .unwrap();
+            assert_eq!(sampler.stack().copied().unwrap_or(0), i);
         }
 
         sampler = sampler.with_stack(1 << 60);
@@ -577,6 +585,33 @@ mod xml {
 
         extern crate std;
         std::println!("{}", str::from_utf8(&output)?);
+
+        Ok(())
+    }
+
+    #[test]
+    fn structure_to_num() -> Result<(), Box<dyn Error>> {
+        let rng = StdRng::seed_from_u64(0);
+        let mut sampler = rng.clone();
+        let mut enum_sampler =
+            EnumerationSampler::new(nonterminal_start::ROOT.inner(), rng, BigUint::zero());
+
+        let mut max = 0;
+        for _ in 0..1024 {
+            let mut start = nonterminal_start::generate(&mut sampler, &mut (), 0);
+
+            enum_sampler = enum_sampler
+                .visit(&mut start, 0)
+                .unwrap()
+                .continue_value()
+                .unwrap();
+            max = max.max(enum_sampler.stack().unwrap().bits());
+            let enum_start = nonterminal_start::generate(&mut enum_sampler, &mut (), 0);
+            assert_eq!(start, enum_start);
+        }
+
+        extern crate std;
+        std::println!("Stored within {max} bits max");
 
         Ok(())
     }
