@@ -109,7 +109,7 @@ where
 impl<N, S, T> Sampler<N> for EnumerationSampler<S, T>
 where
     S: DefinitionOf<N>,
-    T: Integer + Roots + OverflowingMul + OverflowingSub + WrappingShl + Euclid + From<usize>,
+    T: Unsigned + Integer + Roots + OverflowingMul + OverflowingSub + WrappingShl + Euclid + From<usize>,
     usize: From<T>,
 {
     fn sample_kleene(&mut self) -> usize {
