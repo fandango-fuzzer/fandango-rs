@@ -431,10 +431,10 @@ mod test {
     #[test]
     fn simple_encoding() {
         let seq = [1usize, 0, 1, 2, 3, 4, 5];
-        let initial = IntegerizedStack::encode(&0usize, &seq[0]).expect("Should succeed");
+        let initial = IntegerizedStack::encode(0usize, seq[0]);
         let mut stack = IntegerizedStack::new(initial).unwrap();
-        for i in &seq[1..] {
-            stack = stack.push(i).unwrap();
+        for &i in &seq[1..] {
+            stack = stack.push(i);
         }
         let mut stack = Some(stack);
         for i in seq.into_iter().rev() {
@@ -448,14 +448,14 @@ mod test {
     #[test]
     fn mod_encoding() {
         let seq = [1usize, 0, 1, 2, 3, 4, 5];
-        let initial = IntegerizedStack::mod_encode(&0usize, &seq[0], &12).expect("Should succeed");
+        let initial = IntegerizedStack::mod_encode(0usize, seq[0], 12);
         let mut stack = IntegerizedStack::new(initial).unwrap();
-        for i in &seq[1..] {
-            stack = stack.modpush(i, &12).unwrap();
+        for &i in &seq[1..] {
+            stack = stack.modpush(i, 12);
         }
         let mut stack = Some(stack);
         for i in seq.into_iter().rev() {
-            let (next_stack, retrieved) = stack.unwrap().modpop(&12);
+            let (next_stack, retrieved) = stack.unwrap().modpop(12);
             stack = next_stack;
             assert_eq!(retrieved, i);
         }
