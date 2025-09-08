@@ -45,7 +45,7 @@ authors = ["Addison Crump <addison.crump@cispa.de>"]
 [workspace.dependencies]
 either = { version = "1.13", default-features = false }
 embedded-io = { version = "0.6.1", features = ["alloc"] }
-hashbrown = "0.16.0"
+hashbrown = "0.15.5"
 libafl = { version = "0.15.3", default-features = false }
 libafl_bolts = { version = "0.15.3", default-features = false }
 mappable-rc = { version = "0.1.1", default-features = false }

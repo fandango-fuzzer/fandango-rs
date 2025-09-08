@@ -133,71 +133,67 @@ impl Parse for FandangoDerivation {
             let span = attr.span();
             if let Meta::List(v) = attr.meta
                 && let Some(ident) = v.path.get_ident()
-                    && ident == "fandango" {
-                        let args = v.parse_args_with(
-                            Punctuated::<MetaNameValue, Token![,]>::parse_terminated,
-                        )?;
-                        for arg in args {
-                            if let Some(ident) = arg.path.get_ident() {
-                                if ident == "grammar" {
-                                    if let Expr::Lit(ExprLit {
-                                        lit: Lit::Str(s), ..
-                                    }) = arg.value
-                                    {
-                                        let path = root.join(s.value());
-                                        let mut file = File::open(&path).map_err(|e| {
-                                            syn::Error::new(
-                                                span,
-                                                format!(
-                                                    "Failed to open {}: {}",
-                                                    path.to_string_lossy(),
-                                                    e
-                                                ),
-                                            )
-                                        })?;
-                                        let offset_before = merged.len();
-                                        file.read_to_end(&mut merged).map_err(|e| {
-                                            syn::Error::new(
-                                                span,
-                                                format!(
-                                                    "Error while reading {}: {}",
-                                                    path.to_string_lossy(),
-                                                    e
-                                                ),
-                                            )
-                                        })?;
-                                        merged.push(b'\n'); // accounting for potential no endline
-                                        offsets.insert(offset_before, path);
-                                        continue;
-                                    }
-                                } else if ident == "parse" {
-                                    if let Expr::Lit(ExprLit {
-                                        lit: Lit::Bool(b), ..
-                                    }) = arg.value
-                                    {
-                                        parse = b.value();
-                                        continue;
-                                    }
-                                } else if ident == "dynamic" {
-                                    if let Expr::Lit(ExprLit {
-                                        lit: Lit::Bool(b), ..
-                                    }) = arg.value
-                                    {
-                                        dynamic = b.value();
-                                        continue;
-                                    }
-                                } else if ident == "serde"
-                                    && let Expr::Lit(ExprLit {
-                                        lit: Lit::Bool(b), ..
-                                    }) = arg.value
-                                    {
-                                        serde = b.value();
-                                        continue;
-                                    }
-                                return Err(syn::Error::new(span, "Invalid fandango list."));
+                && ident == "fandango"
+            {
+                let args =
+                    v.parse_args_with(Punctuated::<MetaNameValue, Token![,]>::parse_terminated)?;
+                for arg in args {
+                    if let Some(ident) = arg.path.get_ident() {
+                        if ident == "grammar" {
+                            if let Expr::Lit(ExprLit {
+                                lit: Lit::Str(s), ..
+                            }) = arg.value
+                            {
+                                let path = root.join(s.value());
+                                let mut file = File::open(&path).map_err(|e| {
+                                    syn::Error::new(
+                                        span,
+                                        format!("Failed to open {}: {}", path.to_string_lossy(), e),
+                                    )
+                                })?;
+                                let offset_before = merged.len();
+                                file.read_to_end(&mut merged).map_err(|e| {
+                                    syn::Error::new(
+                                        span,
+                                        format!(
+                                            "Error while reading {}: {}",
+                                            path.to_string_lossy(),
+                                            e
+                                        ),
+                                    )
+                                })?;
+                                merged.push(b'\n'); // accounting for potential no endline
+                                offsets.insert(offset_before, path);
+                                continue;
                             }
+                        } else if ident == "parse" {
+                            if let Expr::Lit(ExprLit {
+                                lit: Lit::Bool(b), ..
+                            }) = arg.value
+                            {
+                                parse = b.value();
+                                continue;
+                            }
+                        } else if ident == "dynamic" {
+                            if let Expr::Lit(ExprLit {
+                                lit: Lit::Bool(b), ..
+                            }) = arg.value
+                            {
+                                dynamic = b.value();
+                                continue;
+                            }
+                        } else if ident == "serde"
+                            && let Expr::Lit(ExprLit {
+                                lit: Lit::Bool(b), ..
+                            }) = arg.value
+                        {
+                            serde = b.value();
+                            continue;
                         }
+                        return Err(syn::Error::new(span, "Invalid fandango list."));
                     }
+                }
+            }
         }
         if offsets.is_empty() {
             return Err(syn::Error::new(

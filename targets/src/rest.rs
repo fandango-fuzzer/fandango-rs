@@ -136,13 +136,13 @@ mod defs {
             if self.labels.is_empty()
                 && let Some(elements) =
                     AsNodeMut::<nonterminal_body_elements>::as_node_mut(&mut visited)
-                {
-                    self.labels = RestConstraintContextVisitor::<false>::default()
-                        .visit(elements, 0)?
-                        .continue_value()
-                        .unwrap()
-                        .labels;
-                }
+            {
+                self.labels = RestConstraintContextVisitor::<false>::default()
+                    .visit(elements, 0)?
+                    .continue_value()
+                    .unwrap()
+                    .labels;
+            }
 
             if let Some(title) = AsNodeMut::<nonterminal_section_title>::as_node_mut(&mut visited) {
                 if WriteVisitor::new(LengthCounter::default())
@@ -172,11 +172,12 @@ mod defs {
                 }
             } else if let Some(internal) =
                 AsNodeRef::<nonterminal_internal_reference_nospace>::as_node(&visited)
-                && !self.labels.contains(internal.nth::<0>().nth::<0>()) {
-                    let mut path = self.path.clone();
-                    path.extend([0, 0]);
-                    self.violations.push(path);
-                }
+                && !self.labels.contains(internal.nth::<0>().nth::<0>())
+            {
+                let mut path = self.path.clone();
+                path.extend([0, 0]);
+                self.violations.push(path);
+            }
             let mut result = visited.visit_each(self);
             if let Ok(ControlFlow::Continue(visitor)) = &mut result {
                 visitor.path.pop_back();

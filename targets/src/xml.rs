@@ -94,28 +94,29 @@ mod defs {
                     self.violations.push(violation);
                 }
             } else if let Some(tree) = visited.downcast::<nonterminal_xml_attributes>()
-                && let nonterminal_xml_attributes_0::variant_1(seq) = tree.child() {
-                    let (base, _, mut rest) = seq.children();
-                    loop {
-                        let (cmp, maybe_rest) = match rest.child() {
-                            nonterminal_xml_attributes_0::variant_0(cmp) => (cmp, None),
-                            nonterminal_xml_attributes_0::variant_1(seq) => {
-                                let (cmp, _, rest) = seq.children();
-                                (cmp, Some(rest))
-                            }
-                        };
-                        if base == cmp {
-                            let mut violation = self.path.clone();
-                            violation.extend([0, 1, 0, 0, 0]); // interior path to actual node
-                            self.violations.push(violation);
+                && let nonterminal_xml_attributes_0::variant_1(seq) = tree.child()
+            {
+                let (base, _, mut rest) = seq.children();
+                loop {
+                    let (cmp, maybe_rest) = match rest.child() {
+                        nonterminal_xml_attributes_0::variant_0(cmp) => (cmp, None),
+                        nonterminal_xml_attributes_0::variant_1(seq) => {
+                            let (cmp, _, rest) = seq.children();
+                            (cmp, Some(rest))
                         }
-                        if let Some(actual) = maybe_rest {
-                            rest = actual;
-                        } else {
-                            break;
-                        }
+                    };
+                    if base == cmp {
+                        let mut violation = self.path.clone();
+                        violation.extend([0, 1, 0, 0, 0]); // interior path to actual node
+                        self.violations.push(violation);
+                    }
+                    if let Some(actual) = maybe_rest {
+                        rest = actual;
+                    } else {
+                        break;
                     }
                 }
+            }
             let result = visited.visit_each(self);
             let Ok(ControlFlow::Continue(mut visitor)) = result;
             visitor.path.pop_back();

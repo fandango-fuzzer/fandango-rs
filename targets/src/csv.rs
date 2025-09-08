@@ -91,18 +91,19 @@ mod defs {
             self.path.push_back(idx);
             let visited = T::from(node);
             if let Some(tree) = visited.as_node()
-                && let Some(seq) = tree.nth::<0>().nth::<0>() {
-                    let base = count_fields(seq.nth::<0>().nth::<0>().nth::<0>());
-                    // because this is a universal equality, we can just check this pairwise
-                    if let Some(seq) = seq.nth::<1>().nth::<0>().nth::<0>() {
-                        let cmp = count_fields(seq.nth::<0>().nth::<0>().nth::<0>());
-                        if base != cmp {
-                            let mut violation = self.path.clone();
-                            violation.extend([0, 0, 1, 0, 0, 0, 0, 0]); // interior path to actual node
-                            self.violations.push(violation)
-                        }
+                && let Some(seq) = tree.nth::<0>().nth::<0>()
+            {
+                let base = count_fields(seq.nth::<0>().nth::<0>().nth::<0>());
+                // because this is a universal equality, we can just check this pairwise
+                if let Some(seq) = seq.nth::<1>().nth::<0>().nth::<0>() {
+                    let cmp = count_fields(seq.nth::<0>().nth::<0>().nth::<0>());
+                    if base != cmp {
+                        let mut violation = self.path.clone();
+                        violation.extend([0, 0, 1, 0, 0, 0, 0, 0]); // interior path to actual node
+                        self.violations.push(violation)
                     }
                 }
+            }
             let result = visited.visit_each(self);
             let Ok(ControlFlow::Continue(mut visitor)) = result;
             visitor.path.pop_back();

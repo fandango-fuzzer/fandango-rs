@@ -97,9 +97,10 @@ mod defs {
                     self.scope.insert(id.clone());
                 }
             } else if let Some(id) = visited.downcast::<nonterminal_id>()
-                && !self.scope.contains(id) {
-                    self.violations.push(self.path.clone());
-                }
+                && !self.scope.contains(id)
+            {
+                self.violations.push(self.path.clone());
+            }
             let result = visited.visit_each(self);
             let Ok(ControlFlow::Continue(mut visitor)) = result;
             visitor.path.pop_back();
