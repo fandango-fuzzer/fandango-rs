@@ -397,14 +397,11 @@ mod pest_renamed {
 
 mod xml {
     use alloc::boxed::Box;
-
     use alloc::string::String;
     use alloc::vec::Vec;
     use core::error::Error;
-    use core::hash::BuildHasher;
     use core::num::NonZeroUsize;
     use fandango_core::dynamic::{DynamicNode, DynamicSampler};
-    use fandango_core::generation::enumerate::EnumerationSampler;
     use fandango_core::generation::{DefaultGenerated, Generated};
     use fandango_core::typing::{AsNodeMut, AsStaticNode, Node, Structured};
     use fandango_core::visitor::Visitor;
@@ -413,10 +410,6 @@ mod xml {
     use fandango_core::visitor::navigation::CountNodes;
     use fandango_core::visitor::write::WriteVisitor;
     use fandango_derive::Fandango;
-    use hashbrown::DefaultHashBuilder;
-    use hashbrown::HashSet;
-    use num_bigint::BigUint;
-    use num_traits::Zero;
     use rand::SeedableRng;
     use rand::rngs::StdRng;
 
