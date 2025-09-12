@@ -64,7 +64,7 @@ criterion = { version = "0.7.0", features = ["html_reports"] }
 hashbrown = { version = "0.16.0", default-features = false }
 linfa = "0.7.1"
 linfa-linear = "0.7.1"
-ndarray = "0.16.1" # based on what linfa supports
+ndarray = "0.15.6" # based on what linfa supports
 plotters = "0.3.7"
 rand = { version = "0.9.1", default-features = false }
 serde = "1.0"

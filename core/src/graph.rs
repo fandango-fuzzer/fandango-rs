@@ -15,7 +15,7 @@ use core::iter;
 use core::ops::Deref;
 use hashbrown::HashMap;
 use pest::Span;
-use petgraph::graph::DiGraph;
+use petgraph::graph::{DiGraph, NodeIndex};
 use petgraph::graphmap::NodeTrait;
 use petgraph::prelude::EdgeRef;
 use petgraph::visit::IntoNodeReferences;
@@ -529,7 +529,7 @@ pub trait IntoGraph<'program>: GraphTraverse<'program> {
     fn into_graph(
         self,
     ) -> (
-        HashMap<Self::Node, graph::NodeIndex>,
+        HashMap<Self::Node, NodeIndex>,
         DiGraph<Self::Node, Span<'program>>,
     );
 }
@@ -617,8 +617,8 @@ pub trait IntoNode {
     fn into_node(self) -> Self::Node;
 }
 
-/// Computes the shortest derivation trees available from each node, returning the indices with the
-/// minimum possible path.
+/// Computes the shortest derivation trees available from each alternation, returning the variants
+/// with the minimum possible path.
 pub fn shortest_path<'program, 'source>(
     graph: &DiGraph<FandangoNode<'program, 'source>, Span<'source>>,
 ) -> HashMap<FandangoNode<'program, 'source>, Vec<usize>> {
