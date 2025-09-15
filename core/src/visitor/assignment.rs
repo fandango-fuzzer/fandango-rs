@@ -1,7 +1,7 @@
 //! Utility visitors for manipulating the value of nodes directly.
 
 use crate::typing::{AsNodeMut, Discriminable, Node};
-use crate::visitor::{VisitResult, Visitor};
+use crate::visitor::{VisitMutResult, VisitorMut};
 use core::convert::Infallible;
 use core::ops::ControlFlow;
 
@@ -10,7 +10,7 @@ use core::ops::ControlFlow;
 #[derive(Debug, Copy, Clone)]
 pub struct AssignmentVisitor<N>(pub N);
 
-impl<U, T> Visitor<T> for AssignmentVisitor<U>
+impl<U, T> VisitorMut<T> for AssignmentVisitor<U>
 where
     U: Discriminable,
     T: AsNodeMut<U>,
@@ -19,7 +19,7 @@ where
     type Break = ();
     type Error = Self;
 
-    fn visit<'program, N>(self, node: &'program mut N, _idx: usize) -> VisitResult<Self, T>
+    fn visit_mut<'program, N>(self, node: &'program mut N, _idx: usize) -> VisitMutResult<Self, T>
     where
         N: Node<TypeMut<'program> = T>,
         T: From<&'program mut N> + AsNodeMut<N>,
@@ -47,7 +47,7 @@ impl<T> SwapVisitor<T> {
     }
 }
 
-impl<T> Visitor<T> for SwapVisitor<T>
+impl<T> VisitorMut<T> for SwapVisitor<T>
 where
     T: Discriminable,
 {
@@ -55,7 +55,11 @@ where
     type Break = T;
     type Error = T;
 
-    fn visit<'program, N>(mut self, node: &'program mut N, _idx: usize) -> VisitResult<Self, T>
+    fn visit_mut<'program, N>(
+        mut self,
+        node: &'program mut N,
+        _idx: usize,
+    ) -> VisitMutResult<Self, T>
     where
         N: Node<TypeMut<'program> = T>,
         T: From<&'program mut N> + AsNodeMut<N>,

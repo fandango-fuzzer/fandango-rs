@@ -1,8 +1,11 @@
 //! Utility visitors for navigating type trees.
 
-use crate::typing::{AsNodeMut, Node};
+use crate::typing::{AsNodeMut, AsNodeRef, Node};
 use crate::visitor::error::InvalidPath;
-use crate::visitor::{VisitResult, VisitWith, VisitableChildren, Visitor};
+use crate::visitor::{
+    VisitMutResult, VisitResult, VisitWith, VisitableChildren, VisitableChildrenMut, Visitor,
+    VisitorMut,
+};
 use alloc::collections::VecDeque;
 use alloc::vec::Vec;
 use core::convert::Infallible;
@@ -13,8 +16,7 @@ use core::ops::ControlFlow;
 /// intended visitor needs to be able to traverse the full subtree, not just the provided node.
 /// The path here is expected to be provided without the first node index.
 ///
-/// If you're intending to just visit a specific node's subtree, use [`GoTo::go_to`] or
-/// [`GoToWith::go_to`] instead.
+/// If you're intending to just visit a specific node's subtree, use [`GoTo::go_to`] instead.
 pub trait StartingFrom {
     /// The visitor, but with the provided path (in case of a builder pattern).
     type WithPath;
@@ -99,10 +101,10 @@ where
     type Break = VecDeque<usize>;
     type Error = Infallible;
 
-    fn visit<'program, N>(mut self, node: &'program mut N, idx: usize) -> VisitResult<Self, T>
+    fn visit<'program, N>(mut self, node: &'program N, idx: usize) -> VisitResult<Self, T>
     where
-        N: Node<TypeMut<'program> = T>,
-        T: From<&'program mut N> + AsNodeMut<N>,
+        N: Node<Type<'program> = T>,
+        T: From<&'program N> + AsNodeRef<N>,
     {
         let actual_ptr = node as *const N as usize;
         if node.discriminant() == self.discriminant && actual_ptr == self.reference {
@@ -132,10 +134,10 @@ where
     type Break = VecDeque<usize>;
     type Error = Infallible;
 
-    fn visit<'program, N>(self, node: &'program mut N, idx: usize) -> VisitResult<Self, T>
+    fn visit<'program, N>(self, node: &'program N, idx: usize) -> VisitResult<Self, T>
     where
-        N: Node<TypeMut<'program> = T>,
-        T: From<&'program mut N> + AsNodeMut<N>,
+        N: Node<Type<'program> = T>,
+        T: From<&'program N> + AsNodeRef<N>,
     {
         let mut stack = Vec::new();
 
@@ -154,10 +156,10 @@ where
             type Break = usize;
             type Error = Infallible;
 
-            fn visit<'program, N>(self, node: &'program mut N, idx: usize) -> VisitResult<Self, T>
+            fn visit<'program, N>(self, node: &'program N, idx: usize) -> VisitResult<Self, T>
             where
                 N: Node,
-                T: From<&'program mut N> + AsNodeMut<N>,
+                T: From<&'program N> + AsNodeRef<N>,
             {
                 let actual_ptr = node as *const N as usize;
                 let discriminant = node.discriminant();
@@ -267,10 +269,10 @@ where
     type Break = VecDeque<usize>;
     type Error = Infallible;
 
-    fn visit<'program, N>(mut self, node: &'program mut N, idx: usize) -> VisitResult<Self, T>
+    fn visit<'program, N>(mut self, node: &'program N, idx: usize) -> VisitResult<Self, T>
     where
-        N: Node<TypeMut<'program> = T>,
-        T: From<&'program mut N> + AsNodeMut<N>,
+        N: Node<Type<'program> = T>,
+        T: From<&'program N> + AsNodeRef<N>,
     {
         let mut traversal = if let Some(starting_at) = self.from.pop_front() {
             if FORWARD {
@@ -303,10 +305,10 @@ where
     type Break = T;
     type Error = Infallible;
 
-    fn visit<'program, N>(mut self, node: &'program mut N, _idx: usize) -> VisitResult<Self, T>
+    fn visit<'program, N>(mut self, node: &'program N, _idx: usize) -> VisitResult<Self, T>
     where
-        N: Node<TypeMut<'program> = T>,
-        T: From<&'program mut N> + AsNodeMut<N>,
+        N: Node<Type<'program> = T>,
+        T: From<&'program N> + AsNodeRef<N>,
     {
         if let Some(starting_at) = self.from.pop_front() {
             if FORWARD {
@@ -349,10 +351,10 @@ where
     type Break = T;
     type Error = InvalidPath;
 
-    fn visit<'program, N>(mut self, node: &'program mut N, _: usize) -> VisitResult<Self, T>
+    fn visit<'program, N>(mut self, node: &'program N, _: usize) -> VisitResult<Self, T>
     where
-        N: Node<TypeMut<'program> = T>,
-        T: From<&'program mut N> + AsNodeMut<N>,
+        N: Node<Type<'program> = T>,
+        T: From<&'program N> + AsNodeRef<N>,
     {
         if let Some(next) = self.to.pop_front() {
             T::from(node)
@@ -364,38 +366,47 @@ where
     }
 }
 
+impl<T> VisitorMut<T> for GoToVisitor
+where
+    T: VisitableChildrenMut<T>,
+{
+    type Continue = Infallible;
+    type Break = T;
+    type Error = InvalidPath;
+
+    fn visit_mut<'program, N>(mut self, node: &'program mut N, _: usize) -> VisitMutResult<Self, T>
+    where
+        N: Node<TypeMut<'program> = T>,
+        T: From<&'program mut N> + AsNodeMut<N>,
+    {
+        if let Some(next) = self.to.pop_front() {
+            T::from(node)
+                .visit_nth_mut(self, next)
+                .map_err(|_| InvalidPath)?
+        } else {
+            Ok(ControlFlow::Break(T::from(node)))
+        }
+    }
+}
+
 /// Helper trait to use [`GoToVisitor`] as a method on the derivation tree from the provided node.
-pub trait GoTo<'a> {
+pub trait GoTo {
     /// The type which is returned (see [`VisitWith`] for why this is necessary).
     type Value;
 
     /// Perform the traversal!
-    fn go_to(&'a mut self, idx: usize, path: VecDeque<usize>) -> Result<Self::Value, InvalidPath>;
+    fn go_to(self, idx: usize, path: VecDeque<usize>) -> Result<Self::Value, InvalidPath>;
 }
 
-/// Helper trait to use [`GoToVisitor`] as a method on the derivation tree from the provided opaque
-/// node.
-pub trait GoToWith<'a>: Sized {
-    /// The type which is returned (see [`VisitWith`] for why this is necessary).
-    type Value;
-
-    /// Perform the traversal!
-    fn go_to(&'a mut self, idx: usize, path: VecDeque<usize>) -> Result<Self::Value, InvalidPath>;
-}
-
-impl<'a, N> GoTo<'a> for N
+impl<'a, N> GoTo for &'a N
 where
     N: Node + 'a,
-    GoToVisitor: Visitor<N::TypeMut<'a>, Break = N::TypeMut<'a>, Error = InvalidPath>,
-    N::TypeMut<'a>: From<&'a mut N> + AsNodeMut<N>,
+    GoToVisitor: Visitor<N::Type<'a>, Break = N::Type<'a>, Error = InvalidPath>,
+    N::Type<'a>: From<&'a N> + AsNodeRef<N>,
 {
-    type Value = N::TypeMut<'a>;
+    type Value = N::Type<'a>;
 
-    fn go_to(
-        &'a mut self,
-        idx: usize,
-        path: VecDeque<usize>,
-    ) -> Result<N::TypeMut<'a>, InvalidPath> {
+    fn go_to(self, idx: usize, path: VecDeque<usize>) -> Result<N::Type<'a>, InvalidPath> {
         Ok(GoToVisitor::new(path)
             .visit(self, idx)?
             .break_value()
@@ -403,16 +414,27 @@ where
     }
 }
 
-impl<'a, T> GoToWith<'a> for T
-where
-    T: VisitWith<'a, GoToVisitor>,
-    T::Visited: VisitableChildren<T::Visited>,
-{
-    type Value = T::Visited;
+/// Helper trait to use [`GoToVisitor`] as a method on the derivation tree from the provided node
+/// while accessing the resulting node mutably.
+pub trait GoToMut {
+    /// The type which is returned (see [`super::VisitWithMut`] for why this is necessary).
+    type Value;
 
-    fn go_to(&'a mut self, idx: usize, path: VecDeque<usize>) -> Result<T::Visited, InvalidPath> {
-        Ok(self
-            .visit_with(GoToVisitor::new(path), idx)?
+    /// Perform the traversal!
+    fn go_to_mut(self, idx: usize, path: VecDeque<usize>) -> Result<Self::Value, InvalidPath>;
+}
+
+impl<'a, N> GoToMut for &'a mut N
+where
+    N: Node + 'a,
+    GoToVisitor: VisitorMut<N::TypeMut<'a>, Break = N::TypeMut<'a>, Error = InvalidPath>,
+    N::TypeMut<'a>: From<&'a mut N> + AsNodeMut<N>,
+{
+    type Value = N::TypeMut<'a>;
+
+    fn go_to_mut(self, idx: usize, path: VecDeque<usize>) -> Result<N::TypeMut<'a>, InvalidPath> {
+        Ok(GoToVisitor::new(path)
+            .visit_mut(self, idx)?
             .break_value()
             .unwrap())
     }
@@ -457,10 +479,10 @@ where
     type Break = Infallible;
     type Error = InvalidPath;
 
-    fn visit<'program, N>(mut self, node: &'program mut N, idx: usize) -> VisitResult<Self, T>
+    fn visit<'program, N>(mut self, node: &'program N, idx: usize) -> VisitResult<Self, T>
     where
-        N: Node<TypeMut<'program> = T>,
-        T: From<&'program mut N> + AsNodeMut<N>,
+        N: Node<Type<'program> = T>,
+        T: From<&'program N> + AsNodeRef<N>,
     {
         self.count += 1;
         GoToVisitor::new(core::mem::take(&mut self.from))
@@ -475,23 +497,23 @@ where
 /// node.
 pub trait CountNodes<'a> {
     /// Perform the count!
-    fn count_nodes(&'a mut self) -> usize;
+    fn count_nodes(&'a self) -> usize;
 }
 
 /// Helper trait to use [`NodeCountVisitor`] as a method on the derivation tree from the provided
 /// opaque node.
 pub trait CountNodesWith<'a> {
     /// Perform the count!
-    fn count_nodes(&'a mut self) -> usize;
+    fn count_nodes(&'a self) -> usize;
 }
 
 impl<'a, N> CountNodes<'a> for N
 where
     N: Node + 'a,
-    NodeCountVisitor: Visitor<N::TypeMut<'a>, Continue = NodeCountVisitor, Error = InvalidPath>,
-    N::TypeMut<'a>: From<&'a mut N> + AsNodeMut<N>,
+    NodeCountVisitor: Visitor<N::Type<'a>, Continue = NodeCountVisitor, Error = InvalidPath>,
+    N::Type<'a>: From<&'a N> + AsNodeRef<N>,
 {
-    fn count_nodes(&'a mut self) -> usize {
+    fn count_nodes(&'a self) -> usize {
         NodeCountVisitor::new()
             .visit(self, 0)
             .unwrap()
@@ -506,7 +528,7 @@ where
     T: VisitWith<'a, NodeCountVisitor>,
     T::Visited: VisitableChildren<T::Visited>,
 {
-    fn count_nodes(&'a mut self) -> usize {
+    fn count_nodes(&'a self) -> usize {
         self.visit_with(NodeCountVisitor::new(), 0)
             .unwrap()
             .continue_value()
@@ -554,10 +576,10 @@ where
     type Break = Infallible;
     type Error = InvalidPath;
 
-    fn visit<'program, N>(mut self, node: &'program mut N, idx: usize) -> VisitResult<Self, T>
+    fn visit<'program, N>(mut self, node: &'program N, idx: usize) -> VisitResult<Self, T>
     where
-        N: Node<TypeMut<'program> = T>,
-        T: From<&'program mut N> + AsNodeMut<N>,
+        N: Node<Type<'program> = T>,
+        T: From<&'program N> + AsNodeRef<N>,
     {
         self.count += 1;
         GoToVisitor::new(core::mem::take(&mut self.from))
@@ -585,8 +607,8 @@ pub trait CountBytesWith<'a> {
 impl<'a, N> CountBytes<'a> for N
 where
     N: Node + 'a,
-    ByteCountVisitor: Visitor<N::TypeMut<'a>, Continue = ByteCountVisitor, Error = InvalidPath>,
-    N::TypeMut<'a>: From<&'a mut N> + AsNodeMut<N>,
+    ByteCountVisitor: Visitor<N::Type<'a>, Continue = ByteCountVisitor, Error = InvalidPath>,
+    N::Type<'a>: From<&'a N> + AsNodeRef<N>,
 {
     fn count_bytes(&'a mut self) -> usize {
         ByteCountVisitor::new()

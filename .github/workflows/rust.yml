@@ -73,4 +73,4 @@ jobs:
       - run: rustup update ${{ matrix.toolchain }} && rustup default ${{ matrix.toolchain }}
       - run: rustup target add thumbv7m-none-eabi
       - name: Build
-        run: cd lm3s6965-demo && cargo build
+        run: cd lm3s6965-demo && cargo build && cargo clippy --all-features --workspace -- -D warnings

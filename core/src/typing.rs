@@ -2,6 +2,7 @@
 
 use crate::lang::FandangoNode;
 use crate::lang::{Program, Tagged};
+use crate::visitor::{VisitableChildren, VisitableChildrenMut};
 use alloc::boxed::Box;
 use core::ops::Deref;
 
@@ -77,27 +78,19 @@ pub trait StaticDiscriminable {
 
 /// A node representing an entry in a grammar or a derivation tree.
 pub trait Node: Sized + AsNode + Discriminable + Clone {
-    /// An enum which describes all possible nodes, and for which the following traits are
-    /// implemented by generation (for `N::Type<'program>`):
-    ///  - `From<&'program N>`
-    ///  - `From<&'program Box<N>>`
-    ///  - `From<&'program mut N>`
-    ///  - `From<&'program mut Box<N>>`
-    ///  - `From<N::TypeMut<'program>>`
-    ///  - `DiscriminantLookup`
-    ///  - `NodeLookup`
-    type Type<'program>
+    /// An enum which describes all possible nodes, and which may be visited with [`VisitWith`].
+    type Type<'program>: From<&'program Self>
+        + DiscriminantLookup
+        + VisitableChildren<Self::Type<'program>>
     where
         Self: 'program;
-    /// An enum which describes all possible mutable nodes, and for which the following traits are
-    /// implemented (for `N::TypeMut<'program>`):
-    ///  - `From<&'program mut N>`
-    ///  - `From<&'program mut Box<N>>`
-    ///  - [`crate::visitor::VisitWith`]
-    ///  - [`crate::generation::InPlaceGenerated`]
-    ///  - `DiscriminantLookup`
-    ///  - `NodeLookup`
-    type TypeMut<'program>
+    /// An enum which describes all possible mutable nodes, and which may be visited with either
+    /// [`VisitWith`] or [`VisitWithMut`].
+    type TypeMut<'program>: From<&'program mut Self>
+        + AssignFrom<Self::Type<'program>>
+        + DiscriminantLookup
+        + VisitableChildren<Self::Type<'program>>
+        + VisitableChildrenMut<Self::TypeMut<'program>>
     where
         Self: 'program;
     /// The type which references each child individually.
@@ -144,6 +137,8 @@ impl<T> Node for Box<T>
 where
     Box<T>: AsNode,
     T: Node + Structured,
+    for<'a> <T as Node>::Type<'a>: From<&'a Box<T>>,
+    for<'a> <T as Node>::TypeMut<'a>: From<&'a mut Box<T>>,
 {
     type Type<'program>
         = T::Type<'program>
@@ -171,6 +166,54 @@ where
     }
 }
 
+/// Trait which simplifies copying between [`Node::Type`] and [`Node::TypeMut`].
+pub trait AssignFrom<T> {
+    /// Assigns from the other value, returning true if successful.
+    fn assign_from(&mut self, other: T) -> bool;
+}
+
+/// Helper trait to access the opaque form of a given node.
+pub trait Opaque {
+    /// The opaque node (i.e., [`Node::Type`]).
+    type Returned;
+
+    /// Get the opaque version of this node.
+    fn opaque(self) -> Self::Returned;
+}
+
+impl<'a, N> Opaque for &'a N
+where
+    N: Node,
+    <N as Node>::Type<'a>: From<&'a N>,
+{
+    type Returned = <N as Node>::Type<'a>;
+
+    fn opaque(self) -> Self::Returned {
+        self.into()
+    }
+}
+
+/// Helper trait to access the mutable opaque form of a given node.
+pub trait OpaqueMut {
+    /// The mutable opaque node (i.e. [`Node::TypeMut`])
+    type Returned;
+
+    /// Get the mutable opaque version of this node.
+    fn opaque_mut(self) -> Self::Returned;
+}
+
+impl<'a, N> OpaqueMut for &'a mut N
+where
+    N: Node,
+    <N as Node>::TypeMut<'a>: From<&'a mut N>,
+{
+    type Returned = <N as Node>::TypeMut<'a>;
+
+    fn opaque_mut(self) -> Self::Returned {
+        self.into()
+    }
+}
+
 /// Trait automatically implemented for opaque nodes which allows for downcasting of immutable
 /// references to concrete nodes.
 ///
@@ -185,7 +228,7 @@ pub trait AsNodeRef<N> {
 /// references to concrete nodes.
 ///
 /// Prefer [`DowncastMut`].
-pub trait AsNodeMut<N> {
+pub trait AsNodeMut<N>: AsNodeRef<N> {
     /// Downcast this opaque node into a mutable concrete node reference, if this opaque node
     /// contains that node.
     fn as_node_mut(&mut self) -> Option<&mut N>;

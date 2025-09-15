@@ -26,7 +26,7 @@ mod static_defs {
     use alloc::vec::Vec;
     use common::{BenchmarkSuite, StdGenerator, StdSampler};
     use fandango::generation::Generated;
-    use fandango::visitor::Visitor;
+    use fandango::visitor::{Visitor, VisitorMut};
     use fandango_targets::{Checker, crossover, csv};
 
     impl BenchmarkSuite<StdSampler, StdGenerator> for Benchmark {
@@ -38,13 +38,13 @@ mod static_defs {
 
         fn fix(item: &mut Self::Start, sampler: &mut StdSampler, generator: &mut StdGenerator) {
             csv::ConstraintFixer::evaluated(sampler, generator)
-                .visit(item, 0)
+                .visit_mut(item, 0)
                 .unwrap()
                 .continue_value()
                 .unwrap();
         }
 
-        fn check(item: &mut Self::Start) -> Vec<VecDeque<usize>> {
+        fn check(item: &Self::Start) -> Vec<VecDeque<usize>> {
             csv::ConstraintVisitor::evaluated()
                 .visit(item, 0)
                 .unwrap()
@@ -55,7 +55,7 @@ mod static_defs {
 
         fn crossover(
             item: &mut Self::Start,
-            other: &mut Self::Start,
+            other: &Self::Start,
             mut choice: VecDeque<usize>,
             sampler: &mut StdSampler,
         ) -> bool {

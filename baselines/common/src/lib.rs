@@ -48,12 +48,12 @@ mod static_defs {
         fn fix(item: &mut Self::Start, sampler: &mut S, generator: &mut G);
 
         /// Check a given start node's constraints and return any violations as paths.
-        fn check(item: &mut Self::Start) -> Vec<VecDeque<usize>>;
+        fn check(item: &Self::Start) -> Vec<VecDeque<usize>>;
 
         /// Crossover the given start node at the given points with the provided base.
         fn crossover(
             item: &mut Self::Start,
-            other: &mut Self::Start,
+            other: &Self::Start,
             choice: VecDeque<usize>,
             sampler: &mut S,
         ) -> bool;

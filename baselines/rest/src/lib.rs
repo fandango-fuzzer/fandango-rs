@@ -44,7 +44,7 @@ mod static_defs {
                 .unwrap();
         }
 
-        fn check(item: &mut Self::Start) -> Vec<VecDeque<usize>> {
+        fn check(item: &Self::Start) -> Vec<VecDeque<usize>> {
             rest::ConstraintVisitor::evaluated()
                 .visit(item, 0)
                 .unwrap()
@@ -55,7 +55,7 @@ mod static_defs {
 
         fn crossover(
             item: &mut Self::Start,
-            other: &mut Self::Start,
+            other: &Self::Start,
             mut choice: VecDeque<usize>,
             sampler: &mut StdSampler,
         ) -> bool {

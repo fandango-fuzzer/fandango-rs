@@ -39,10 +39,10 @@ mod defs {
     use alloc::collections::VecDeque;
     use alloc::vec::Vec;
     use core::convert::Infallible;
-    use core::ops::ControlFlow;
+    use core::ops::{ControlFlow, Deref};
     use embedded_io::{ErrorType, Write};
     use fandango::Fandango;
-    use fandango::typing::{AsNodeMut, AsNodeRef, Node, Nth};
+    use fandango::typing::{AsNodeRef, Downcast, Node, Nth};
     use fandango::visitor::write::WriteVisitor;
     use fandango::visitor::{VisitResult, VisitableChildren, Visitor};
     use hashbrown::HashSet;
@@ -74,9 +74,6 @@ mod defs {
         }
     }
 
-    #[cfg(no_opt_indirect)]
-    type Labels = HashSet<alloc::boxed::Box<nonterminal_id>>;
-    #[cfg(not(no_opt_indirect))]
     type Labels = HashSet<nonterminal_id>;
 
     #[derive(Debug, Default)]
@@ -104,21 +101,11 @@ mod defs {
         }
     }
 
-    #[cfg(no_opt_indirect)]
-    fn visited_form<N>(node: &mut alloc::boxed::Box<N>) -> &mut N {
-        node.as_mut()
-    }
-
-    #[cfg(not(no_opt_indirect))]
-    fn visited_form<N>(node: &mut N) -> &mut N {
-        node
-    }
-
     impl<T> Visitor<T> for ConstraintVisitor<false>
     where
         T: VisitableChildren<T>
-            + AsNodeMut<nonterminal_body_elements>
-            + AsNodeMut<nonterminal_section_title>
+            + AsNodeRef<nonterminal_body_elements>
+            + AsNodeRef<nonterminal_section_title>
             + AsNodeRef<nonterminal_internal_reference>
             + AsNodeRef<nonterminal_internal_reference_nospace>,
     {
@@ -126,16 +113,16 @@ mod defs {
         type Break = Infallible;
         type Error = Infallible;
 
-        fn visit<'program, N>(mut self, node: &'program mut N, idx: usize) -> VisitResult<Self, T>
+        #[allow(noop_method_call)]
+        fn visit<'program, N>(mut self, node: &'program N, idx: usize) -> VisitResult<Self, T>
         where
-            N: Node<TypeMut<'program> = T>,
-            T: From<&'program mut N> + AsNodeMut<N>,
+            N: Node<Type<'program> = T>,
+            T: From<&'program N> + AsNodeRef<N>,
         {
             self.path.push_back(idx);
-            let mut visited = T::from(node);
+            let visited = T::from(node);
             if self.labels.is_empty()
-                && let Some(elements) =
-                    AsNodeMut::<nonterminal_body_elements>::as_node_mut(&mut visited)
+                && let Some(elements) = visited.downcast::<nonterminal_body_elements>()
             {
                 self.labels = RestConstraintContextVisitor::<false>::default()
                     .visit(elements, 0)?
@@ -144,15 +131,15 @@ mod defs {
                     .labels;
             }
 
-            if let Some(title) = AsNodeMut::<nonterminal_section_title>::as_node_mut(&mut visited) {
+            if let Some(title) = visited.downcast::<nonterminal_section_title>() {
                 if WriteVisitor::new(LengthCounter::default())
-                    .visit(visited_form(title.nth_mut::<0>().nth_mut::<0>()), 0)?
+                    .visit(title.nth::<0>().nth::<0>().deref(), 0)?
                     .continue_value()
                     .unwrap()
                     .output()
                     .count
                     > WriteVisitor::new(LengthCounter::default())
-                        .visit(visited_form(title.nth_mut::<0>().nth_mut::<2>()), 0)?
+                        .visit(title.nth::<0>().nth::<2>().deref(), 0)?
                         .continue_value()
                         .unwrap()
                         .output()
@@ -162,16 +149,14 @@ mod defs {
                     path.extend([0, 2]);
                     self.violations.push(path);
                 }
-            } else if let Some(internal) =
-                AsNodeRef::<nonterminal_internal_reference>::as_node(&visited)
-            {
+            } else if let Some(internal) = visited.downcast::<nonterminal_internal_reference>() {
                 if !self.labels.contains(internal.nth::<0>().nth::<1>()) {
                     let mut path = self.path.clone();
                     path.extend([0, 1]);
                     self.violations.push(path);
                 }
             } else if let Some(internal) =
-                AsNodeRef::<nonterminal_internal_reference_nospace>::as_node(&visited)
+                visited.downcast::<nonterminal_internal_reference_nospace>()
                 && !self.labels.contains(internal.nth::<0>().nth::<0>())
             {
                 let mut path = self.path.clone();
@@ -194,14 +179,16 @@ mod defs {
         type Break = Infallible;
         type Error = Infallible;
 
-        fn visit<'program, N>(mut self, node: &'program mut N, _idx: usize) -> VisitResult<Self, T>
+        #[allow(noop_method_call)]
+        fn visit<'program, N>(mut self, node: &'program N, _idx: usize) -> VisitResult<Self, T>
         where
-            N: Node<TypeMut<'program> = T>,
-            T: From<&'program mut N> + AsNodeMut<N>,
+            N: Node<Type<'program> = T>,
+            T: From<&'program N> + AsNodeRef<N>,
         {
             let visited = T::from(node);
-            if let Some(label) = visited.as_node() {
-                self.labels.insert(label.nth::<0>().nth::<1>().clone());
+            if let Some(label) = visited.downcast::<nonterminal_label>() {
+                self.labels
+                    .insert(label.nth::<0>().nth::<1>().deref().clone());
             }
             visited.visit_each(self)
         }
@@ -224,10 +211,10 @@ mod defs {
         type Break = Infallible;
         type Error = Infallible;
 
-        fn visit<'program, N>(self, _node: &'program mut N, _idx: usize) -> VisitResult<Self, T>
+        fn visit<'program, N>(self, _node: &'program N, _idx: usize) -> VisitResult<Self, T>
         where
-            N: Node<TypeMut<'program> = T>,
-            T: From<&'program mut N> + AsNodeMut<N>,
+            N: Node<Type<'program> = T>,
+            T: From<&'program N> + AsNodeRef<N>,
         {
             Ok(ControlFlow::Continue(self)) // no fixes available for original fandango
         }
@@ -256,9 +243,9 @@ mod defs {
                 tuple_list!(DepthLimiter::new(rest::nonterminal_start::ROOT.inner(), 50));
             let mut diff_count = 0;
             for _ in 0..100_000 {
-                let mut tree = rest::nonterminal_start::generate(&mut rng, &mut generators, 0);
+                let tree = rest::nonterminal_start::generate(&mut rng, &mut generators, 0);
                 let Ok(ControlFlow::Continue(rest::ConstraintVisitor { violations, .. })) =
-                    rest::ConstraintVisitor::evaluated().visit(&mut tree, 0);
+                    rest::ConstraintVisitor::evaluated().visit(&tree, 0);
 
                 for mut violation in violations {
                     let backup = violation.clone();
@@ -267,8 +254,7 @@ mod defs {
                     assert!(
                         matches!(
                             goto,
-                            rest::TypeMut::nonterminal_id(_)
-                                | rest::TypeMut::nonterminal_underline(_)
+                            rest::Type::nonterminal_id(_) | rest::Type::nonterminal_underline(_)
                         ),
                         "at {backup:?}, found: {goto:?}"
                     );

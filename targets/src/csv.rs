@@ -30,8 +30,10 @@ mod defs {
     use core::ops::ControlFlow;
     use fandango::Fandango;
     use fandango::generation::Generated;
-    use fandango::typing::{AsNodeMut, AsNodeRef, ChildAccessor, Node, Nth};
-    use fandango::visitor::{VisitResult, VisitableChildren, Visitor};
+    use fandango::typing::{AsNodeMut, AsNodeRef, ChildAccessor, Downcast, Node, Nth};
+    use fandango::visitor::{
+        VisitMutResult, VisitResult, VisitableChildren, VisitableChildrenMut, Visitor, VisitorMut,
+    };
 
     /// Base for the CSV grammar stored in csv.fan.
     #[derive(Fandango)]
@@ -83,14 +85,14 @@ mod defs {
         type Break = Infallible;
         type Error = Infallible;
 
-        fn visit<'program, N>(mut self, node: &'program mut N, idx: usize) -> VisitResult<Self, T>
+        fn visit<'program, N>(mut self, node: &'program N, idx: usize) -> VisitResult<Self, T>
         where
-            N: Node<TypeMut<'program> = T>,
-            T: From<&'program mut N> + AsNodeMut<N>,
+            N: Node<Type<'program> = T>,
+            T: From<&'program N> + AsNodeRef<N>,
         {
             self.path.push_back(idx);
             let visited = T::from(node);
-            if let Some(tree) = visited.as_node()
+            if let Some(tree) = visited.downcast::<nonterminal_csv_records>()
                 && let Some(seq) = tree.nth::<0>().nth::<0>()
             {
                 let base = count_fields(seq.nth::<0>().nth::<0>().nth::<0>());
@@ -116,10 +118,10 @@ mod defs {
         type Break = Infallible;
         type Error = Infallible;
 
-        fn visit<'program, N>(self, _node: &'program mut N, _idx: usize) -> VisitResult<Self, T>
+        fn visit<'program, N>(self, _node: &'program N, _idx: usize) -> VisitResult<Self, T>
         where
-            N: Node<TypeMut<'program> = T>,
-            T: From<&'program mut N> + AsNodeMut<N>,
+            N: Node<Type<'program> = T>,
+            T: From<&'program N> + AsNodeRef<N>,
         {
             Ok(ControlFlow::Continue(self)) // csv constraints are trivially true
         }
@@ -147,16 +149,20 @@ mod defs {
         }
     }
 
-    impl<'a, S, G, T> Visitor<T> for ConstraintFixer<'a, S, G, true>
+    impl<'a, S, G, T> VisitorMut<T> for ConstraintFixer<'a, S, G, true>
     where
         nonterminal_raw_field: Generated<S, G>,
-        T: VisitableChildren<T> + AsNodeMut<nonterminal_csv_records>,
+        T: VisitableChildrenMut<T> + AsNodeMut<nonterminal_csv_records>,
     {
         type Continue = Self;
         type Break = Infallible;
         type Error = Infallible;
 
-        fn visit<'program, N>(self, node: &'program mut N, _idx: usize) -> VisitResult<Self, T>
+        fn visit_mut<'program, N>(
+            self,
+            node: &'program mut N,
+            _idx: usize,
+        ) -> VisitMutResult<Self, T>
         where
             N: Node<TypeMut<'program> = T>,
             T: From<&'program mut N> + AsNodeMut<N>,
@@ -207,16 +213,20 @@ mod defs {
                 }
                 return Ok(ControlFlow::Continue(self)); // terminate; we have completed the fix
             }
-            visited.visit_each(self)
+            visited.visit_each_mut(self)
         }
     }
 
-    impl<'a, S, G, T> Visitor<T> for ConstraintFixer<'a, S, G, false> {
+    impl<'a, S, G, T> VisitorMut<T> for ConstraintFixer<'a, S, G, false> {
         type Continue = Self;
         type Break = Infallible;
         type Error = Infallible;
 
-        fn visit<'program, N>(self, _node: &'program mut N, _idx: usize) -> VisitResult<Self, T>
+        fn visit_mut<'program, N>(
+            self,
+            _node: &'program mut N,
+            _idx: usize,
+        ) -> VisitMutResult<Self, T>
         where
             N: Node<TypeMut<'program> = T>,
             T: From<&'program mut N> + AsNodeMut<N>,
@@ -235,8 +245,8 @@ mod defs {
         use fandango::generation::Generated;
         use fandango::tuple_list::tuple_list;
         use fandango::typing::{ChildAccessor, Nth, Structured};
-        use fandango::visitor::Visitor;
         use fandango::visitor::navigation::GoTo;
+        use fandango::visitor::{Visitor, VisitorMut};
         use rand::SeedableRng;
         use rand::rngs::StdRng;
 
@@ -249,20 +259,19 @@ mod defs {
             for _ in 0..100_000 {
                 let mut tree = csv::nonterminal_start::generate(&mut rng, &mut generators, 0);
                 let Ok(ControlFlow::Continue(csv::ConstraintVisitor { violations, .. })) =
-                    csv::ConstraintVisitor::corrected().visit(&mut tree, 0);
+                    csv::ConstraintVisitor::corrected().visit(&tree, 0);
 
                 for mut violation in violations {
                     violation.pop_front();
                     assert!(matches!(
                         tree.go_to(0, violation.clone())?,
-                        csv::TypeMut::nonterminal_csv_string_list(_)
+                        csv::Type::nonterminal_csv_string_list(_)
                     ));
                     let len = violation.len();
 
                     violation.truncate(len - 8);
 
-                    let csv::TypeMut::nonterminal_csv_records(records) =
-                        tree.go_to(0, violation)?
+                    let csv::Type::nonterminal_csv_records(records) = tree.go_to(0, violation)?
                     else {
                         unreachable!("We are inspecting the records directly.");
                     };
@@ -290,9 +299,10 @@ mod defs {
                     diff_count += 1;
                 }
 
-                let _ = csv::ConstraintFixer::corrected(&mut rng, &mut ()).visit(&mut tree, 0)?;
+                let _ =
+                    csv::ConstraintFixer::corrected(&mut rng, &mut ()).visit_mut(&mut tree, 0)?;
                 let ControlFlow::Continue(csv::ConstraintVisitor { violations, .. }) =
-                    csv::ConstraintVisitor::corrected().visit(&mut tree, 0)?;
+                    csv::ConstraintVisitor::corrected().visit(&tree, 0)?;
                 assert_eq!(0, violations.len());
             }
             assert_ne!(0, diff_count);

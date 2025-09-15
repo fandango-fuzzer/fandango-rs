@@ -32,7 +32,7 @@ mod defs {
     use core::convert::Infallible;
     use core::ops::ControlFlow;
     use fandango::Fandango;
-    use fandango::typing::{AsNodeMut, AsNodeRef, Downcast, Node, Nth};
+    use fandango::typing::{AsNodeRef, Downcast, Node, Nth};
     use fandango::visitor::{VisitResult, VisitableChildren, Visitor};
     use hashbrown::HashSet;
 
@@ -77,10 +77,10 @@ mod defs {
         type Break = Infallible;
         type Error = Infallible;
 
-        fn visit<'program, N>(mut self, node: &'program mut N, idx: usize) -> VisitResult<Self, T>
+        fn visit<'program, N>(mut self, node: &'program N, idx: usize) -> VisitResult<Self, T>
         where
-            N: Node<TypeMut<'program> = T>,
-            T: From<&'program mut N> + AsNodeMut<N>,
+            N: Node<Type<'program> = T>,
+            T: From<&'program N> + AsNodeRef<N>,
         {
             self.path.push_back(idx);
             let visited = T::from(node);
@@ -129,10 +129,10 @@ mod defs {
         type Break = Infallible;
         type Error = Infallible;
 
-        fn visit<'program, N>(self, _node: &'program mut N, _idx: usize) -> VisitResult<Self, T>
+        fn visit<'program, N>(self, _node: &'program N, _idx: usize) -> VisitResult<Self, T>
         where
-            N: Node<TypeMut<'program> = T>,
-            T: From<&'program mut N> + AsNodeMut<N>,
+            N: Node<Type<'program> = T>,
+            T: From<&'program N> + AsNodeRef<N>,
         {
             Ok(ControlFlow::Continue(self)) // no fixes available for original fandango
         }
@@ -163,17 +163,16 @@ mod defs {
             ));
             let mut diff_count = 0;
             for _ in 0..100_000 {
-                let mut tree =
-                    scriptsizec::nonterminal_start::generate(&mut rng, &mut generators, 0);
+                let tree = scriptsizec::nonterminal_start::generate(&mut rng, &mut generators, 0);
                 let Ok(ControlFlow::Continue(scriptsizec::ConstraintVisitor {
                     violations, ..
-                })) = scriptsizec::ConstraintVisitor::evaluated().visit(&mut tree, 0);
+                })) = scriptsizec::ConstraintVisitor::evaluated().visit(&tree, 0);
 
                 for mut violation in violations {
                     violation.pop_front();
                     assert!(matches!(
                         tree.go_to(0, violation.clone())?,
-                        scriptsizec::TypeMut::nonterminal_id(_)
+                        scriptsizec::Type::nonterminal_id(_)
                     ));
                     diff_count += 1;
                 }

@@ -13,19 +13,21 @@ mod defs {
     use alloc::collections::BTreeMap;
     use alloc::vec::Vec;
     use common::{BenchmarkSuite, StdGenerator, StdSampler};
-    use core::convert::Infallible;
     use core::hint::black_box;
     use core::time::Duration;
     use criterion::{BatchSize, BenchmarkId, Criterion, Throughput};
     use fandango::dynamic::{DynamicNode, DynamicSampler};
     use fandango::generation::{Generated, InPlaceGenerated};
-    use fandango::tuple_list::tuple_list;
-    use fandango::typing::{AsNode, AsNodeMut, AsStaticNode, Node};
-    use fandango::visitor::navigation::{Advance, CountNodes, GoTo};
+    use fandango::lang::FandangoNode;
+    use fandango::tuple_list::{tuple_list, tuple_list_type};
+    use fandango::typing::{AsNode, AsNodeMut, AsNodeRef, AsStaticNode, Node};
+    use fandango::visitor::navigation::{Advance, CountNodes, GoToMut};
     use fandango::visitor::write::WriteVisitor;
-    use fandango::visitor::{VisitableChildren, Visitor};
+    use fandango::visitor::{VisitableChildren, VisitableChildrenMut, Visitor};
     use fandango_targets::crossover;
     use fandango_targets::operators::{DepthLimiter, NonterminalVisitor};
+    use hashbrown::HashMap;
+    use rand::rngs::StdRng;
     use rand::seq::IndexedRandom;
     use rand::{RngCore, SeedableRng};
 
@@ -35,22 +37,16 @@ mod defs {
         B: BenchmarkSuite<StdSampler, StdGenerator>,
         // boilerplate since we're doing this generically
         B::Start: Node + Clone + Ord + AsStaticNode,
-        for<'a> B::Start: CountNodes<'a> + GoTo<'a, Value = <B::Start as Node>::TypeMut<'a>>,
-        for<'a> NonterminalVisitor: Visitor<
-                <B::Start as Node>::TypeMut<'a>,
-                Continue = NonterminalVisitor,
-                Break = Infallible,
-                Error = Infallible,
-            > + Visitor<
-                &'a mut DynamicNode,
-                Continue = NonterminalVisitor,
-                Break = Infallible,
-                Error = Infallible,
-            >,
-        for<'a> <B::Start as Node>::TypeMut<'a>: VisitableChildren<<B::Start as Node>::TypeMut<'a>>
-            + AsNodeMut<B::Start>
+        for<'a> <B::Start as Node>::Type<'a>: VisitableChildren<<B::Start as Node>::Type<'a>>
+            + From<&'a B::Start>
+            + AsNodeRef<B::Start>,
+        for<'a> <B::Start as Node>::TypeMut<'a>: VisitableChildrenMut<<B::Start as Node>::TypeMut<'a>>
             + From<&'a mut B::Start>
-            + InPlaceGenerated<StdSampler, StdGenerator>,
+            + AsNodeMut<B::Start>
+            + InPlaceGenerated<
+                StdRng,
+                tuple_list_type!(DepthLimiter<HashMap<FandangoNode<'static, 'static>, Vec<usize>>>),
+            >,
     {
         let mut group = c.benchmark_group(B::NAME);
         group.warm_up_time(Duration::from_millis(100));
@@ -76,19 +72,19 @@ mod defs {
                 &mut dyn_rng,
             );
 
-            let mut value = B::generate(&mut rng, &mut generator);
+            let value = B::generate(&mut rng, &mut generator);
             let size = NonterminalVisitor::default()
-                .visit(&mut value, 0)
+                .visit(&value, 0)
                 .unwrap()
                 .continue_value()
                 .unwrap()
                 .count();
 
-            let mut dyn_value = DynamicNode::generate(&mut dyn_rng, &mut generator, 0);
+            let dyn_value = DynamicNode::generate(&mut dyn_rng, &mut generator, 0);
             assert_eq!(
                 size,
                 NonterminalVisitor::default()
-                    .visit(&mut dyn_value, 0)
+                    .visit(&dyn_value, 0)
                     .unwrap()
                     .continue_value()
                     .unwrap()
@@ -96,13 +92,13 @@ mod defs {
             );
 
             let first = WriteVisitor::new(Vec::new())
-                .visit(&mut value, 0)
+                .visit(&value, 0)
                 .unwrap()
                 .continue_value()
                 .unwrap()
                 .output();
             let second = WriteVisitor::new(Vec::new())
-                .visit(&mut dyn_value, 0)
+                .visit(&dyn_value, 0)
                 .unwrap()
                 .continue_value()
                 .unwrap()
@@ -196,7 +192,7 @@ mod defs {
             group.bench_function(BenchmarkId::new("mutate", size), |b| {
                 b.iter_batched(
                     || {
-                        let mut sample = B::generate(
+                        let sample = B::generate(
                             &mut StdSampler::seed_from_u64(
                                 seeds.choose(&mut global).copied().unwrap(),
                             ),
@@ -205,7 +201,7 @@ mod defs {
 
                         let count = sample.count_nodes();
                         let choice = Advance::forward(global.next_u64() as usize % count)
-                            .visit(&mut sample, 0)
+                            .visit(&sample, 0)
                             .unwrap()
                             .break_value()
                             .unwrap();
@@ -215,7 +211,7 @@ mod defs {
                     |(mut value, mut choice, mut local)| {
                         let idx = choice.pop_front().unwrap();
                         let depth = choice.len();
-                        let mut mutated = value.go_to(idx, choice).unwrap();
+                        let mut mutated = value.go_to_mut(idx, choice).unwrap();
                         mutated.generate_in_place(black_box(&mut local), &mut generator, depth);
                     },
                     BatchSize::SmallInput,
@@ -229,7 +225,7 @@ mod defs {
                     || {
                         let seed = seeds.choose(&mut global).copied().unwrap();
 
-                        let mut sample = DynamicNode::generate(
+                        let sample = DynamicNode::generate(
                             &mut DynamicSampler::new(
                                 <B::Start as AsStaticNode>::static_root(),
                                 <B::Start as AsStaticNode>::static_definition(),
@@ -242,7 +238,7 @@ mod defs {
 
                         let count = sample.count_nodes();
                         let choice = Advance::forward(global.next_u64() as usize % count)
-                            .visit(&mut sample, 0)
+                            .visit(&sample, 0)
                             .unwrap()
                             .break_value()
                             .unwrap();
@@ -252,7 +248,7 @@ mod defs {
                     |(mut value, mut choice, mut local)| {
                         let idx = choice.pop_front().unwrap();
                         let depth = choice.len();
-                        let mutated = value.go_to(idx, choice).unwrap();
+                        let mutated = value.go_to_mut(idx, choice).unwrap();
                         let mut sampler = DynamicSampler::new(
                             mutated.root(),
                             mutated.definition(),
@@ -270,7 +266,7 @@ mod defs {
             group.bench_function(BenchmarkId::new("crossover", size), |b| {
                 b.iter_batched(
                     || {
-                        let mut sample = B::generate(
+                        let sample = B::generate(
                             &mut StdSampler::seed_from_u64(
                                 seeds.choose(&mut global).copied().unwrap(),
                             ),
@@ -279,7 +275,7 @@ mod defs {
 
                         let count = sample.count_nodes();
                         let choice = Advance::forward(global.next_u64() as usize % count)
-                            .visit(&mut sample, 0)
+                            .visit(&sample, 0)
                             .unwrap()
                             .break_value()
                             .unwrap();
@@ -288,10 +284,10 @@ mod defs {
 
                         (sample, other, choice, global.clone())
                     },
-                    |(mut value, mut base, choice, mut local)| {
+                    |(mut value, base, choice, mut local)| {
                         B::crossover(
                             black_box(&mut value),
-                            black_box(&mut base),
+                            black_box(&base),
                             black_box(choice),
                             black_box(&mut local),
                         )
@@ -306,7 +302,7 @@ mod defs {
                 b.iter_batched(
                     || {
                         let seed = seeds.choose(&mut global).copied().unwrap();
-                        let mut sample = DynamicNode::generate(
+                        let sample = DynamicNode::generate(
                             &mut DynamicSampler::new(
                                 <B::Start as AsStaticNode>::static_root(),
                                 <B::Start as AsStaticNode>::static_definition(),
@@ -319,7 +315,7 @@ mod defs {
 
                         let count = sample.count_nodes();
                         let choice = Advance::forward(global.next_u64() as usize % count)
-                            .visit(&mut sample, 0)
+                            .visit(&sample, 0)
                             .unwrap()
                             .break_value()
                             .unwrap();

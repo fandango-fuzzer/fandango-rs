@@ -10,17 +10,15 @@
 //! 3. Depth-limiting Generator/Sampler:
 //!   - FANDANGO restricts the depth of produced derivation trees; we approximate this behavior
 
-use alloc::collections::VecDeque;
 use alloc::vec::Vec;
 use core::convert::Infallible;
 use core::marker::PhantomData;
-use core::ops::ControlFlow;
 #[allow(deprecated)]
 use fandango::dynamic::{DefinitionOf, HasDynamicSampler};
 use fandango::generation::{Generated, Generator, GeneratorTuple, Sampler};
 use fandango::graph::{IntoGraph, shortest_path};
 use fandango::lang::{FandangoNode, Program};
-use fandango::typing::{AsNodeMut, Node, StaticDiscriminable};
+use fandango::typing::{AsNodeRef, Node, StaticDiscriminable};
 use fandango::visitor::{VisitResult, VisitableChildren, Visitor};
 use fandango::{impl_definition_of, impl_has_dynamic_sampler};
 use hashbrown::HashMap;
@@ -173,29 +171,27 @@ where
 }
 
 /// Scans a set of nodes for all instances of a given discriminant.
-pub struct NodeScan {
+pub struct NodeScan<T> {
     discriminant: usize,
-    path: VecDeque<usize>,
-    paths: Vec<VecDeque<usize>>,
+    matches: Vec<T>,
 }
 
-impl NodeScan {
+impl<T> NodeScan<T> {
     /// Create a new scanner for the given node.
     pub fn new(discriminant: usize) -> Self {
         Self {
             discriminant,
-            path: VecDeque::new(),
-            paths: Vec::new(),
+            matches: Vec::new(),
         }
     }
 
     /// Acquire the paths resulting from the search.
-    pub fn paths(self) -> Vec<VecDeque<usize>> {
-        self.paths
+    pub fn matches(self) -> Vec<T> {
+        self.matches
     }
 }
 
-impl<T> Visitor<T> for NodeScan
+impl<T> Visitor<T> for NodeScan<T>
 where
     T: VisitableChildren<T>,
 {
@@ -203,20 +199,15 @@ where
     type Break = Infallible;
     type Error = Infallible;
 
-    fn visit<'program, N>(mut self, node: &'program mut N, idx: usize) -> VisitResult<Self, T>
+    fn visit<'program, N>(mut self, node: &'program N, _idx: usize) -> VisitResult<Self, T>
     where
-        N: Node<TypeMut<'program> = T>,
-        T: From<&'program mut N> + AsNodeMut<N>,
+        N: Node<Type<'program> = T>,
+        T: From<&'program N> + AsNodeRef<N>,
     {
-        self.path.push_back(idx);
         if node.discriminant() == self.discriminant {
-            self.paths.push(self.path.clone());
+            self.matches.push(T::from(node));
         }
-        let mut result = T::from(node).visit_each(self);
-        if let Ok(ControlFlow::Continue(visitor)) = &mut result {
-            visitor.path.pop_back();
-        }
-        result
+        T::from(node).visit_each(self)
     }
 }
 
@@ -229,7 +220,8 @@ macro_rules! crossover {
         (|| {
             let idx = $choice.pop_front().unwrap();
             let depth = $choice.len();
-            let mut node = ::fandango::visitor::navigation::GoTo::go_to($mutated, idx, $choice)?;
+            let mut node =
+                ::fandango::visitor::navigation::GoToMut::go_to_mut($mutated, idx, $choice)?;
 
             use ::fandango::typing::Discriminable;
             let discriminant = node.discriminant();
@@ -239,23 +231,17 @@ macro_rules! crossover {
                 .unwrap()
                 .continue_value()
                 .unwrap()
-                .paths();
+                .matches();
             if base_choices.is_empty() {
                 return Result::<bool, ::fandango::visitor::error::InvalidPath>::Ok(false);
             }
 
-            let mut base_path = base_choices
-                .swap_remove(
-                    ::fandango::generation::Sampler::<()>::sample($sampler) % base_choices.len(),
-                )
-                .clone();
+            let mut base = base_choices.swap_remove(
+                ::fandango::generation::Sampler::<()>::sample($sampler) % base_choices.len(),
+            );
 
-            let _ = base_path.pop_front().unwrap();
-            let mut base = ::fandango::visitor::navigation::GoTo::go_to($base, idx, base_path)?;
-
-            let mut swapper = ::fandango::visitor::assignment::SwapVisitor::new(base);
-
-            let _ = ::fandango::visitor::VisitWith::visit_with(&mut node, swapper, idx).unwrap();
+            let success = ::fandango::typing::AssignFrom::assign_from(&mut node, base);
+            debug_assert!(success);
 
             Ok(true)
         })()
@@ -283,10 +269,10 @@ where
     type Break = Infallible;
     type Error = Infallible;
 
-    fn visit<'program, N>(mut self, node: &'program mut N, _idx: usize) -> VisitResult<Self, T>
+    fn visit<'program, N>(mut self, node: &'program N, _idx: usize) -> VisitResult<Self, T>
     where
-        N: Node<TypeMut<'program> = T>,
-        T: From<&'program mut N> + AsNodeMut<N>,
+        N: Node<Type<'program> = T>,
+        T: From<&'program N> + AsNodeRef<N>,
     {
         if matches!(node.definition(), FandangoNode::Nonterminal(_)) {
             self.count += 1;

@@ -22,6 +22,7 @@ fandango-targets.workspace = true
 common = { path = "common" }
 
 criterion.workspace = true
+hashbrown.workspace = true
 rand.workspace = true
 
 [dev-dependencies]

@@ -22,7 +22,7 @@ mod simple {
     use fandango_core::visitor::Visitor;
     use fandango_core::visitor::kpath::{KPathUpdate, KPaths};
     use fandango_core::visitor::navigation::{
-        Advance, CountNodes, CountNodesWith, FindVisitor, GoTo,
+        Advance, CountNodes, CountNodesWith, FindVisitor, GoToMut,
     };
     use fandango_core::visitor::write::WriteVisitor;
     use fandango_core::visitor_chain;
@@ -80,22 +80,17 @@ mod simple {
         let dfs = dfs.unwrap();
         let bfs = bfs.unwrap();
 
-        let plus_path = dfs
-            .clone()
-            .visit(&mut start, 0)
-            .unwrap()
-            .break_value()
-            .unwrap();
+        let plus_path = dfs.clone().visit(&start, 0).unwrap().break_value().unwrap();
 
         assert_eq!(
             plus_path,
-            bfs.visit(&mut start, 0).unwrap().break_value().unwrap()
+            bfs.visit(&start, 0).unwrap().break_value().unwrap()
         );
 
         assert_eq!(
             "+2",
             String::from_utf8(
-                visitor_chain!(&mut start, 0, dfs.clone(), WriteVisitor::new(Vec::new()))
+                visitor_chain!(&start, 0, dfs.clone(), WriteVisitor::new(Vec::new()))
                     .continue_value()
                     .unwrap()
                     .output()
@@ -105,7 +100,7 @@ mod simple {
         assert_eq!(
             "+2",
             String::from_utf8(
-                visitor_chain!(&mut start, 0, dfs, WriteVisitor::new(Vec::new()))
+                visitor_chain!(&start, 0, dfs, WriteVisitor::new(Vec::new()))
                     .continue_value()
                     .unwrap()
                     .output()
@@ -130,11 +125,11 @@ mod simple {
             let old_start = start.clone();
             let selection = rng.random_range(0..count);
             let mut target = Advance::forward(selection)
-                .visit(&mut start, 0)?
+                .visit(&start, 0)?
                 .break_value()
                 .unwrap();
             let idx = target.pop_front().unwrap();
-            let mut target = start.go_to(idx, target)?;
+            let mut target = start.go_to_mut(idx, target)?;
             let old_count = target.count_nodes();
             target.generate_in_place(&mut rng, &mut generators, 0);
             let new_count = target.count_nodes();
@@ -170,11 +165,11 @@ mod simple {
             let old_start = start.clone();
             let selection = sampler.inner().random_range(0..count);
             let mut target = Advance::forward(selection)
-                .visit(&mut start, 0)?
+                .visit(&start, 0)?
                 .break_value()
                 .unwrap();
             let idx = target.pop_front().unwrap();
-            let target = start.go_to(idx, target)?;
+            let target = start.go_to_mut(idx, target)?;
             let old_count = target.count_nodes();
             let definition = target.definition();
             sampler.with_definition(definition);
@@ -194,11 +189,11 @@ mod simple {
     #[test]
     fn generate() -> Result<(), Box<dyn Error>> {
         let mut rng = StdRng::seed_from_u64(0);
-        let mut start = nonterminal_start::generate(&mut rng, &mut (), 0);
+        let start = nonterminal_start::generate(&mut rng, &mut (), 0);
 
         let serialized = String::from_utf8(
             WriteVisitor::new(Vec::new())
-                .visit(&mut start, 0)?
+                .visit(&start, 0)?
                 .continue_value()
                 .unwrap()
                 .output(),
@@ -218,10 +213,10 @@ mod simple {
         let mut distribution = [0usize; 10];
 
         for _ in 0..100_000 {
-            let mut digit = nonterminal_digit::generate(&mut rng, &mut (), 0);
+            let digit = nonterminal_digit::generate(&mut rng, &mut (), 0);
 
             WriteVisitor::new(&mut buf)
-                .visit(&mut digit, 0)?
+                .visit(&digit, 0)?
                 .continue_value()
                 .unwrap()
                 .output();
@@ -248,10 +243,10 @@ mod simple {
         let mut distribution = [0usize; 10];
 
         for _ in 0..100_000 {
-            let mut digit = nonterminal_digit::generate(&mut rng, &mut generators, 0);
+            let digit = nonterminal_digit::generate(&mut rng, &mut generators, 0);
 
             WriteVisitor::new(&mut buf)
-                .visit(&mut digit, 0)?
+                .visit(&digit, 0)?
                 .continue_value()
                 .unwrap()
                 .output();
@@ -288,10 +283,10 @@ mod simple {
         let mut distribution = [0usize; 10];
 
         for _ in 0..100_000 {
-            let mut digit = DynamicNode::generate(&mut sampler, &mut generators, 0);
+            let digit = DynamicNode::generate(&mut sampler, &mut generators, 0);
 
             WriteVisitor::new(&mut buf)
-                .visit(&mut digit, 0)?
+                .visit(&digit, 0)?
                 .continue_value()
                 .unwrap()
                 .output();
@@ -319,16 +314,16 @@ mod simple {
         );
 
         for _ in 0..10_000 {
-            let mut static_start = nonterminal_start::generate(&mut rng, &mut (), 0);
-            let mut dyn_start = DynamicNode::generate(&mut dyn_sampler, &mut (), 0);
+            let static_start = nonterminal_start::generate(&mut rng, &mut (), 0);
+            let dyn_start = DynamicNode::generate(&mut dyn_sampler, &mut (), 0);
 
             let static_ser = WriteVisitor::new(Vec::new())
-                .visit(&mut static_start, 0)?
+                .visit(&static_start, 0)?
                 .continue_value()
                 .unwrap()
                 .output();
             let dyn_ser = WriteVisitor::new(Vec::new())
-                .visit(&mut dyn_start, 0)?
+                .visit(&dyn_start, 0)?
                 .continue_value()
                 .unwrap()
                 .output();
@@ -353,13 +348,9 @@ mod simple {
         let (mut zero, _total) = updater.kpaths().k_paths();
 
         while zero != 0 {
-            let mut start = nonterminal_start::generate(&mut rng, &mut (), 0);
+            let start = nonterminal_start::generate(&mut rng, &mut (), 0);
 
-            updater = updater
-                .visit(&mut start, 0)
-                .unwrap()
-                .continue_value()
-                .unwrap();
+            updater = updater.visit(&start, 0).unwrap().continue_value().unwrap();
 
             zero = updater.kpaths().k_paths().0;
         }
@@ -403,12 +394,12 @@ mod xml {
     use core::num::NonZeroUsize;
     use fandango_core::dynamic::{DynamicNode, DynamicSampler};
     use fandango_core::generation::{DefaultGenerated, Generated};
-    use fandango_core::typing::{AsNodeMut, AsStaticNode, Node, Structured};
-    use fandango_core::visitor::Visitor;
+    use fandango_core::typing::{AsNodeMut, AsStaticNode, Node, OpaqueMut, Structured};
     use fandango_core::visitor::assignment::AssignmentVisitor;
     use fandango_core::visitor::kpath::{KPathUpdate, KPaths};
     use fandango_core::visitor::navigation::CountNodes;
     use fandango_core::visitor::write::WriteVisitor;
+    use fandango_core::visitor::{Visitor, VisitorMut};
     use fandango_derive::Fandango;
     use rand::SeedableRng;
     use rand::rngs::StdRng;
@@ -421,11 +412,11 @@ mod xml {
     #[test]
     fn generate() -> Result<(), Box<dyn Error>> {
         let mut rng = StdRng::seed_from_u64(0);
-        let mut start = nonterminal_start::generate_default(&mut rng, &mut (), 0);
+        let start = nonterminal_start::generate_default(&mut rng, &mut (), 0);
 
         let serialized = String::from_utf8(
             WriteVisitor::new(Vec::new())
-                .visit(&mut start, 0)?
+                .visit(&start, 0)?
                 .continue_value()
                 .unwrap()
                 .output(),
@@ -447,7 +438,7 @@ mod xml {
         Ok(())
     }
 
-    // this looks horrible, but this means we can effectively downcast N1 to N2 conditionally
+    // this looks horrible, but this means we can downcast N1 to N2 conditionally
     // this also applies to visitors; see the AssignmentVisitor impl for an example
     fn swap_example<'a, N1, N2>(n1: &'a mut N1, n2: &'a mut N2)
     where
@@ -455,7 +446,7 @@ mod xml {
         N2: Node<TypeMut<'a> = N1::TypeMut<'a>>,
         N1::TypeMut<'a>: From<&'a mut N1> + AsNodeMut<N2>,
     {
-        core::mem::swap(<N1::TypeMut<'a>>::from(n1).as_node_mut().unwrap(), n2);
+        core::mem::swap(n1.opaque_mut().as_node_mut().unwrap(), n2);
     }
 
     #[test]
@@ -476,7 +467,7 @@ mod xml {
 
         assert!(
             AssignmentVisitor(first)
-                .visit(&mut second, 0)
+                .visit_mut(&mut second, 0)
                 .unwrap()
                 .is_break()
         );
@@ -499,16 +490,16 @@ mod xml {
         );
 
         for _ in 0..10_000 {
-            let mut static_start = nonterminal_start::generate(&mut rng, &mut (), 0);
-            let mut dyn_start = DynamicNode::generate(&mut dyn_sampler, &mut (), 0);
+            let static_start = nonterminal_start::generate(&mut rng, &mut (), 0);
+            let dyn_start = DynamicNode::generate(&mut dyn_sampler, &mut (), 0);
 
             let static_ser = WriteVisitor::new(Vec::new())
-                .visit(&mut static_start, 0)?
+                .visit(&static_start, 0)?
                 .continue_value()
                 .unwrap()
                 .output();
             let dyn_ser = WriteVisitor::new(Vec::new())
-                .visit(&mut dyn_start, 0)?
+                .visit(&dyn_start, 0)?
                 .continue_value()
                 .unwrap()
                 .output();
@@ -533,13 +524,9 @@ mod xml {
         let (mut zero, _total) = updater.kpaths().k_paths();
 
         while zero != 0 {
-            let mut start = nonterminal_start::generate(&mut rng, &mut (), 0);
+            let start = nonterminal_start::generate(&mut rng, &mut (), 0);
 
-            updater = updater
-                .visit(&mut start, 0)
-                .unwrap()
-                .continue_value()
-                .unwrap();
+            updater = updater.visit(&start, 0).unwrap().continue_value().unwrap();
 
             zero = updater.kpaths().k_paths().0;
         }

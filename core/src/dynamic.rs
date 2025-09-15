@@ -6,8 +6,13 @@
 
 use crate::generation::{DefaultGenerated, Generated, GeneratorTuple, InPlaceGenerated, Sampler};
 use crate::lang::{Operator, Symbol};
-use crate::typing::{AsNode, AsNodeMut, Discriminable, DiscriminantLookup, Node};
-use crate::visitor::{MaybeVisitResult, VisitResult, VisitWith, VisitableChildren, Visitor};
+use crate::typing::{
+    AsNode, AsNodeMut, AsNodeRef, AssignFrom, Discriminable, DiscriminantLookup, Node,
+};
+use crate::visitor::{
+    MaybeVisitMutResult, MaybeVisitResult, VisitMutResult, VisitResult, VisitWith, VisitWithMut,
+    VisitableChildren, VisitableChildrenMut, Visitor, VisitorMut,
+};
 use alloc::boxed::Box;
 use alloc::vec;
 use alloc::vec::Vec;
@@ -408,7 +413,24 @@ impl AsNode for DynamicNode {
     }
 }
 
-impl DiscriminantLookup for DynamicNode {
+impl AssignFrom<&'_ DynamicNode> for &'_ mut DynamicNode {
+    fn assign_from(&mut self, other: &'_ DynamicNode) -> bool {
+        if self.discriminant() == other.discriminant() {
+            **self = other.clone();
+            true
+        } else {
+            false
+        }
+    }
+}
+
+impl DiscriminantLookup for &'_ DynamicNode {
+    fn lookup_discriminant(node: &crate::lang::FandangoNode) -> usize {
+        DefaultHashBuilder::default().hash_one(node) as usize
+    }
+}
+
+impl DiscriminantLookup for &'_ mut DynamicNode {
     fn lookup_discriminant(node: &crate::lang::FandangoNode) -> usize {
         DefaultHashBuilder::default().hash_one(node) as usize
     }
@@ -416,7 +438,7 @@ impl DiscriminantLookup for DynamicNode {
 
 impl Discriminable for DynamicNode {
     fn discriminant(&self) -> usize {
-        DynamicNode::lookup_discriminant(&self.definition)
+        <&DynamicNode>::lookup_discriminant(&self.definition)
     }
 }
 
@@ -447,6 +469,24 @@ impl Node for DynamicNode {
     }
 }
 
+impl AsNodeRef<DynamicNode> for DynamicNode {
+    fn as_node(&self) -> Option<&DynamicNode> {
+        Some(self)
+    }
+}
+
+impl AsNodeRef<DynamicNode> for &DynamicNode {
+    fn as_node(&self) -> Option<&DynamicNode> {
+        Some(self)
+    }
+}
+
+impl AsNodeRef<DynamicNode> for &mut DynamicNode {
+    fn as_node(&self) -> Option<&DynamicNode> {
+        Some(self)
+    }
+}
+
 impl AsNodeMut<DynamicNode> for DynamicNode {
     fn as_node_mut(&mut self) -> Option<&mut DynamicNode> {
         Some(self)
@@ -459,12 +499,12 @@ impl AsNodeMut<DynamicNode> for &mut DynamicNode {
     }
 }
 
-impl<'a> VisitableChildren<&'a mut DynamicNode> for &'a mut DynamicNode {
-    fn visit_each<V>(self, mut visitor: V) -> VisitResult<V, &'a mut DynamicNode>
+impl<'a> VisitableChildren<&'a DynamicNode> for &'a DynamicNode {
+    fn visit_each<V>(self, mut visitor: V) -> VisitResult<V, &'a DynamicNode>
     where
-        V: Visitor<&'a mut DynamicNode, Continue = V>,
+        V: Visitor<&'a DynamicNode, Continue = V>,
     {
-        for (child, idx) in self.children_mut().iter_mut() {
+        for (child, idx) in self.children().iter() {
             match visitor.visit(child, idx) {
                 Ok(ControlFlow::Continue(v)) => {
                     visitor = v;
@@ -475,11 +515,11 @@ impl<'a> VisitableChildren<&'a mut DynamicNode> for &'a mut DynamicNode {
         Ok(ControlFlow::Continue(visitor))
     }
 
-    fn visit_each_reverse<V>(self, mut visitor: V) -> VisitResult<V, &'a mut DynamicNode>
+    fn visit_each_reverse<V>(self, mut visitor: V) -> VisitResult<V, &'a DynamicNode>
     where
-        V: Visitor<&'a mut DynamicNode, Continue = V>,
+        V: Visitor<&'a DynamicNode, Continue = V>,
     {
-        for (child, idx) in self.children_mut().iter_mut().rev() {
+        for (child, idx) in self.children().iter().rev() {
             match visitor.visit(child, idx) {
                 Ok(ControlFlow::Continue(v)) => {
                     visitor = v;
@@ -490,11 +530,11 @@ impl<'a> VisitableChildren<&'a mut DynamicNode> for &'a mut DynamicNode {
         Ok(ControlFlow::Continue(visitor))
     }
 
-    fn visit_each_from<V>(self, mut visitor: V, from: usize) -> VisitResult<V, &'a mut DynamicNode>
+    fn visit_each_from<V>(self, mut visitor: V, from: usize) -> VisitResult<V, &'a DynamicNode>
     where
-        V: Visitor<&'a mut DynamicNode, Continue = V>,
+        V: Visitor<&'a DynamicNode, Continue = V>,
     {
-        for (child, idx) in self.children_mut().iter_mut() {
+        for (child, idx) in self.children().iter() {
             if idx >= from {
                 match visitor.visit(child, idx) {
                     Ok(ControlFlow::Continue(v)) => {
@@ -511,11 +551,11 @@ impl<'a> VisitableChildren<&'a mut DynamicNode> for &'a mut DynamicNode {
         self,
         mut visitor: V,
         from: usize,
-    ) -> VisitResult<V, &'a mut DynamicNode>
+    ) -> VisitResult<V, &'a DynamicNode>
     where
-        V: Visitor<&'a mut DynamicNode, Continue = V>,
+        V: Visitor<&'a DynamicNode, Continue = V>,
     {
-        for (child, idx) in self.children_mut().iter_mut() {
+        for (child, idx) in self.children().iter() {
             if idx >= from {
                 match visitor.visit(child, idx) {
                     Ok(ControlFlow::Continue(v)) => {
@@ -528,14 +568,15 @@ impl<'a> VisitableChildren<&'a mut DynamicNode> for &'a mut DynamicNode {
         Ok(ControlFlow::Continue(visitor))
     }
 
-    fn visit_nth<V>(self, visitor: V, idx: usize) -> MaybeVisitResult<V, &'a mut DynamicNode>
+    fn visit_nth<V>(self, visitor: V, idx: usize) -> MaybeVisitResult<V, &'a DynamicNode>
     where
-        V: Visitor<&'a mut DynamicNode>,
+        V: Visitor<&'a DynamicNode>,
     {
-        let child = match self.children_mut() {
-            DynamicNodeVariant::Sequence(seq) => seq.get_mut(idx),
+        let child = match self.children() {
+            DynamicNodeVariant::Sequence(seq) => seq.get(idx),
+            #[expect(clippy::get_first)]
             DynamicNodeVariant::Alternation { variant, content } if *variant == idx => {
-                content.get_mut(0)
+                content.get(0)
             }
             _ => None,
         };
@@ -546,17 +587,153 @@ impl<'a> VisitableChildren<&'a mut DynamicNode> for &'a mut DynamicNode {
     }
 }
 
-impl<'a, V> VisitWith<'a, V> for &'a mut DynamicNode
-where
-    V: Visitor<&'a mut DynamicNode>,
-{
-    type Visited = &'a mut DynamicNode;
+impl<'a> VisitableChildren<&'a DynamicNode> for &'a mut DynamicNode {
+    fn visit_each<V>(self, visitor: V) -> VisitResult<V, &'a DynamicNode>
+    where
+        V: Visitor<&'a DynamicNode, Continue = V>,
+    {
+        (&*self).visit_each(visitor)
+    }
 
-    fn visit_with(&'a mut self, visitor: V, idx: usize) -> VisitResult<V, Self::Visited>
+    fn visit_each_reverse<V>(self, visitor: V) -> VisitResult<V, &'a DynamicNode>
+    where
+        V: Visitor<&'a DynamicNode, Continue = V>,
+    {
+        (&*self).visit_each_reverse(visitor)
+    }
+
+    fn visit_each_from<V>(self, visitor: V, from: usize) -> VisitResult<V, &'a DynamicNode>
+    where
+        V: Visitor<&'a DynamicNode, Continue = V>,
+    {
+        (&*self).visit_each_from(visitor, from)
+    }
+
+    fn visit_each_reverse_from<V>(self, visitor: V, from: usize) -> VisitResult<V, &'a DynamicNode>
+    where
+        V: Visitor<&'a DynamicNode, Continue = V>,
+    {
+        (&*self).visit_each_reverse_from(visitor, from)
+    }
+
+    fn visit_nth<V>(self, visitor: V, idx: usize) -> MaybeVisitResult<V, &'a DynamicNode>
+    where
+        V: Visitor<&'a DynamicNode>,
+    {
+        (&*self).visit_nth(visitor, idx)
+    }
+}
+
+impl<'a> VisitableChildrenMut<&'a mut DynamicNode> for &'a mut DynamicNode {
+    fn visit_each_mut<V>(self, mut visitor: V) -> VisitMutResult<V, &'a mut DynamicNode>
+    where
+        V: VisitorMut<&'a mut DynamicNode, Continue = V>,
+    {
+        for (child, idx) in self.children_mut().iter_mut() {
+            match visitor.visit_mut(child, idx) {
+                Ok(ControlFlow::Continue(v)) => {
+                    visitor = v;
+                }
+                result => return result,
+            }
+        }
+        Ok(ControlFlow::Continue(visitor))
+    }
+
+    fn visit_each_reverse_mut<V>(self, mut visitor: V) -> VisitMutResult<V, &'a mut DynamicNode>
+    where
+        V: VisitorMut<&'a mut DynamicNode, Continue = V>,
+    {
+        for (child, idx) in self.children_mut().iter_mut().rev() {
+            match visitor.visit_mut(child, idx) {
+                Ok(ControlFlow::Continue(v)) => {
+                    visitor = v;
+                }
+                result => return result,
+            }
+        }
+        Ok(ControlFlow::Continue(visitor))
+    }
+
+    fn visit_each_mut_from<V>(
+        self,
+        mut visitor: V,
+        from: usize,
+    ) -> VisitMutResult<V, &'a mut DynamicNode>
+    where
+        V: VisitorMut<&'a mut DynamicNode, Continue = V>,
+    {
+        for (child, idx) in self.children_mut().iter_mut() {
+            if idx >= from {
+                match visitor.visit_mut(child, idx) {
+                    Ok(ControlFlow::Continue(v)) => {
+                        visitor = v;
+                    }
+                    result => return result,
+                }
+            }
+        }
+        Ok(ControlFlow::Continue(visitor))
+    }
+
+    fn visit_each_reverse_mut_from<V>(
+        self,
+        mut visitor: V,
+        from: usize,
+    ) -> VisitMutResult<V, &'a mut DynamicNode>
+    where
+        V: VisitorMut<&'a mut DynamicNode, Continue = V>,
+    {
+        for (child, idx) in self.children_mut().iter_mut() {
+            if idx >= from {
+                match visitor.visit_mut(child, idx) {
+                    Ok(ControlFlow::Continue(v)) => {
+                        visitor = v;
+                    }
+                    result => return result,
+                }
+            }
+        }
+        Ok(ControlFlow::Continue(visitor))
+    }
+
+    fn visit_nth_mut<V>(self, visitor: V, idx: usize) -> MaybeVisitMutResult<V, &'a mut DynamicNode>
+    where
+        V: VisitorMut<&'a mut DynamicNode>,
+    {
+        let child = match self.children_mut() {
+            DynamicNodeVariant::Sequence(seq) => seq.get_mut(idx),
+            DynamicNodeVariant::Alternation { variant, content } if *variant == idx => {
+                content.get_mut(0)
+            }
+            _ => None,
+        };
+        match child {
+            None => Err(visitor),
+            Some(child) => Ok(visitor.visit_mut(child, idx)),
+        }
+    }
+}
+
+impl<'a, V> VisitWith<'a, V> for &'a DynamicNode {
+    type Visited = &'a DynamicNode;
+
+    fn visit_with(&'a self, visitor: V, idx: usize) -> VisitResult<V, Self::Visited>
     where
         V: Visitor<Self::Visited>,
     {
         visitor.visit(self, idx)
+    }
+}
+
+impl<'a, V> VisitWithMut<'a, V> for &'a mut DynamicNode {
+    type Visited = &'a mut DynamicNode;
+
+    fn visit_with_mut(&'a mut self, visitor: V, idx: usize) -> VisitMutResult<V, Self::Visited>
+    where
+        V: VisitorMut<Self::Visited>,
+    {
+        visitor.visit_mut(self, idx)
     }
 }
 

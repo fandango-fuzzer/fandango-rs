@@ -225,8 +225,10 @@ version = "0.1.0"
 dependencies = [
  "either",
  "embedded-io",
- "hashbrown 0.15.3",
+ "hashbrown 0.16.0",
  "mappable-rc",
+ "num-integer",
+ "num-traits",
  "pest",
  "pest_derive",
  "petgraph",
@@ -248,7 +250,7 @@ name = "fandango-generator"
 version = "0.1.0"
 dependencies = [
  "fandango-core",
- "hashbrown 0.15.3",
+ "hashbrown 0.16.0",
  "pest",
  "pest_generator",
  "petgraph",
@@ -263,8 +265,7 @@ version = "0.1.0"
 dependencies = [
  "embedded-io",
  "fandango",
- "hashbrown 0.15.3",
- "petgraph",
+ "hashbrown 0.16.0",
 ]
 
 [[package]]
@@ -278,6 +279,12 @@ name = "foldhash"
 version = "0.1.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d9c4f5dac5e15c24eb999c26181a6ca40b39fe946cbe4c263c7209467bc83af2"
+
+[[package]]
+name = "foldhash"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "77ce24cb58228fbb8aa041425bb1050850ac19177686ea6e0f41a70416f56fdb"
 
 [[package]]
 name = "generic-array"
@@ -312,7 +319,18 @@ checksum = "84b26c544d002229e640969970a2e74021aadf6e2f96372b9c58eff97de08eb3"
 dependencies = [
  "allocator-api2",
  "equivalent",
- "foldhash",
+ "foldhash 0.1.5",
+]
+
+[[package]]
+name = "hashbrown"
+version = "0.16.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5419bdc4f6a9207fbeba6d11b604d481addf78ecd10c11ad51e76c2f6482748d"
+dependencies = [
+ "allocator-api2",
+ "equivalent",
+ "foldhash 0.2.0",
  "serde",
 ]
 
@@ -421,6 +439,24 @@ name = "nb"
 version = "1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8d5439c4ad607c3c23abf66de8c8bf57ba8adcd1f129e699851a6e43935d339d"
+
+[[package]]
+name = "num-integer"
+version = "0.1.46"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7969661fd2958a5cb096e56c8e1ad0444ac2bbcd0061bd28660485a44879858f"
+dependencies = [
+ "num-traits",
+]
+
+[[package]]
+name = "num-traits"
+version = "0.2.19"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "071dfc062690e90b734c0b2273ce72ad0ffa95f0c74596bc250dcfd960262841"
+dependencies = [
+ "autocfg",
+]
 
 [[package]]
 name = "once_cell"

@@ -1,7 +1,7 @@
 //! Visitors for emitting FANDANGO-generated inputs.
 
 use crate::lang::FandangoNode;
-use crate::typing::{AsNodeMut, Node};
+use crate::typing::{AsNodeRef, Node};
 use crate::visitor::navigation::StartingFrom;
 use crate::visitor::{VisitResult, VisitableChildren, Visitor};
 use alloc::collections::VecDeque;
@@ -54,10 +54,10 @@ where
     type Break = Infallible;
     type Error = <W as io::ErrorType>::Error;
 
-    fn visit<'program, N>(mut self, node: &'program mut N, _: usize) -> VisitResult<Self, T>
+    fn visit<'program, N>(mut self, node: &'program N, _: usize) -> VisitResult<Self, T>
     where
-        N: Node<TypeMut<'program> = T>,
-        T: From<&'program mut N> + AsNodeMut<N>,
+        N: Node<Type<'program> = T>,
+        T: From<&'program N> + AsNodeRef<N>,
     {
         match node.definition() {
             FandangoNode::String(s) => {

@@ -3,7 +3,7 @@
 //! See: https://publications.cispa.saarland/3572/1/tosem-codeine-arxiv.pdf
 
 use crate::lang::{FandangoNode, Operator, Program, Symbol};
-use crate::typing::{AsNodeMut, DiscriminantLookup, Node};
+use crate::typing::{AsNodeRef, DiscriminantLookup, Node};
 use crate::visitor::{VisitResult, VisitableChildren, Visitor};
 use alloc::collections::{BTreeMap, BTreeSet, VecDeque};
 use alloc::vec;
@@ -287,10 +287,10 @@ where
     type Break = Infallible;
     type Error = Infallible;
 
-    fn visit<'program, N>(mut self, node: &'program mut N, _idx: usize) -> VisitResult<Self, T>
+    fn visit<'program, N>(mut self, node: &'program N, _idx: usize) -> VisitResult<Self, T>
     where
-        N: Node<TypeMut<'program> = T>,
-        T: From<&'program mut N> + AsNodeMut<N>,
+        N: Node<Type<'program> = T>,
+        T: From<&'program N> + AsNodeRef<N>,
     {
         self.stack.push(node.discriminant());
         for offset in self.stack.len().saturating_sub(self.kpaths.k.get())..self.stack.len() {
@@ -383,10 +383,10 @@ where
     type Break = V::Break;
     type Error = V::Error;
 
-    fn visit<'program, N>(mut self, node: &'program mut N, _idx: usize) -> VisitResult<Self, T>
+    fn visit<'program, N>(mut self, node: &'program N, _idx: usize) -> VisitResult<Self, T>
     where
-        N: Node<TypeMut<'program> = T>,
-        T: From<&'program mut N> + AsNodeMut<N>,
+        N: Node<Type<'program> = T>,
+        T: From<&'program N> + AsNodeRef<N>,
     {
         self.stack.push(node.discriminant());
         for offset in self.stack.len().saturating_sub(self.kpaths.k.get())..self.stack.len() {

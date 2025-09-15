@@ -6,7 +6,7 @@ pub mod kpath;
 pub mod navigation;
 pub mod write;
 
-use crate::typing::{AsNodeMut, Node};
+use crate::typing::{AsNodeMut, AsNodeRef, Node};
 use alloc::boxed::Box;
 use alloc::vec::Vec;
 use core::error::Error;
@@ -26,7 +26,23 @@ pub trait Visitor<T> {
     type Error;
 
     /// Visit a provided node. You are responsible for recursion.
-    fn visit<'program, N>(self, node: &'program mut N, idx: usize) -> VisitResult<Self, T>
+    fn visit<'program, N>(self, node: &'program N, idx: usize) -> VisitResult<Self, T>
+    where
+        N: Node<Type<'program> = T>,
+        T: From<&'program N> + AsNodeRef<N>;
+}
+
+/// Visitor pattern over mutable nodes.
+pub trait VisitorMut<T> {
+    /// The type which is returned when the visitation may continue.
+    type Continue;
+    /// The type which is returned when the visitation is complete.
+    type Break;
+    /// The error which is returned upon failure.
+    type Error;
+
+    /// Visit a provided node. You are responsible for recursion.
+    fn visit_mut<'program, N>(self, node: &'program mut N, idx: usize) -> VisitMutResult<Self, T>
     where
         N: Node<TypeMut<'program> = T>,
         T: From<&'program mut N> + AsNodeMut<N>;
@@ -34,6 +50,17 @@ pub trait Visitor<T> {
 
 /// Visits an opaque node with the provided visitor.
 pub trait VisitWith<'a, V>: Sized {
+    /// This thereby informs the compiler that the visitor will not consume the node's reference.
+    type Visited;
+
+    /// Perform the visit on the opaque node.
+    fn visit_with(&'a self, visitor: V, idx: usize) -> VisitResult<V, Self::Visited>
+    where
+        V: Visitor<Self::Visited>;
+}
+
+/// Visits a mutable opaque node with the provided visitor.
+pub trait VisitWithMut<'a, V>: Sized {
     /// This type is an intermediary which represents what type *actually* gets visited by the
     /// visitor. This is necessary because implementors of [`VisitWith`] look something like this:
     ///
@@ -196,9 +223,9 @@ pub trait VisitWith<'a, V>: Sized {
     type Visited;
 
     /// Perform the visit on the opaque node.
-    fn visit_with(&'a mut self, visitor: V, idx: usize) -> VisitResult<V, Self::Visited>
+    fn visit_with_mut(&'a mut self, visitor: V, idx: usize) -> VisitMutResult<V, Self::Visited>
     where
-        V: Visitor<Self::Visited>;
+        V: VisitorMut<Self::Visited>;
 }
 
 /// The result type returned by visitors.
@@ -207,10 +234,22 @@ where
     V: Visitor<T>,
 = Result<ControlFlow<V::Break, V::Continue>, V::Error>;
 
+/// The result type returned by mutable visitors.
+pub type VisitMutResult<V, T>
+where
+    V: VisitorMut<T>,
+= Result<ControlFlow<V::Break, V::Continue>, V::Error>;
+
 /// The result type returned when visiting a node which may not exist.
 pub type MaybeVisitResult<V, T>
 where
     V: Visitor<T>,
+= Result<Result<ControlFlow<V::Break, V::Continue>, V::Error>, V>;
+
+/// The result type returned when visiting a node which may not exist.
+pub type MaybeVisitMutResult<V, T>
+where
+    V: VisitorMut<T>,
 = Result<Result<ControlFlow<V::Break, V::Continue>, V::Error>, V>;
 
 /// Denotes that a node (and its children) may be visited by a given visitor.
@@ -241,9 +280,37 @@ pub trait VisitableChildren<T> {
         V: Visitor<T>;
 }
 
-impl<'program, N, T> VisitableChildren<T> for &'program mut Box<N>
+/// Denotes that a node (and its children) may be visited by a given visitor.
+pub trait VisitableChildrenMut<T> {
+    /// Visit each of the children of this node, in order.
+    fn visit_each_mut<V>(self, visitor: V) -> VisitMutResult<V, T>
+    where
+        V: VisitorMut<T, Continue = V>;
+
+    /// Visit each of the children of this node, in reverse order.
+    fn visit_each_reverse_mut<V>(self, visitor: V) -> VisitMutResult<V, T>
+    where
+        V: VisitorMut<T, Continue = V>;
+
+    /// Visit each of the children of this node, in order, starting at a given node (inclusive).
+    fn visit_each_mut_from<V>(self, visitor: V, idx: usize) -> VisitMutResult<V, T>
+    where
+        V: VisitorMut<T, Continue = V>;
+
+    /// Visit each of the children of this node, in reverse order, starting at a given node (inclusive).
+    fn visit_each_reverse_mut_from<V>(self, visitor: V, idx: usize) -> VisitMutResult<V, T>
+    where
+        V: VisitorMut<T, Continue = V>;
+
+    /// Visit just the nth child, or return the visitor if the nth child did not exist.
+    fn visit_nth_mut<V>(self, visitor: V, idx: usize) -> MaybeVisitMutResult<V, T>
+    where
+        V: VisitorMut<T>;
+}
+
+impl<'program, N, T> VisitableChildren<T> for &'program Box<N>
 where
-    &'program mut N: VisitableChildren<T>,
+    &'program N: VisitableChildren<T>,
 {
     fn visit_each<V>(self, visitor: V) -> VisitResult<V, T>
     where
@@ -281,6 +348,46 @@ where
     }
 }
 
+impl<'program, N, T> VisitableChildrenMut<T> for &'program mut Box<N>
+where
+    &'program N: VisitableChildrenMut<T>,
+{
+    fn visit_each_mut<V>(self, visitor: V) -> VisitMutResult<V, T>
+    where
+        V: VisitorMut<T, Continue = V>,
+    {
+        (**self).visit_each_mut(visitor)
+    }
+
+    fn visit_each_reverse_mut<V>(self, visitor: V) -> VisitMutResult<V, T>
+    where
+        V: VisitorMut<T, Continue = V>,
+    {
+        (**self).visit_each_reverse_mut(visitor)
+    }
+
+    fn visit_each_mut_from<V>(self, visitor: V, idx: usize) -> VisitMutResult<V, T>
+    where
+        V: VisitorMut<T, Continue = V>,
+    {
+        (**self).visit_each_mut_from(visitor, idx)
+    }
+
+    fn visit_each_reverse_mut_from<V>(self, visitor: V, idx: usize) -> VisitMutResult<V, T>
+    where
+        V: VisitorMut<T, Continue = V>,
+    {
+        (**self).visit_each_reverse_mut_from(visitor, idx)
+    }
+
+    fn visit_nth_mut<V>(self, visitor: V, idx: usize) -> MaybeVisitMutResult<V, T>
+    where
+        V: VisitorMut<T>,
+    {
+        (**self).visit_nth_mut(visitor, idx)
+    }
+}
+
 impl<V1, V2, T> Visitor<T> for Either<V1, V2>
 where
     V1: Visitor<T>,
@@ -290,10 +397,10 @@ where
     type Break = Either<V1::Break, V2::Break>;
     type Error = Either<V1::Error, V2::Error>;
 
-    fn visit<'program, N>(self, node: &'program mut N, idx: usize) -> VisitResult<Self, T>
+    fn visit<'program, N>(self, node: &'program N, idx: usize) -> VisitResult<Self, T>
     where
-        N: Node<TypeMut<'program> = T>,
-        T: From<&'program mut N> + AsNodeMut<N>,
+        N: Node<Type<'program> = T>,
+        T: From<&'program N> + AsNodeRef<N>,
     {
         Ok(match self {
             Either::Left(visitor) => match visitor.visit(node, idx).map_err(Either::Left)? {
@@ -301,6 +408,33 @@ where
                 ControlFlow::Break(c) => ControlFlow::Break(Either::Left(c)),
             },
             Either::Right(visitor) => match visitor.visit(node, idx).map_err(Either::Right)? {
+                ControlFlow::Continue(c) => ControlFlow::Continue(Either::Right(c)),
+                ControlFlow::Break(c) => ControlFlow::Break(Either::Right(c)),
+            },
+        })
+    }
+}
+
+impl<V1, V2, T> VisitorMut<T> for Either<V1, V2>
+where
+    V1: VisitorMut<T>,
+    V2: VisitorMut<T>,
+{
+    type Continue = Either<V1::Continue, V2::Continue>;
+    type Break = Either<V1::Break, V2::Break>;
+    type Error = Either<V1::Error, V2::Error>;
+
+    fn visit_mut<'program, N>(self, node: &'program mut N, idx: usize) -> VisitMutResult<Self, T>
+    where
+        N: Node<TypeMut<'program> = T>,
+        T: From<&'program mut N> + AsNodeMut<N>,
+    {
+        Ok(match self {
+            Either::Left(visitor) => match visitor.visit_mut(node, idx).map_err(Either::Left)? {
+                ControlFlow::Continue(c) => ControlFlow::Continue(Either::Left(c)),
+                ControlFlow::Break(c) => ControlFlow::Break(Either::Left(c)),
+            },
+            Either::Right(visitor) => match visitor.visit_mut(node, idx).map_err(Either::Right)? {
                 ControlFlow::Continue(c) => ControlFlow::Continue(Either::Right(c)),
                 ControlFlow::Break(c) => ControlFlow::Break(Either::Right(c)),
             },

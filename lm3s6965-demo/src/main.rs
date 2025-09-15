@@ -30,7 +30,7 @@ mod app {
     use fandango::tuple_list::tuple_list;
     use fandango::typing::Structured;
     use fandango::visitor::write::WriteVisitor;
-    use fandango::visitor::Visitor;
+    use fandango::visitor::{Visitor, VisitorMut};
     use fandango_targets::operators::DepthLimiter;
     use fandango_targets::xml;
     use rand::SeedableRng;
@@ -63,12 +63,12 @@ mod app {
         for _ in 0..10_000 {
             let mut start = xml::nonterminal_start::generate(&mut rng, &mut generators, 0);
             let _ = xml::ConstraintFixer::corrected(&mut rng, &mut ())
-                .visit(&mut start, 0)
+                .visit_mut(&mut start, 0)
                 .unwrap();
 
             let serialized = String::from_utf8(
                 WriteVisitor::new(Vec::new())
-                    .visit(&mut start, 0)
+                    .visit(&start, 0)
                     .unwrap()
                     .continue_value()
                     .unwrap()

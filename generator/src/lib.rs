@@ -401,6 +401,76 @@ pub fn derive_fandango_or_emit_error(
                     }
                 )*
 
+                impl<'program> Type<'program> {
+                    fn reborrow<'a>(&'a self) -> Type<'a> {
+                        match self {
+                            #(Type::#node_names(n) => Type::#node_names(&*n)),*
+                        }
+                    }
+                }
+
+                impl<'a, 'program, V> ::fandango::visitor::VisitWith<'a, V> for Type<'program>
+                where
+                    'program: 'a,
+                {
+                    type Visited = Type<'a>;
+
+                    fn visit_with(&'a self, visitor: V, idx: usize) -> ::fandango::visitor::VisitResult<V, Self::Visited>
+                    where
+                        V: ::fandango::visitor::Visitor<Type<'a>>, {
+                        match self.reborrow() {
+                            #(Type::#node_names(n) => visitor.visit(n, idx)),*
+                        }
+                    }
+                }
+
+                impl<'program> ::fandango::visitor::VisitableChildren<Type<'program>> for Type<'program> {
+                    fn visit_each<V>(self, visitor: V) -> ::fandango::visitor::VisitResult<V, Type<'program>>
+                    where
+                        V: ::fandango::visitor::Visitor<Type<'program>, Continue = V>
+                    {
+                        match self {
+                            #(Type::#node_names(n) => n.visit_each(visitor)),*
+                        }
+                    }
+
+                    fn visit_each_reverse<V>(self, visitor: V) -> ::fandango::visitor::VisitResult<V, Type<'program>>
+                    where
+                        V: ::fandango::visitor::Visitor<Type<'program>, Continue = V>
+                    {
+                        match self {
+                            #(Type::#node_names(n) => n.visit_each_reverse(visitor)),*
+                        }
+                    }
+
+                    fn visit_each_reverse_from<V>(self, visitor: V, idx: usize) -> ::fandango::visitor::VisitResult<V, Type<'program>>
+                    where
+                        V: ::fandango::visitor::Visitor<Type<'program>, Continue=V>
+                    {
+                        match self {
+                            #(Type::#node_names(n) => n.visit_each_reverse_from(visitor, idx)),*
+                        }
+                    }
+
+                    fn visit_each_from<V>(self, visitor: V, idx: usize) -> ::fandango::visitor::VisitResult<V, Type<'program>>
+                    where
+                        V: ::fandango::visitor::Visitor<Type<'program>, Continue=V>
+                    {
+                        match self {
+                            #(Type::#node_names(n) => n.visit_each_from(visitor, idx)),*
+                        }
+                    }
+
+                    fn visit_nth<V>(self, visitor: V, idx: usize) -> ::fandango::visitor::MaybeVisitResult<V, Type<'program>>
+                    where
+                        V: ::fandango::visitor::Visitor<Type<'program>>
+                    {
+                        match self {
+                            #(Type::#node_names(n) => n.visit_nth(visitor, idx)),*
+                        }
+                    }
+                }
+
                 #[derive(Debug)]
                 #[allow(missing_docs)]
                 pub enum TypeMut<'program> {
@@ -450,7 +520,13 @@ pub fn derive_fandango_or_emit_error(
                 )*
 
                 impl<'program> TypeMut<'program> {
-                    fn reborrow<'a>(&'a mut self) -> TypeMut<'a> {
+                    fn reborrow<'a>(&'a self) -> Type<'a> {
+                        match self {
+                            #(TypeMut::#node_names(n) => Type::#node_names(&*n)),*
+                        }
+                    }
+
+                    fn reborrow_mut<'a>(&'a mut self) -> TypeMut<'a> {
                         match self {
                             #(TypeMut::#node_names(n) => TypeMut::#node_names(&mut *n)),*
                         }
@@ -465,17 +541,140 @@ pub fn derive_fandango_or_emit_error(
                     }
                 }
 
+                impl<'program> ::fandango::typing::AssignFrom<Type<'program>> for TypeMut<'program> {
+                    fn assign_from(&mut self, other: Type<'program>) -> bool {
+                        match self {
+                            #(TypeMut::#node_names(n) => match other {
+                                Type::#node_names(v) => {
+                                    **n = v.clone();
+                                    true
+                                },
+                                _ => false,
+                            }),*
+                        }
+                    }
+                }
+
                 impl<'a, 'program, V> ::fandango::visitor::VisitWith<'a, V> for TypeMut<'program>
+                where
+                    'program: 'a,
+                {
+                    type Visited = Type<'a>;
+
+                    fn visit_with(&'a self, visitor: V, idx: usize) -> ::fandango::visitor::VisitResult<V, Self::Visited>
+                    where
+                        V: ::fandango::visitor::Visitor<Type<'a>>, {
+                        match self.reborrow() {
+                            #(Type::#node_names(n) => visitor.visit(n, idx)),*
+                        }
+                    }
+                }
+
+                impl<'a, 'program, V> ::fandango::visitor::VisitWithMut<'a, V> for TypeMut<'program>
                 where
                     'program: 'a,
                 {
                     type Visited = TypeMut<'a>;
 
-                    fn visit_with(&'a mut self, visitor: V, idx: usize) -> ::fandango::visitor::VisitResult<V, Self::Visited>
+                    fn visit_with_mut(&'a mut self, visitor: V, idx: usize) -> ::fandango::visitor::VisitMutResult<V, Self::Visited>
                     where
-                        V: ::fandango::visitor::Visitor<TypeMut<'a>>, {
-                        match self.reborrow() {
-                            #(TypeMut::#node_names(n) => visitor.visit(n, idx)),*
+                        V: ::fandango::visitor::VisitorMut<TypeMut<'a>>, {
+                        match self.reborrow_mut() {
+                            #(TypeMut::#node_names(n) => visitor.visit_mut(n, idx)),*
+                        }
+                    }
+                }
+
+                impl<'program> ::fandango::visitor::VisitableChildren<Type<'program>> for TypeMut<'program> {
+                    fn visit_each<V>(self, visitor: V) -> ::fandango::visitor::VisitResult<V, Type<'program>>
+                    where
+                        V: ::fandango::visitor::Visitor<Type<'program>, Continue = V>
+                    {
+                        match self {
+                            #(TypeMut::#node_names(n) => n.visit_each(visitor)),*
+                        }
+                    }
+
+                    fn visit_each_reverse<V>(self, visitor: V) -> ::fandango::visitor::VisitResult<V, Type<'program>>
+                    where
+                        V: ::fandango::visitor::Visitor<Type<'program>, Continue = V>
+                    {
+                        match self {
+                            #(TypeMut::#node_names(n) => n.visit_each_reverse(visitor)),*
+                        }
+                    }
+
+                    fn visit_each_reverse_from<V>(self, visitor: V, idx: usize) -> ::fandango::visitor::VisitResult<V, Type<'program>>
+                    where
+                        V: ::fandango::visitor::Visitor<Type<'program>, Continue=V>
+                    {
+                        match self {
+                            #(TypeMut::#node_names(n) => n.visit_each_reverse_from(visitor, idx)),*
+                        }
+                    }
+
+                    fn visit_each_from<V>(self, visitor: V, idx: usize) -> ::fandango::visitor::VisitResult<V, Type<'program>>
+                    where
+                        V: ::fandango::visitor::Visitor<Type<'program>, Continue=V>
+                    {
+                        match self {
+                            #(TypeMut::#node_names(n) => n.visit_each_from(visitor, idx)),*
+                        }
+                    }
+
+                    fn visit_nth<V>(self, visitor: V, idx: usize) -> ::fandango::visitor::MaybeVisitResult<V, Type<'program>>
+                    where
+                        V: ::fandango::visitor::Visitor<Type<'program>>
+                    {
+                        match self {
+                            #(TypeMut::#node_names(n) => n.visit_nth(visitor, idx)),*
+                        }
+                    }
+                }
+
+                impl<'program> ::fandango::visitor::VisitableChildrenMut<TypeMut<'program>> for TypeMut<'program> {
+                    fn visit_each_mut<V>(self, visitor: V) -> ::fandango::visitor::VisitMutResult<V, TypeMut<'program>>
+                    where
+                        V: ::fandango::visitor::VisitorMut<TypeMut<'program>, Continue = V>
+                    {
+                        match self {
+                            #(TypeMut::#node_names(n) => n.visit_each_mut(visitor)),*
+                        }
+                    }
+
+                    fn visit_each_reverse_mut<V>(self, visitor: V) -> ::fandango::visitor::VisitMutResult<V, TypeMut<'program>>
+                    where
+                        V: ::fandango::visitor::VisitorMut<TypeMut<'program>, Continue = V>
+                    {
+                        match self {
+                            #(TypeMut::#node_names(n) => n.visit_each_reverse_mut(visitor)),*
+                        }
+                    }
+
+                    fn visit_each_reverse_mut_from<V>(self, visitor: V, idx: usize) -> ::fandango::visitor::VisitMutResult<V, TypeMut<'program>>
+                    where
+                        V: ::fandango::visitor::VisitorMut<TypeMut<'program>, Continue=V>
+                    {
+                        match self {
+                            #(TypeMut::#node_names(n) => n.visit_each_reverse_mut_from(visitor, idx)),*
+                        }
+                    }
+
+                    fn visit_each_mut_from<V>(self, visitor: V, idx: usize) -> ::fandango::visitor::VisitMutResult<V, TypeMut<'program>>
+                    where
+                        V: ::fandango::visitor::VisitorMut<TypeMut<'program>, Continue=V>
+                    {
+                        match self {
+                            #(TypeMut::#node_names(n) => n.visit_each_mut_from(visitor, idx)),*
+                        }
+                    }
+
+                    fn visit_nth_mut<V>(self, visitor: V, idx: usize) -> ::fandango::visitor::MaybeVisitMutResult<V, TypeMut<'program>>
+                    where
+                        V: ::fandango::visitor::VisitorMut<TypeMut<'program>>
+                    {
+                        match self {
+                            #(TypeMut::#node_names(n) => n.visit_nth_mut(visitor, idx)),*
                         }
                     }
                 }
@@ -485,57 +684,10 @@ pub fn derive_fandango_or_emit_error(
                     #(#node_names: ::fandango::generation::Generated<S, G>),*,
                 {
                     fn generate_in_place(&mut self, sampler: &mut S, with: &mut G, depth: usize) {
-                        match self.reborrow() {
+                        match self.reborrow_mut() {
                             #(TypeMut::#node_names(n) => {
                                 *n = ::fandango::generation::Generated::generate(sampler, with, depth);
                             }),*
-                        }
-                    }
-                }
-
-                impl<'program> ::fandango::visitor::VisitableChildren<TypeMut<'program>> for TypeMut<'program> {
-                    fn visit_each<V>(self, visitor: V) -> ::fandango::visitor::VisitResult<V, TypeMut<'program>>
-                    where
-                        V: ::fandango::visitor::Visitor<TypeMut<'program>, Continue = V>
-                    {
-                        match self {
-                            #(TypeMut::#node_names(n) => n.visit_each(visitor)),*
-                        }
-                    }
-
-                    fn visit_each_reverse<V>(self, visitor: V) -> ::fandango::visitor::VisitResult<V, TypeMut<'program>>
-                    where
-                        V: ::fandango::visitor::Visitor<TypeMut<'program>, Continue = V>
-                    {
-                        match self {
-                            #(TypeMut::#node_names(n) => n.visit_each_reverse(visitor)),*
-                        }
-                    }
-
-                    fn visit_each_reverse_from<V>(self, visitor: V, idx: usize) -> ::fandango::visitor::VisitResult<V, TypeMut<'program>>
-                    where
-                        V: ::fandango::visitor::Visitor<TypeMut<'program>, Continue=V>
-                    {
-                        match self {
-                            #(TypeMut::#node_names(n) => n.visit_each_reverse_from(visitor, idx)),*
-                        }
-                    }
-
-                    fn visit_each_from<V>(self, visitor: V, idx: usize) -> ::fandango::visitor::VisitResult<V, TypeMut<'program>>
-                    where
-                        V: ::fandango::visitor::Visitor<TypeMut<'program>, Continue=V>
-                    {
-                        match self {
-                            #(TypeMut::#node_names(n) => n.visit_each_from(visitor, idx)),*
-                        }
-                    }
-
-                    fn visit_nth<V>(self, visitor: V, idx: usize) -> ::fandango::visitor::MaybeVisitResult<V, TypeMut<'program>>
-                    where
-                        V: ::fandango::visitor::Visitor<TypeMut<'program>>
-                    {
-                        match self {
-                            #(TypeMut::#node_names(n) => n.visit_nth(visitor, idx)),*
                         }
                     }
                 }

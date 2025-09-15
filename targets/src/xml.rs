@@ -33,7 +33,9 @@ mod defs {
     use fandango::Fandango;
     use fandango::generation::Generated;
     use fandango::typing::{AsNodeMut, AsNodeRef, ChildAccessor, Downcast, DowncastMut, Node, Nth};
-    use fandango::visitor::{VisitResult, VisitableChildren, Visitor};
+    use fandango::visitor::{
+        VisitMutResult, VisitResult, VisitableChildren, VisitableChildrenMut, Visitor, VisitorMut,
+    };
 
     /// Base for the XML grammar stored in xml.fan.
     #[derive(Fandango)]
@@ -75,10 +77,10 @@ mod defs {
         type Break = Infallible;
         type Error = Infallible;
 
-        fn visit<'program, N>(mut self, node: &'program mut N, idx: usize) -> VisitResult<Self, T>
+        fn visit<'program, N>(mut self, node: &'program N, idx: usize) -> VisitResult<Self, T>
         where
-            N: Node<TypeMut<'program> = T>,
-            T: From<&'program mut N> + AsNodeMut<N>,
+            N: Node<Type<'program> = T>,
+            T: From<&'program N> + AsNodeRef<N>,
         {
             self.path.push_back(idx);
             let visited = T::from(node);
@@ -146,10 +148,10 @@ mod defs {
         }
     }
 
-    impl<S, G, T> Visitor<T> for ConstraintFixer<'_, S, G, true>
+    impl<S, G, T> VisitorMut<T> for ConstraintFixer<'_, S, G, true>
     where
         nonterminal_id: Generated<S, G>,
-        T: VisitableChildren<T>
+        T: VisitableChildrenMut<T>
             + AsNodeMut<nonterminal_xml_tree>
             + AsNodeMut<nonterminal_xml_attributes>,
     {
@@ -157,7 +159,11 @@ mod defs {
         type Break = Infallible;
         type Error = Infallible;
 
-        fn visit<'program, N>(self, node: &'program mut N, _idx: usize) -> VisitResult<Self, T>
+        fn visit_mut<'program, N>(
+            self,
+            node: &'program mut N,
+            _idx: usize,
+        ) -> VisitMutResult<Self, T>
         where
             N: Node<TypeMut<'program> = T>,
             T: From<&'program mut N> + AsNodeMut<N>,
@@ -199,14 +205,14 @@ mod defs {
                 }
                 return Ok(ControlFlow::Continue(self)); // attributes are already fixed, so no need
             }
-            visited.visit_each(self)
+            visited.visit_each_mut(self)
         }
     }
 
-    impl<S, G, T> Visitor<T> for ConstraintFixer<'_, S, G, false>
+    impl<S, G, T> VisitorMut<T> for ConstraintFixer<'_, S, G, false>
     where
         nonterminal_id: Generated<S, G>,
-        T: VisitableChildren<T>
+        T: VisitableChildrenMut<T>
             + AsNodeMut<nonterminal_xml_tree>
             + AsNodeMut<nonterminal_xml_attributes>,
     {
@@ -214,7 +220,11 @@ mod defs {
         type Break = Infallible;
         type Error = Infallible;
 
-        fn visit<'program, N>(self, node: &'program mut N, _idx: usize) -> VisitResult<Self, T>
+        fn visit_mut<'program, N>(
+            self,
+            node: &'program mut N,
+            _idx: usize,
+        ) -> VisitMutResult<Self, T>
         where
             N: Node<TypeMut<'program> = T>,
             T: From<&'program mut N> + AsNodeMut<N>,
@@ -228,7 +238,7 @@ mod defs {
                 };
                 id.clone_into(close.child_mut().nth_mut::<1>());
             }
-            visited.visit_each(self)
+            visited.visit_each_mut(self)
         }
     }
 }
