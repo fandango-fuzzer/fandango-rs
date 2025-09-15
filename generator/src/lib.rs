@@ -350,10 +350,23 @@ pub fn derive_fandango_or_emit_error(
                     #(G: ::fandango::generation::GeneratorTuple<::alloc::boxed::Box<#node_names>, S>),*
                 {}
 
-                #[derive(Clone, Debug)]
+                #[derive(Clone, Debug, Eq, PartialEq)]
                 #[allow(missing_docs)]
                 pub enum Type<'program> {
                     #(#node_names(&'program #node_names)),*
+                }
+
+                impl<'program> PartialEq<TypeMut<'program>> for Type<'program> {
+                    fn eq(&self, other: &TypeMut<'program>) -> bool {
+                        match self {
+                            #(
+                                Type::#node_names(n1) => match other {
+                                    TypeMut::#node_names(n2) => *n1 == *n2,
+                                    _ => false,
+                                }
+                            )*
+                        }
+                    }
                 }
 
                 impl ::fandango::typing::Discriminable for Type<'_> {
@@ -471,10 +484,16 @@ pub fn derive_fandango_or_emit_error(
                     }
                 }
 
-                #[derive(Debug)]
+                #[derive(Debug, Eq, PartialEq)]
                 #[allow(missing_docs)]
                 pub enum TypeMut<'program> {
                     #(#node_names(&'program mut #node_names)),*
+                }
+
+                impl<'program> PartialEq<Type<'program>> for TypeMut<'program> {
+                    fn eq(&self, other: &Type<'program>) -> bool {
+                        other.eq(self)
+                    }
                 }
 
                 impl ::fandango::typing::Discriminable for TypeMut<'_> {

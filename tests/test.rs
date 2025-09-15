@@ -14,11 +14,12 @@ mod simple {
     use alloc::vec::Vec;
     use core::error::Error;
     use core::num::NonZeroUsize;
+    use core::ops::Deref;
     use fandango::Fandango;
     use fandango_core::dynamic::{DynamicNode, DynamicSampler, HasDynamicSampler};
     use fandango_core::generation::util::Flattener;
     use fandango_core::generation::{Generated, InPlaceGenerated};
-    use fandango_core::typing::{AsNode, AsStaticNode, Structured};
+    use fandango_core::typing::{AsNode, AsStaticNode, Nth, Structured};
     use fandango_core::visitor::Visitor;
     use fandango_core::visitor::kpath::{KPathUpdate, KPaths};
     use fandango_core::visitor::navigation::{
@@ -46,9 +47,9 @@ mod simple {
 
         let mut start = Simple::extract(SAMPLE).unwrap();
         {
-            let expr = start.children_mut().0;
-            if let nonterminal_expr_0::variant_0(expr) = expr.children_mut().0 {
-                let (_number, plus, expr) = expr.children_mut();
+            let expr = start.nth::<0>();
+            if let nonterminal_expr_0::variant_0(expr) = expr.nth::<0>() {
+                let (_number, plus, expr) = expr.children();
                 dfs = Some(FindVisitor::dfs(plus));
                 bfs = Some(FindVisitor::bfs(plus));
 
@@ -61,7 +62,7 @@ mod simple {
                         .output()
                 );
 
-                if let nonterminal_expr_0::variant_1(number) = expr.children_mut().0 {
+                if let nonterminal_expr_0::variant_1(number) = expr.deref().nth::<0>() {
                     assert_eq!(
                         "2".as_bytes(),
                         WriteVisitor::new(Vec::new())
@@ -80,27 +81,21 @@ mod simple {
         let dfs = dfs.unwrap();
         let bfs = bfs.unwrap();
 
-        let plus_path = dfs.clone().visit(&start, 0).unwrap().break_value().unwrap();
+        let mut plus_path = dfs.clone().visit(&start, 0).unwrap().break_value().unwrap();
 
         assert_eq!(
             plus_path,
             bfs.visit(&start, 0).unwrap().break_value().unwrap()
         );
 
+        plus_path.pop_front();
+
         assert_eq!(
             "+2",
             String::from_utf8(
-                visitor_chain!(&start, 0, dfs.clone(), WriteVisitor::new(Vec::new()))
-                    .continue_value()
+                WriteVisitor::new_from(Vec::new(), plus_path.clone())
+                    .visit(&start, 0)
                     .unwrap()
-                    .output()
-            )
-            .unwrap()
-        );
-        assert_eq!(
-            "+2",
-            String::from_utf8(
-                visitor_chain!(&start, 0, dfs, WriteVisitor::new(Vec::new()))
                     .continue_value()
                     .unwrap()
                     .output()

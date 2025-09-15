@@ -82,6 +82,9 @@ pub trait Node: Sized + AsNode + Discriminable + Clone {
     type Type<'program>: From<&'program Self>
         + DiscriminantLookup
         + VisitableChildren<Self::Type<'program>>
+        + PartialEq
+        + PartialEq<Self::TypeMut<'program>>
+        + Eq
     where
         Self: 'program;
     /// An enum which describes all possible mutable nodes, and which may be visited with either
@@ -91,6 +94,9 @@ pub trait Node: Sized + AsNode + Discriminable + Clone {
         + DiscriminantLookup
         + VisitableChildren<Self::Type<'program>>
         + VisitableChildrenMut<Self::TypeMut<'program>>
+        + PartialEq
+        + PartialEq<Self::Type<'program>>
+        + Eq
     where
         Self: 'program;
     /// The type which references each child individually.

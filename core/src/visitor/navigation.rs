@@ -1,6 +1,6 @@
 //! Utility visitors for navigating type trees.
 
-use crate::typing::{AsNodeMut, AsNodeRef, Node};
+use crate::typing::{AsNodeMut, AsNodeRef, Node, Opaque};
 use crate::visitor::error::InvalidPath;
 use crate::visitor::{
     VisitMutResult, VisitResult, VisitWith, VisitableChildren, VisitableChildrenMut, Visitor,
@@ -27,75 +27,77 @@ pub trait StartingFrom {
 
 /// Find a given node, by DFS or BFS.
 #[derive(Clone, Debug)]
-pub struct FindVisitor<const DFS: bool> {
-    reference: usize,
-    discriminant: usize,
+pub struct FindVisitor<T, const DFS: bool> {
+    reference: T,
     from: VecDeque<usize>,
 }
 
-impl<const DFS: bool> FindVisitor<DFS> {
-    fn new<N>(target: &N) -> Self
+impl<T, const DFS: bool> FindVisitor<T, DFS> {
+    fn new<'a, N>(target: &'a N) -> Self
     where
-        N: Node,
+        N: Node<Type<'a> = T>,
+        T: From<&'a N>,
     {
         Self::new_from(target, VecDeque::new())
     }
 
-    fn new_from<N>(target: &N, from: VecDeque<usize>) -> Self
+    fn new_from<'a, N>(target: &'a N, from: VecDeque<usize>) -> Self
     where
-        N: Node,
+        N: Node<Type<'a> = T>,
+        T: From<&'a N>,
     {
         Self {
-            reference: target as *const N as usize,
-            discriminant: target.discriminant(),
+            reference: T::from(target),
             from,
         }
     }
 }
 
-impl FindVisitor<true> {
+impl<T> FindVisitor<T, true> {
     /// Search for a node by DFS.
-    pub fn dfs<N>(target: &N) -> Self
+    pub fn dfs<'a, N>(target: &'a N) -> Self
     where
-        N: Node,
+        N: Node<Type<'a> = T>,
+        T: From<&'a N>,
     {
         Self::new(target)
     }
 
     /// Search for a node by DFS, starting from a given position.
-    pub fn dfs_from<N>(target: &N, from: VecDeque<usize>) -> Self
+    pub fn dfs_from<'a, N>(target: &'a N, from: VecDeque<usize>) -> Self
     where
-        N: Node,
+        N: Node<Type<'a> = T>,
+        T: From<&'a N>,
     {
         Self::new_from(target, from)
     }
 }
 
-impl StartingFrom for FindVisitor<true> {
+impl<T> StartingFrom for FindVisitor<T, true> {
     type WithPath = Self;
 
     fn starting_from(self, from: VecDeque<usize>) -> Self::WithPath {
         Self::WithPath {
             reference: self.reference,
-            discriminant: self.discriminant,
             from,
         }
     }
 }
 
-impl FindVisitor<false> {
+impl<T> FindVisitor<T, false> {
     /// Search for a node by BFS. A `_from` variant is not provided at this time.
-    pub fn bfs<N>(target: &N) -> Self
+    pub fn bfs<'a, N>(target: &'a N) -> Self
     where
-        N: Node,
+        N: Node<Type<'a> = T>,
+        T: From<&'a N>,
     {
         Self::new(target)
     }
 }
 
-impl<T> Visitor<T> for FindVisitor<true>
+impl<T, U> Visitor<T> for FindVisitor<U, true>
 where
-    T: VisitableChildren<T>,
+    T: VisitableChildren<T> + PartialEq<U>,
 {
     type Continue = Self;
     type Break = VecDeque<usize>;
@@ -106,15 +108,15 @@ where
         N: Node<Type<'program> = T>,
         T: From<&'program N> + AsNodeRef<N>,
     {
-        let actual_ptr = node as *const N as usize;
-        if node.discriminant() == self.discriminant && actual_ptr == self.reference {
+        let opaque = node.opaque();
+        if opaque == self.reference {
             let mut path = VecDeque::new();
             path.push_front(idx);
             Ok(ControlFlow::Break(path))
         } else {
             match {
                 let from = self.from.pop_front().unwrap_or(0);
-                T::from(node).visit_each_from(self, from)
+                opaque.visit_each_from(self, from)
             }? {
                 ControlFlow::Break(mut path) => {
                     path.push_front(idx);
@@ -126,9 +128,9 @@ where
     }
 }
 
-impl<T> Visitor<T> for FindVisitor<false>
+impl<T, U> Visitor<T> for FindVisitor<U, false>
 where
-    T: VisitableChildren<T>,
+    T: VisitableChildren<T> + PartialEq<U>,
 {
     type Continue = Self;
     type Break = VecDeque<usize>;
@@ -144,27 +146,27 @@ where
         let mut work = VecDeque::new();
         work.push_back((usize::MAX, idx, T::from(node)));
 
-        struct ChildCollector<'a, T> {
-            reference: usize,
-            discriminant: usize,
+        struct ChildCollector<'a, T, U> {
+            reference: &'a U,
             parent: usize,
             work: &'a mut VecDeque<(usize, usize, T)>,
         }
 
-        impl<T> Visitor<T> for ChildCollector<'_, T> {
+        impl<T, U> Visitor<T> for ChildCollector<'_, T, U>
+        where
+            T: PartialEq<U>,
+        {
             type Continue = Self;
             type Break = usize;
             type Error = Infallible;
 
             fn visit<'program, N>(self, node: &'program N, idx: usize) -> VisitResult<Self, T>
             where
-                N: Node,
+                N: Node<Type<'program> = T>,
                 T: From<&'program N> + AsNodeRef<N>,
             {
-                let actual_ptr = node as *const N as usize;
-                let discriminant = node.discriminant();
-                let t = T::from(node);
-                if discriminant == self.discriminant && actual_ptr == self.reference {
+                let t = node.opaque();
+                if t == *self.reference {
                     Ok(ControlFlow::Break(idx))
                 } else {
                     self.work.push_back((self.parent, idx, t));
@@ -178,8 +180,7 @@ where
             stack.push((parent, idx));
 
             let collector = ChildCollector {
-                reference: self.reference,
-                discriminant: self.discriminant,
+                reference: &self.reference,
                 parent: next_parent,
                 work: &mut work,
             };
