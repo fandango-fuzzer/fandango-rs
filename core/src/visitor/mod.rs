@@ -50,7 +50,9 @@ pub trait VisitorMut<T> {
 
 /// Visits an opaque node with the provided visitor.
 pub trait VisitWith<'a, V>: Sized {
-    /// This thereby informs the compiler that the visitor will not consume the node's reference.
+    /// This type is an intermediary which represents what type *actually* gets visited by the
+    /// visitor. For example, most [`Node::TypeMut`] will implement this by specifying that
+    /// [`VisitWith::Visited`] is [`Node::Type`] and "casting" to the immutable opaque type.
     type Visited;
 
     /// Perform the visit on the opaque node.
@@ -62,164 +64,7 @@ pub trait VisitWith<'a, V>: Sized {
 /// Visits a mutable opaque node with the provided visitor.
 pub trait VisitWithMut<'a, V>: Sized {
     /// This type is an intermediary which represents what type *actually* gets visited by the
-    /// visitor. This is necessary because implementors of [`VisitWith`] look something like this:
-    ///
-    /// ```
-    /// # #![allow(non_camel_case_types)]
-    /// # struct start();
-    /// #
-    /// pub enum TypeMut<'program> {
-    ///     start(&'program mut start),
-    ///     // other variants...
-    /// }
-    /// ```
-    ///
-    /// If we use the visitor directly, this will consume the `'program` lifetime -- and thus
-    /// prevent further modification until we create a new node of this type. By specifying what is
-    /// indeed visited, we can first reborrow the type and then perform the visit:
-    ///
-    /// ```
-    /// # #![allow(non_camel_case_types)]
-    /// # use std::ops::ControlFlow;
-    /// # use std::marker::PhantomData;
-    /// # use std::convert::Infallible;
-    /// # use fandango_core::lang::FandangoNode;
-    /// # use fandango_core::typing::{AsNode, AsNodeMut, Discriminable, Node};
-    /// # use fandango_core::visitor::{MaybeVisitResult, VisitResult, VisitWith, VisitableChildren, Visitor};
-    /// #
-    /// # #[derive(Clone)]
-    /// # pub struct start;
-    /// # impl Discriminable for start {
-    /// #    fn discriminant(&self) -> usize {
-    /// #        0
-    /// #    }
-    /// # }
-    /// #
-    /// # impl AsNode for start {
-    /// #     fn root(&self) -> FandangoNode<'static, 'static> {
-    /// #         unimplemented!()
-    /// #     }
-    /// #
-    /// #     fn definition(&self) -> FandangoNode<'static, 'static> {
-    /// #         unimplemented!()
-    /// #     }
-    /// # }
-    /// #
-    /// # impl Node for start {
-    /// #     type Type<'program> = () where Self: 'program;
-    /// #     type TypeMut<'program> = TypeMut<'program> where Self: 'program;
-    /// #     type ChildrenRef<'program> = () where Self: 'program;
-    /// #     type ChildrenRefMut<'program> = () where Self: 'program;
-    /// #
-    /// #     fn children(&self) -> Self::ChildrenRef<'_> {
-    /// #         unimplemented!()
-    /// #     }
-    /// #
-    /// #     fn children_mut(&mut self) -> Self::ChildrenRefMut<'_> {
-    /// #         unimplemented!()
-    /// #     }
-    /// # }
-    /// pub enum TypeMut<'program> {
-    ///     start(&'program mut start),
-    ///     // other children...
-    /// }
-    ///
-    /// impl<'program> TypeMut<'program> {
-    ///     fn reborrow<'a>(&'a mut self) -> TypeMut<'a> {
-    ///         match self {
-    ///             TypeMut::start(n) => TypeMut::start(&mut *n),
-    ///             // other children...
-    ///         }
-    ///     }
-    /// }
-    /// #
-    /// # impl<'program> AsNodeMut<start> for TypeMut<'program> {
-    /// #    fn as_node_mut(&mut self) -> Option<&mut start> {
-    /// #        match self {
-    /// #            TypeMut::start(n) => Some(&mut *n),
-    /// #            // other children...
-    /// #        }
-    /// #    }
-    /// # }
-    /// #
-    /// # impl<'program> VisitableChildren<TypeMut<'program>> for TypeMut<'program> {
-    /// #     fn visit_each<V>(self, visitor: V) -> VisitResult<V, TypeMut<'program>> where V: Visitor<TypeMut<'program>, Continue=V> {
-    /// #         Ok(ControlFlow::Continue(visitor))
-    /// #     }
-    /// #
-    /// #     fn visit_each_reverse<V>(self, visitor: V) -> VisitResult<V, TypeMut<'program>> where V: Visitor<TypeMut<'program>, Continue=V> {
-    /// #         unimplemented!()
-    /// #     }
-    /// #
-    /// #     fn visit_each_from<V>(self, visitor: V, idx: usize) -> VisitResult<V, TypeMut<'program>> where V: Visitor<TypeMut<'program>, Continue=V> {
-    /// #         unimplemented!()
-    /// #     }
-    /// #
-    /// #     fn visit_each_reverse_from<V>(self, visitor: V, idx: usize) -> VisitResult<V, TypeMut<'program>> where V: Visitor<TypeMut<'program>, Continue=V> {
-    /// #         unimplemented!()
-    /// #     }
-    /// #
-    /// #     fn visit_nth<V>(self, visitor: V, idx: usize) -> MaybeVisitResult<V, TypeMut<'program>> where V: Visitor<TypeMut<'program>> {
-    /// #         unimplemented!()
-    /// #     }
-    /// # }
-    /// #
-    /// # impl<'program> From<&'program mut start> for TypeMut<'program> {
-    /// #     fn from(value: &'program mut start) -> Self {
-    /// #         Self::start(value)
-    /// #     }
-    /// # }
-    /// #
-    /// impl<'a, 'program, V> VisitWith<'a, V> for TypeMut<'program>
-    /// where
-    ///     'program: 'a,
-    /// {
-    ///     type Visited = TypeMut<'a>;
-    ///
-    ///     fn visit_with(&'a mut self, visitor: V, idx: usize) -> VisitResult<V, Self::Visited>
-    ///     where
-    ///         V: Visitor<TypeMut<'a>> {
-    ///         match self.reborrow() {
-    ///             TypeMut::start(n) => visitor.visit(n, idx),
-    ///             // other children...
-    ///         }
-    ///     }
-    /// }
-    ///
-    /// struct ToyVisitor;
-    ///
-    /// impl<T> Visitor<T> for ToyVisitor
-    /// where
-    ///     T: VisitableChildren<T>,
-    /// {
-    ///     type Continue = Self;
-    ///     type Break = Infallible;
-    ///     type Error = Infallible;
-    ///
-    ///     fn visit<'program, N>(self, node: &'program mut N, _: usize) -> VisitResult<Self, T>
-    ///     where
-    ///         N: Node<TypeMut<'program> = T>,
-    ///         T: From<&'program mut N> + AsNodeMut<N>
-    ///     {
-    ///         T::from(node).visit_each(self)
-    ///     }
-    /// }
-    ///
-    /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
-    /// // using later...
-    /// # let node = start;
-    /// let mut node: start = node; // node from generated source
-    /// let mut t = TypeMut::from(&mut node);
-    /// // we can now perform the visitation multiple times
-    /// t.visit_with(ToyVisitor, 0)?;
-    /// t.visit_with(ToyVisitor, 0)?;
-    /// t.visit_with(ToyVisitor, 0)?;
-    /// t.visit_with(ToyVisitor, 0)?;
-    /// # Ok(())
-    /// # }
-    /// ```
-    ///
-    /// This thereby informs the compiler that the visitor will not consume the node's reference.
+    /// visitor.
     type Visited;
 
     /// Perform the visit on the opaque node.
