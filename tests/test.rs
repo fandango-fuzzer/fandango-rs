@@ -14,7 +14,6 @@ mod simple {
     use alloc::vec::Vec;
     use core::error::Error;
     use core::num::NonZeroUsize;
-    use core::ops::Deref;
     use fandango::Fandango;
     use fandango_core::dynamic::{DynamicNode, DynamicSampler, HasDynamicSampler};
     use fandango_core::generation::util::Flattener;
@@ -26,7 +25,6 @@ mod simple {
         Advance, CountNodes, CountNodesWith, FindVisitor, GoToMut,
     };
     use fandango_core::visitor::write::WriteVisitor;
-    use fandango_core::visitor_chain;
     use rand::Rng;
     use rand::SeedableRng;
     use rand::rngs::StdRng;
@@ -45,7 +43,7 @@ mod simple {
         let mut dfs = None;
         let mut bfs = None;
 
-        let mut start = Simple::extract(SAMPLE).unwrap();
+        let start = Simple::extract(SAMPLE).unwrap();
         {
             let expr = start.nth::<0>();
             if let nonterminal_expr_0::variant_0(expr) = expr.nth::<0>() {
@@ -62,7 +60,7 @@ mod simple {
                         .output()
                 );
 
-                if let nonterminal_expr_0::variant_1(number) = expr.deref().nth::<0>() {
+                if let nonterminal_expr_0::variant_1(number) = expr.nth::<0>() {
                     assert_eq!(
                         "2".as_bytes(),
                         WriteVisitor::new(Vec::new())

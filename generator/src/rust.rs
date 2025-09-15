@@ -829,6 +829,7 @@ impl<'program, 'source> IntoRustSource<FandangoGenContext<'_, '_, 'program, 'sou
                 }
             }
             FandangoNode::Operator(op) => {
+                // TODO auto-resolve through box so the user doesn't have to deal with indirection
                 assert_eq!(children.len(), 1);
                 let ref_prefix = &ref_visit_prefixes[0];
                 let prefix = &visit_prefixes[0];
@@ -1178,11 +1179,11 @@ impl<'program, 'source> IntoRustSource<FandangoGenContext<'_, '_, 'program, 'sou
                     impl ::fandango::typing::Node for #name {
                         type Type<'program> = Type<'program>;
                         type TypeMut<'program> = TypeMut<'program>;
-                        type ChildrenRef<'program> = ( #( &'program #child_field_types ),*, );
-                        type ChildrenRefMut<'program> = ( #( &'program mut #child_field_types ),*, );
+                        type ChildrenRef<'program> = ( #( &'program #child_types ),*, );
+                        type ChildrenRefMut<'program> = ( #( &'program mut #child_types ),*, );
 
-                        fn children<'program>(&'program self) -> Self::ChildrenRef<'program> { (#(&self.#child_names),*,) }
-                        fn children_mut<'program>(&'program mut self) -> Self::ChildrenRefMut<'program> { (#(&mut self.#child_names),*,) }
+                        fn children<'program>(&'program self) -> Self::ChildrenRef<'program> { (#(#ref_visit_prefixes(&self.#child_names)),*,) }
+                        fn children_mut<'program>(&'program mut self) -> Self::ChildrenRefMut<'program> { (#(#visit_prefixes(&mut self.#child_names)),*,) }
                     }
 
                     impl<'program> ::fandango::visitor::VisitableChildren<Type<'program>> for &'program #name
