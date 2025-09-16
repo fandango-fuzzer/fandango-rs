@@ -3,8 +3,6 @@
 use crate::lang::FandangoNode;
 use crate::lang::{Program, Tagged};
 use crate::visitor::{VisitableChildren, VisitableChildrenMut};
-use alloc::boxed::Box;
-use core::ops::Deref;
 
 /// Denotes that this type is structured in a tree shape with an associated [`FandangoNode`]. Only
 /// to be implemented by generated code.
@@ -85,7 +83,7 @@ pub trait Node: Sized + AsNode + Discriminable + Clone {
         + PartialEq
         + PartialEq<Self::TypeMut<'program>>
         + Eq
-        + AsNodeRef<Self::Repr>
+        + AsNodeRef<Self>
         + Discriminable
     where
         Self: 'program;
@@ -99,7 +97,7 @@ pub trait Node: Sized + AsNode + Discriminable + Clone {
         + PartialEq
         + PartialEq<Self::Type<'program>>
         + Eq
-        + AsNodeMut<Self::Repr>
+        + AsNodeMut<Self>
         + Discriminable
     where
         Self: 'program;
@@ -112,77 +110,10 @@ pub trait Node: Sized + AsNode + Discriminable + Clone {
     where
         Self: 'program;
 
-    /// The actual representative of this node
-    ///
-    /// Used to disambiguate over indirected nodes (e.g., via [`Box`]) so that we can constrain
-    /// [`Node::Type`] and [`Node::TypeMut`] as strictly as possible. For generated nodes, [`Repr`]
-    /// is `Self`.
-    type Repr;
-
     /// Immutable accessors to children nodes.
     fn children(&self) -> Self::ChildrenRef<'_>;
     /// Mutable accessors to children nodes.
     fn children_mut(&mut self) -> Self::ChildrenRefMut<'_>;
-}
-
-impl<T> Structured for Box<T>
-where
-    T: Structured,
-{
-    type FandangoType = T::FandangoType;
-    const STRUCTURE: &'static Tagged<'static, Self::FandangoType> = T::STRUCTURE;
-    const ROOT: &'static Tagged<'static, Program<'static>> = T::ROOT;
-}
-
-impl<T> StaticDiscriminable for Box<T>
-where
-    T: StaticDiscriminable,
-{
-    const DISCRIMINANT: usize = T::DISCRIMINANT;
-}
-
-impl<T> Discriminable for Box<T>
-where
-    T: Discriminable,
-{
-    fn discriminant(&self) -> usize {
-        self.deref().discriminant()
-    }
-}
-
-impl<T> Node for Box<T>
-where
-    Box<T>: AsNode,
-    T: Node + Structured,
-    for<'a> <T as Node>::Type<'a>: From<&'a Box<T>> + AsNodeRef<T>,
-    for<'a> <T as Node>::TypeMut<'a>: From<&'a mut Box<T>> + AsNodeMut<T>,
-{
-    type Type<'program>
-        = T::Type<'program>
-    where
-        T: 'program;
-    type TypeMut<'program>
-        = T::TypeMut<'program>
-    where
-        T: 'program;
-    type ChildrenRef<'program>
-        = T::ChildrenRef<'program>
-    where
-        T: 'program;
-    type ChildrenRefMut<'program>
-        = T::ChildrenRefMut<'program>
-    where
-        T: 'program;
-
-    type Repr = T; // the underlying node
-
-    fn children(&self) -> Self::ChildrenRef<'_> {
-        (**self).children()
-    }
-
-    fn children_mut(&mut self) -> Self::ChildrenRefMut<'_> {
-        (**self).children_mut()
-    }
 }
 
 /// Trait which simplifies copying between [`Node::Type`] and [`Node::TypeMut`].

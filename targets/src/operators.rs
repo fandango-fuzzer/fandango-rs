@@ -219,7 +219,7 @@ pub fn crossover<'a, N, S>(
     sampler: &mut S,
 ) -> Result<bool, InvalidPath>
 where
-    N: Node<Repr = N>,
+    N: Node,
     S: Sampler<()>,
 {
     let discriminant = node.discriminant();

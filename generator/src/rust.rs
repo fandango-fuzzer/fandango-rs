@@ -191,7 +191,6 @@ where
                 type TypeMut<'program> = TypeMut<'program>;
                 type ChildrenRef<'program> = (&'program #child_name,);
                 type ChildrenRefMut<'program> = (&'program mut #child_name,);
-                type Repr = Self;
 
                 fn children<'program>(&'program self) -> Self::ChildrenRef<'program> { (&self.child_0,) }
                 fn children_mut<'program>(&'program mut self) -> Self::ChildrenRefMut<'program> { (&mut self.child_0,) }
@@ -441,6 +440,7 @@ impl<'program, 'source> IntoRustSource<FandangoGenContext<'_, '_, 'program, 'sou
             child_field_types,
             ref_visit_prefixes,
             visit_prefixes,
+            generate_prefixes,
         ) = children
             .iter()
             .zip(&child_types)
@@ -454,6 +454,7 @@ impl<'program, 'source> IntoRustSource<FandangoGenContext<'_, '_, 'program, 'sou
                             quote! { ::alloc::vec::Vec<#base> },
                             quote! {},
                             quote! {},
+                            quote! {},
                         ),
                         Operator::Option(_) => {
                             if needs_indirection.contains(&(node_weight, *child)) {
@@ -463,12 +464,14 @@ impl<'program, 'source> IntoRustSource<FandangoGenContext<'_, '_, 'program, 'sou
                                     quote! { ::core::option::Option<::alloc::boxed::Box<#base>> },
                                     quote! { ::core::ops::Deref::deref },
                                     quote! { ::core::ops::DerefMut::deref_mut },
+                                    quote! { ::alloc::boxed::Box::new },
                                 )
                             } else {
                                 (
                                     quote! { ::core::option::Option<&'a #base> },
                                     quote! { ::core::option::Option<&'a mut #base> },
                                     quote! { ::core::option::Option<#base> },
+                                    quote! {},
                                     quote! {},
                                     quote! {},
                                 )
@@ -486,6 +489,7 @@ impl<'program, 'source> IntoRustSource<FandangoGenContext<'_, '_, 'program, 'sou
                                 quote! { ::alloc::boxed::Box<#base> },
                                 quote! { ::core::ops::Deref::deref },
                                 quote! { ::core::ops::DerefMut::deref_mut },
+                                quote! { ::alloc::boxed::Box::new },
                             )
                         } else {
                             (
@@ -494,12 +498,13 @@ impl<'program, 'source> IntoRustSource<FandangoGenContext<'_, '_, 'program, 'sou
                                 base,
                                 quote! {},
                                 quote! {},
+                                quote! {},
                             )
                         }
                     }
                 }
             })
-            .collect::<(Vec<_>, Vec<_>, Vec<_>, Vec<_>, Vec<_>)>();
+            .collect::<(Vec<_>, Vec<_>, Vec<_>, Vec<_>, Vec<_>, Vec<_>)>();
 
         match node_weight {
             FandangoNode::String(orig) => {
@@ -525,7 +530,6 @@ impl<'program, 'source> IntoRustSource<FandangoGenContext<'_, '_, 'program, 'sou
                         type TypeMut<'program> = TypeMut<'program>;
                         type ChildrenRef<'program> = (&'static [u8],);
                         type ChildrenRefMut<'program> = (&'static [u8],);
-                        type Repr = Self;
 
                         fn children<'program>(&'program self) -> Self::ChildrenRef<'program> { (#s.as_slice(),) }
                         fn children_mut<'program>(&'program mut self) -> Self::ChildrenRefMut<'program> { (#s.as_slice(),) }
@@ -660,7 +664,6 @@ impl<'program, 'source> IntoRustSource<FandangoGenContext<'_, '_, 'program, 'sou
                         type TypeMut<'program> = TypeMut<'program>;
                         type ChildrenRef<'program> = &'program Self;
                         type ChildrenRefMut<'program> = &'program mut Self;
-                        type Repr = Self;
 
                         fn children<'program>(&'program self) -> Self::ChildrenRef<'program> {
                             self
@@ -779,7 +782,7 @@ impl<'program, 'source> IntoRustSource<FandangoGenContext<'_, '_, 'program, 'sou
                     {
                         fn generate_default(sampler: &mut S, with: &mut G, depth: usize) -> Self {
                             match <S as ::fandango::generation::Sampler<Self>>::sample_alternative(sampler, #count) {
-                                #(#indices => Self::#child_variants(::fandango::generation::Generated::generate(sampler, with, depth + 1))),*,
+                                #(#indices => Self::#child_variants(#generate_prefixes(::fandango::generation::Generated::generate(sampler, with, depth + 1)))),*,
                                 _ => unreachable!()
                             }
                         }
@@ -876,7 +879,7 @@ impl<'program, 'source> IntoRustSource<FandangoGenContext<'_, '_, 'program, 'sou
                     }
                     Operator::Option(_) => {
                         quote! {
-                            <S as ::fandango::generation::Sampler<Self>>::sample_optional(sampler).then(|| ::fandango::generation::Generated::generate(sampler, with, depth + 1))
+                            <S as ::fandango::generation::Sampler<Self>>::sample_optional(sampler).then(|| #(#generate_prefixes)*(::fandango::generation::Generated::generate(sampler, with, depth + 1)))
                         }
                     }
                     Operator::Repeat(_, start, end) => {
@@ -967,7 +970,6 @@ impl<'program, 'source> IntoRustSource<FandangoGenContext<'_, '_, 'program, 'sou
                         type TypeMut<'program> = TypeMut<'program>;
                         type ChildrenRef<'program> = &'program #child_type;
                         type ChildrenRefMut<'program> = &'program mut #child_type;
-                        type Repr = Self;
 
                         fn children<'program>(&'program self) -> Self::ChildrenRef<'program> { &self.child_0 }
                         fn children_mut<'program>(&'program mut self) -> Self::ChildrenRefMut<'program> { &mut self.child_0 }
@@ -1185,7 +1187,6 @@ impl<'program, 'source> IntoRustSource<FandangoGenContext<'_, '_, 'program, 'sou
                         type TypeMut<'program> = TypeMut<'program>;
                         type ChildrenRef<'program> = ( #( &'program #child_types ),*, );
                         type ChildrenRefMut<'program> = ( #( &'program mut #child_types ),*, );
-                        type Repr = Self;
 
                         fn children<'program>(&'program self) -> Self::ChildrenRef<'program> { (#(#ref_visit_prefixes(&self.#child_names)),*,) }
                         fn children_mut<'program>(&'program mut self) -> Self::ChildrenRefMut<'program> { (#(#visit_prefixes(&mut self.#child_names)),*,) }
@@ -1344,7 +1345,7 @@ impl<'program, 'source> IntoRustSource<FandangoGenContext<'_, '_, 'program, 'sou
                     {
                         fn generate_default(sampler: &mut S, with: &mut G, depth: usize) -> Self {
                             Self {
-                                #( #child_names: ::fandango::generation::Generated::generate(sampler, with, depth + 1) ),*,
+                                #( #child_names: #generate_prefixes(::fandango::generation::Generated::generate(sampler, with, depth + 1)) ),*,
                             }
                         }
                     }

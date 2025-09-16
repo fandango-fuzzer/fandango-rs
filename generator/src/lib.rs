@@ -341,13 +341,11 @@ pub fn derive_fandango_or_emit_error(
                 trait TypeGenerator<S>
                 where
                     #(Self: ::fandango::generation::GeneratorTuple<#node_names, S>),*,
-                    #(Self: ::fandango::generation::GeneratorTuple<::alloc::boxed::Box<#node_names>, S>),*
                 {}
 
                 impl<S, G> TypeGenerator<S> for G
                 where
                     #(G: ::fandango::generation::GeneratorTuple<#node_names, S>),*,
-                    #(G: ::fandango::generation::GeneratorTuple<::alloc::boxed::Box<#node_names>, S>),*
                 {}
 
                 #[derive(Clone, Debug, Eq, PartialEq)]

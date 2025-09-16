@@ -460,8 +460,6 @@ impl Node for DynamicNode {
     where
         Self: 'program;
 
-    type Repr = Self;
-
     fn children(&self) -> Self::ChildrenRef<'_> {
         &self.content
     }
