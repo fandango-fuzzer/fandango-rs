@@ -40,10 +40,7 @@ impl<G, N, S, SM> Mutator<DerivationTree<N>, S> for AdvanceMutator<SM, G>
 where
     N: Node,
     // boilerplate for CountNodes and Advance
-    for<'a> N::TypeMut<'a>: InPlaceGenerated<SM, G>
-        + VisitableChildren<N::TypeMut<'a>>
-        + From<&'a mut N>
-        + AsNodeMut<N>,
+    for<'a> N::TypeMut<'a>: InPlaceGenerated<SM, G>,
     SM: Sampler<N>,
     S: HasRand + HasMetadata,
 {

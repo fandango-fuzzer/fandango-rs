@@ -403,7 +403,6 @@ impl<'a, N> GoTo for &'a N
 where
     N: Node + 'a,
     GoToVisitor: Visitor<N::Type<'a>, Break = N::Type<'a>, Error = InvalidPath>,
-    N::Type<'a>: From<&'a N> + AsNodeRef<N>,
 {
     type Value = N::Type<'a>;
 
@@ -512,7 +511,6 @@ impl<'a, N> CountNodes<'a> for N
 where
     N: Node + 'a,
     NodeCountVisitor: Visitor<N::Type<'a>, Continue = NodeCountVisitor, Error = InvalidPath>,
-    N::Type<'a>: From<&'a N> + AsNodeRef<N>,
 {
     fn count_nodes(&'a self) -> usize {
         NodeCountVisitor::new()

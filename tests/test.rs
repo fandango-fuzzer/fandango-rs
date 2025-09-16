@@ -387,6 +387,7 @@ mod xml {
     use core::num::NonZeroUsize;
     use fandango_core::dynamic::{DynamicNode, DynamicSampler};
     use fandango_core::generation::{DefaultGenerated, Generated};
+    use fandango_core::typing::DowncastMut;
     use fandango_core::typing::{AsNodeMut, AsStaticNode, Node, OpaqueMut, Structured};
     use fandango_core::visitor::assignment::AssignmentVisitor;
     use fandango_core::visitor::kpath::{KPathUpdate, KPaths};
@@ -437,9 +438,9 @@ mod xml {
     where
         N1: Node,
         N2: Node<TypeMut<'a> = N1::TypeMut<'a>>,
-        N1::TypeMut<'a>: From<&'a mut N1> + AsNodeMut<N2>,
+        N1::TypeMut<'a>: AsNodeMut<N2>,
     {
-        core::mem::swap(n1.opaque_mut().as_node_mut().unwrap(), n2);
+        core::mem::swap(n1.opaque_mut().downcast_mut().unwrap(), n2);
     }
 
     #[test]

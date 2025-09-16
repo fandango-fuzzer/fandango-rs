@@ -47,10 +47,7 @@ impl<T> SwapVisitor<T> {
     }
 }
 
-impl<T> VisitorMut<T> for SwapVisitor<T>
-where
-    T: Discriminable,
-{
+impl<T> VisitorMut<T> for SwapVisitor<T> {
     type Continue = Infallible;
     type Break = T;
     type Error = T;

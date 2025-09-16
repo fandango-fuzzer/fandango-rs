@@ -25,7 +25,6 @@ impl<N, S> Scheduler<DerivationTree<N>, S> for KPathScheduler
 where
     N: Node,
     S: HasMetadata + HasTestcase<DerivationTree<N>> + HasCorpus<DerivationTree<N>>,
-    for<'a> N::TypeMut<'a>: From<&'a mut N> + AsNodeMut<N> + VisitableChildren<N::TypeMut<'a>>,
 {
     fn on_add(&mut self, state: &mut S, id: CorpusId) -> Result<(), Error> {
         let mut testcase = state.testcase_mut(id)?;

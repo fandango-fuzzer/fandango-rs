@@ -134,7 +134,6 @@ pub trait Opaque {
 impl<'a, N> Opaque for &'a N
 where
     N: Node,
-    <N as Node>::Type<'a>: From<&'a N>,
 {
     type Returned = <N as Node>::Type<'a>;
 

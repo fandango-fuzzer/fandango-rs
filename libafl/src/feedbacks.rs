@@ -51,7 +51,6 @@ impl<N, S> StateInitializer<S> for KPathFeedback<N>
 where
     N: Node + Structured + 'static,
     S: HasMetadata,
-    for<'a> N::TypeMut<'a>: DiscriminantLookup,
 {
     fn init_state(&mut self, state: &mut S) -> Result<(), Error> {
         let kpaths = KPaths::new::<N::TypeMut<'static>>(self.k, N::ROOT.inner());

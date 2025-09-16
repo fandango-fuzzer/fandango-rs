@@ -35,7 +35,7 @@ mod defs {
     where
         B: BenchmarkSuite<StdSampler, StdGenerator>,
         // boilerplate since we're doing this generically
-        B::Start: Node<Repr = B::Start> + Clone + Ord + AsStaticNode,
+        B::Start: Node + Clone + Ord + AsStaticNode,
         for<'a> <B::Start as Node>::TypeMut<'a>: InPlaceGenerated<
                 StdRng,
                 tuple_list_type!(DepthLimiter<HashMap<FandangoNode<'static, 'static>, Vec<usize>>>),
