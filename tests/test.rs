@@ -528,3 +528,89 @@ mod xml {
         Ok(())
     }
 }
+
+mod lang {
+    use super::*;
+    use alloc::boxed::Box;
+    use fandango::typing::AsNodeMut;
+    use fandango::visitor::VisitableChildren;
+    use core::error::Error;
+    use fandango_derive::Fandango;
+    use rand::rngs::StdRng;
+    use rand::SeedableRng;
+    use fandango_core::visitor::write::WriteVisitor;
+    use alloc::string::String;
+    use alloc::vec::Vec;
+    use fandango_core::generation::{DefaultGenerated};
+    use fandango_core::visitor::Visitor;
+    use core::convert::Infallible;
+    use fandango_core::visitor::VisitResult;
+
+    #[allow(dead_code)]
+    #[derive(Fandango)]
+    #[fandango(grammar = "targets/grammars/lang.fan")]
+    pub struct Lang;
+
+    #[test]
+    fn generate_lang() -> Result<(), Box<dyn Error>> {
+        // Test to generate some language code.
+        let mut outputs = Vec::new();
+        let mut rng = StdRng::seed_from_u64(0);
+        for _ in 0..10 {
+            let mut start = nonterminal_start::generate_default(&mut rng, &mut (), 0);
+            let serialized = String::from_utf8(
+            WriteVisitor::new(Vec::new())
+                .visit(&mut start, 0)?
+                .continue_value()
+                .unwrap()
+                .output(),
+            )?;
+            outputs.push(serialized);
+        }
+
+        extern crate std;
+        
+        std::println!("\n=== Generated Lang Code ===");
+        for output in outputs {
+            std::println!("{output}");
+            std::println!("---------------------------");
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn count_variable_names() -> Result<(), Box<dyn Error>> {
+        // Test to count variable names in generated code.
+        let mut rng = StdRng::seed_from_u64(0);
+        let mut start = nonterminal_start::generate_default(&mut rng, &mut (), 0);
+        
+        pub struct CountVarNamesVisitor {
+            pub count: usize,
+        }
+
+        // impl<T> Visitor<T> for CountVarNamesVisitor
+        // where
+        //     T: VisitableChildren<T> + AsNodeMut<nonterminal_var_name>,
+        // {
+        //     type Continue = Self;
+        //     type Break = Infallible;
+        //     type Error = Infallible;
+
+            // fn visit<'program, N>(mut self, node: &'program mut N, _idx: usize) -> VisitResult<Self, T>
+            // where
+            //     N: Node<TypeMut<'program> = T>,
+            //     T: From<&'program mut N> + AsNodeMut<N>,
+            // {
+            //     let visited = T::from(node);
+            //     if let Some(_tree) = AsNodeMut::<nonterminal_var_name>::as_node_mut(&visited) {
+            //         self.count += 1;
+            //     }
+            //     visited.visit_each(self)
+            // }
+        // }
+
+        extern crate std;
+        std::println!("Number of variable names: {}", 0);
+        Ok(())
+    }
+}

@@ -12,6 +12,7 @@ csv = []
 rest = []
 scriptsizec = []
 xml = []
+lang = []
 
 static_defs = []
 
