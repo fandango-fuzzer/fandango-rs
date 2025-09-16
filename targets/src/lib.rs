@@ -7,38 +7,13 @@
 
 extern crate alloc;
 
-#[allow(unused)]
-macro_rules! maybe_deref {
-    ($value: ident) => {
-        loop {
-            #[cfg(no_opt_indirect)]
-            {
-                break &**$value;
-            }
-            #[cfg(not(no_opt_indirect))]
-            {
-                break $value;
-            }
-        }
-    };
-}
+use alloc::collections::VecDeque;
+use alloc::vec::Vec;
 
-#[allow(unused)]
-macro_rules! maybe_deref_mut {
-    ($value: ident) => {
-        loop {
-            #[cfg(no_opt_indirect)]
-            {
-                break &mut **$value;
-            }
-            #[cfg(not(no_opt_indirect))]
-            {
-                break $value;
-            }
-        }
-    };
-}
+pub mod operators;
 
+#[cfg(feature = "lang")]
+pub mod lang;
 #[cfg(feature = "csv")]
 pub mod csv;
 #[cfg(feature = "rest")]
