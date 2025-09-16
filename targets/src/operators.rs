@@ -18,7 +18,8 @@ use fandango::dynamic::{DefinitionOf, HasDynamicSampler};
 use fandango::generation::{Generated, Generator, GeneratorTuple, Sampler};
 use fandango::graph::{IntoGraph, shortest_path};
 use fandango::lang::{FandangoNode, Program};
-use fandango::typing::{AsNodeRef, Node, StaticDiscriminable};
+use fandango::typing::{AsNodeRef, AssignFrom, Discriminable, Node, StaticDiscriminable};
+use fandango::visitor::error::InvalidPath;
 use fandango::visitor::{VisitResult, VisitableChildren, Visitor};
 use fandango::{impl_definition_of, impl_has_dynamic_sampler};
 use hashbrown::HashMap;
@@ -211,41 +212,33 @@ where
     }
 }
 
-/// Crossover a node, FANDANGO-style.
-///
-/// Due to limitations of the Rust type system, we have to keep this as a macro for now. :(
-#[macro_export]
-macro_rules! crossover {
-    ($mutated:expr, $base:expr, $choice:ident, $sampler:expr) => {{
-        (|| {
-            let idx = $choice.pop_front().unwrap();
-            let depth = $choice.len();
-            let mut node =
-                ::fandango::visitor::navigation::GoToMut::go_to_mut($mutated, idx, $choice)?;
+/// Crossover operator, which selects a random (matching) subtree from `base` into `node`
+pub fn crossover<'a, N, S>(
+    node: &mut N::TypeMut<'a>,
+    base: &'a N,
+    sampler: &mut S,
+) -> Result<bool, InvalidPath>
+where
+    N: Node<Repr = N>,
+    S: Sampler<()>,
+{
+    let discriminant = node.discriminant();
 
-            use ::fandango::typing::Discriminable;
-            let discriminant = node.discriminant();
+    let mut base_choices = NodeScan::new(discriminant)
+        .visit(base, 0)
+        .unwrap()
+        .continue_value()
+        .unwrap()
+        .matches();
+    if base_choices.is_empty() {
+        return Ok(false);
+    }
 
-            let mut base_choices = $crate::operators::NodeScan::new(discriminant)
-                .visit($base, 0)
-                .unwrap()
-                .continue_value()
-                .unwrap()
-                .matches();
-            if base_choices.is_empty() {
-                return Result::<bool, ::fandango::visitor::error::InvalidPath>::Ok(false);
-            }
+    let base = base_choices.swap_remove(sampler.sample() % base_choices.len());
+    let success = node.assign_from(base);
+    debug_assert!(success);
 
-            let mut base = base_choices.swap_remove(
-                ::fandango::generation::Sampler::<()>::sample($sampler) % base_choices.len(),
-            );
-
-            let success = ::fandango::typing::AssignFrom::assign_from(&mut node, base);
-            debug_assert!(success);
-
-            Ok(true)
-        })()
-    }};
+    Ok(true)
 }
 
 /// A simple visitor which counts nonterminals, for use in benchmarking against FANDANGO.

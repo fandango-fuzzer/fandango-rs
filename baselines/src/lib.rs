@@ -20,12 +20,11 @@ mod defs {
     use fandango::generation::{Generated, InPlaceGenerated};
     use fandango::lang::FandangoNode;
     use fandango::tuple_list::{tuple_list, tuple_list_type};
-    use fandango::typing::{AsNode, AsNodeMut, AsNodeRef, AsStaticNode, Node};
+    use fandango::typing::{AsNode, AsStaticNode, Node};
+    use fandango::visitor::Visitor;
     use fandango::visitor::navigation::{Advance, CountNodes, GoToMut};
     use fandango::visitor::write::WriteVisitor;
-    use fandango::visitor::{VisitableChildren, VisitableChildrenMut, Visitor};
-    use fandango_targets::crossover;
-    use fandango_targets::operators::{DepthLimiter, NonterminalVisitor};
+    use fandango_targets::operators::{DepthLimiter, NonterminalVisitor, crossover};
     use hashbrown::HashMap;
     use rand::rngs::StdRng;
     use rand::seq::IndexedRandom;
@@ -36,14 +35,8 @@ mod defs {
     where
         B: BenchmarkSuite<StdSampler, StdGenerator>,
         // boilerplate since we're doing this generically
-        B::Start: Node + Clone + Ord + AsStaticNode,
-        for<'a> <B::Start as Node>::Type<'a>: VisitableChildren<<B::Start as Node>::Type<'a>>
-            + From<&'a B::Start>
-            + AsNodeRef<B::Start>,
-        for<'a> <B::Start as Node>::TypeMut<'a>: VisitableChildrenMut<<B::Start as Node>::TypeMut<'a>>
-            + From<&'a mut B::Start>
-            + AsNodeMut<B::Start>
-            + InPlaceGenerated<
+        B::Start: Node<Repr = B::Start> + Clone + Ord + AsStaticNode,
+        for<'a> <B::Start as Node>::TypeMut<'a>: InPlaceGenerated<
                 StdRng,
                 tuple_list_type!(DepthLimiter<HashMap<FandangoNode<'static, 'static>, Vec<usize>>>),
             >,
@@ -284,11 +277,13 @@ mod defs {
 
                         (sample, other, choice, global.clone())
                     },
-                    |(mut value, base, choice, mut local)| {
-                        B::crossover(
+                    |(mut value, base, mut choice, mut local)| {
+                        assert_eq!(choice.pop_front(), Some(0));
+                        let mut value = value.go_to_mut(0, choice).expect("Must be a valid path");
+
+                        crossover(
                             black_box(&mut value),
                             black_box(&base),
-                            black_box(choice),
                             black_box(&mut local),
                         )
                     },
@@ -333,8 +328,11 @@ mod defs {
 
                         (sample, other, choice, global.clone())
                     },
-                    |(mut value, mut base, mut choice, mut local)| {
-                        crossover!(&mut value, &mut base, choice, &mut local)
+                    |(mut value, base, mut choice, mut local)| {
+                        assert_eq!(choice.pop_front(), Some(0));
+                        let mut value = value.go_to_mut(0, choice).expect("Must be a valid path");
+
+                        crossover(&mut value, &base, &mut local)
                     },
                     BatchSize::SmallInput,
                 )

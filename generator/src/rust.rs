@@ -191,6 +191,7 @@ where
                 type TypeMut<'program> = TypeMut<'program>;
                 type ChildrenRef<'program> = (&'program #child_name,);
                 type ChildrenRefMut<'program> = (&'program mut #child_name,);
+                type Repr = Self;
 
                 fn children<'program>(&'program self) -> Self::ChildrenRef<'program> { (&self.child_0,) }
                 fn children_mut<'program>(&'program mut self) -> Self::ChildrenRefMut<'program> { (&mut self.child_0,) }
@@ -524,6 +525,7 @@ impl<'program, 'source> IntoRustSource<FandangoGenContext<'_, '_, 'program, 'sou
                         type TypeMut<'program> = TypeMut<'program>;
                         type ChildrenRef<'program> = (&'static [u8],);
                         type ChildrenRefMut<'program> = (&'static [u8],);
+                        type Repr = Self;
 
                         fn children<'program>(&'program self) -> Self::ChildrenRef<'program> { (#s.as_slice(),) }
                         fn children_mut<'program>(&'program mut self) -> Self::ChildrenRefMut<'program> { (#s.as_slice(),) }
@@ -658,6 +660,7 @@ impl<'program, 'source> IntoRustSource<FandangoGenContext<'_, '_, 'program, 'sou
                         type TypeMut<'program> = TypeMut<'program>;
                         type ChildrenRef<'program> = &'program Self;
                         type ChildrenRefMut<'program> = &'program mut Self;
+                        type Repr = Self;
 
                         fn children<'program>(&'program self) -> Self::ChildrenRef<'program> {
                             self
@@ -964,6 +967,7 @@ impl<'program, 'source> IntoRustSource<FandangoGenContext<'_, '_, 'program, 'sou
                         type TypeMut<'program> = TypeMut<'program>;
                         type ChildrenRef<'program> = &'program #child_type;
                         type ChildrenRefMut<'program> = &'program mut #child_type;
+                        type Repr = Self;
 
                         fn children<'program>(&'program self) -> Self::ChildrenRef<'program> { &self.child_0 }
                         fn children_mut<'program>(&'program mut self) -> Self::ChildrenRefMut<'program> { &mut self.child_0 }
@@ -1181,6 +1185,7 @@ impl<'program, 'source> IntoRustSource<FandangoGenContext<'_, '_, 'program, 'sou
                         type TypeMut<'program> = TypeMut<'program>;
                         type ChildrenRef<'program> = ( #( &'program #child_types ),*, );
                         type ChildrenRefMut<'program> = ( #( &'program mut #child_types ),*, );
+                        type Repr = Self;
 
                         fn children<'program>(&'program self) -> Self::ChildrenRef<'program> { (#(#ref_visit_prefixes(&self.#child_names)),*,) }
                         fn children_mut<'program>(&'program mut self) -> Self::ChildrenRefMut<'program> { (#(#visit_prefixes(&mut self.#child_names)),*,) }

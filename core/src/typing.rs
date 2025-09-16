@@ -85,6 +85,8 @@ pub trait Node: Sized + AsNode + Discriminable + Clone {
         + PartialEq
         + PartialEq<Self::TypeMut<'program>>
         + Eq
+        + AsNodeRef<Self::Repr>
+        + Discriminable
     where
         Self: 'program;
     /// An enum which describes all possible mutable nodes, and which may be visited with either
@@ -97,6 +99,8 @@ pub trait Node: Sized + AsNode + Discriminable + Clone {
         + PartialEq
         + PartialEq<Self::Type<'program>>
         + Eq
+        + AsNodeMut<Self::Repr>
+        + Discriminable
     where
         Self: 'program;
     /// The type which references each child individually.
@@ -107,6 +111,13 @@ pub trait Node: Sized + AsNode + Discriminable + Clone {
     type ChildrenRefMut<'program>
     where
         Self: 'program;
+
+    /// The actual representative of this node
+    ///
+    /// Used to disambiguate over indirected nodes (e.g., via [`Box`]) so that we can constrain
+    /// [`Node::Type`] and [`Node::TypeMut`] as strictly as possible. For generated nodes, [`Repr`]
+    /// is `Self`.
+    type Repr;
 
     /// Immutable accessors to children nodes.
     fn children(&self) -> Self::ChildrenRef<'_>;
@@ -143,8 +154,8 @@ impl<T> Node for Box<T>
 where
     Box<T>: AsNode,
     T: Node + Structured,
-    for<'a> <T as Node>::Type<'a>: From<&'a Box<T>>,
-    for<'a> <T as Node>::TypeMut<'a>: From<&'a mut Box<T>>,
+    for<'a> <T as Node>::Type<'a>: From<&'a Box<T>> + AsNodeRef<T>,
+    for<'a> <T as Node>::TypeMut<'a>: From<&'a mut Box<T>> + AsNodeMut<T>,
 {
     type Type<'program>
         = T::Type<'program>
@@ -162,6 +173,8 @@ where
         = T::ChildrenRefMut<'program>
     where
         T: 'program;
+
+    type Repr = T; // the underlying node
 
     fn children(&self) -> Self::ChildrenRef<'_> {
         (**self).children()

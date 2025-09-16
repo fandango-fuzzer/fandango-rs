@@ -27,7 +27,7 @@ mod static_defs {
     use common::{BenchmarkSuite, StdGenerator, StdSampler};
     use fandango::generation::Generated;
     use fandango::visitor::Visitor;
-    use fandango_targets::{Checker, crossover, rest};
+    use fandango_targets::{Checker, rest};
 
     impl BenchmarkSuite<StdSampler, StdGenerator> for Benchmark {
         type Start = rest::nonterminal_start;
@@ -51,15 +51,6 @@ mod static_defs {
                 .continue_value()
                 .unwrap()
                 .violations()
-        }
-
-        fn crossover(
-            item: &mut Self::Start,
-            other: &Self::Start,
-            mut choice: VecDeque<usize>,
-            sampler: &mut StdSampler,
-        ) -> bool {
-            crossover!(item, other, choice, sampler).unwrap()
         }
     }
 }

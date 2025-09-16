@@ -460,12 +460,26 @@ impl Node for DynamicNode {
     where
         Self: 'program;
 
+    type Repr = Self;
+
     fn children(&self) -> Self::ChildrenRef<'_> {
         &self.content
     }
 
     fn children_mut(&mut self) -> Self::ChildrenRefMut<'_> {
         &mut self.content
+    }
+}
+
+impl Discriminable for &'_ DynamicNode {
+    fn discriminant(&self) -> usize {
+        (**self).discriminant()
+    }
+}
+
+impl Discriminable for &'_ mut DynamicNode {
+    fn discriminant(&self) -> usize {
+        (**self).discriminant()
     }
 }
 
@@ -734,11 +748,5 @@ impl<'a, V> VisitWithMut<'a, V> for &'a mut DynamicNode {
         V: VisitorMut<Self::Visited>,
     {
         visitor.visit_mut(self, idx)
-    }
-}
-
-impl Discriminable for &'_ mut DynamicNode {
-    fn discriminant(&self) -> usize {
-        DynamicNode::discriminant(self)
     }
 }
