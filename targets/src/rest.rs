@@ -35,7 +35,6 @@ mod defs {
 
 #[cfg(feature = "static_defs")]
 mod defs {
-    use crate::Checker;
     use alloc::collections::VecDeque;
     use alloc::vec::Vec;
     use core::convert::Infallible;
@@ -45,6 +44,7 @@ mod defs {
     use fandango::typing::{AsNodeRef, Downcast, Node, Nth, Opaque};
     use fandango::visitor::write::WriteVisitor;
     use fandango::visitor::{VisitResult, VisitableChildren, Visitor};
+    use fandango_runtime::operators::Checker;
     use hashbrown::HashSet;
 
     /// Base for the REST grammar stored in rest.fan.
@@ -185,7 +185,7 @@ mod defs {
             N: Node<Type<'program> = T>,
             T: From<&'program N> + AsNodeRef<N>,
         {
-            let visited = T::from(node);
+            let visited = node.opaque();
             if let Some(label) = visited.downcast::<nonterminal_label>() {
                 self.labels
                     .insert(label.nth::<0>().nth::<1>().deref().clone());

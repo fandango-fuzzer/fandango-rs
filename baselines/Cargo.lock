@@ -410,6 +410,7 @@ version = "0.1.0"
 dependencies = [
  "embedded-io",
  "fandango",
+ "fandango-runtime",
  "hashbrown 0.16.0",
 ]
 

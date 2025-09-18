@@ -26,7 +26,6 @@ mod defs {
 
 #[cfg(feature = "static_defs")]
 mod defs {
-    use crate::Checker;
     use alloc::collections::VecDeque;
     use alloc::vec::Vec;
     use core::convert::Infallible;
@@ -34,6 +33,7 @@ mod defs {
     use fandango::Fandango;
     use fandango::typing::{AsNodeRef, Downcast, Node, Nth, Opaque};
     use fandango::visitor::{VisitResult, VisitableChildren, Visitor};
+    use fandango_runtime::operators::Checker;
     use hashbrown::HashSet;
 
     /// Base for the ScriptSizeC grammar stored in ssc.fan.
@@ -59,7 +59,10 @@ mod defs {
         }
     }
 
-    impl<S> Checker for ConstraintVisitor<S> {
+    impl<S> Checker for ConstraintVisitor<S>
+    where
+        S: Default,
+    {
         fn violations(self) -> Vec<VecDeque<usize>> {
             self.violations
         }

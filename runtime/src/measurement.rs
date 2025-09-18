@@ -1,7 +1,8 @@
-use crate::operators::CheckVisitor;
+use crate::operators::Checker;
 use alloc::collections::VecDeque;
 use alloc::vec::Vec;
 use core::convert::Infallible;
+use core::marker::PhantomData;
 use core::ops::ControlFlow;
 use core::slice;
 use either::Either;
@@ -148,27 +149,28 @@ where
 }
 
 pub struct ViolationFitness<V> {
-    visitor: V,
+    phantom: PhantomData<V>,
 }
 
 impl<V> ViolationFitness<V> {
-    pub fn new(visitor: V) -> Self {
-        Self { visitor }
+    pub fn new() -> Self {
+        Self {
+            phantom: PhantomData,
+        }
     }
 }
 
 impl<'a, N, V> FitnessMeasurer<'a, N> for ViolationFitness<V>
 where
     N: Node + 'a,
-    V: CheckVisitor<N::Type<'a>>,
+    V: Visitor<N::Type<'a>, Break = Infallible, Continue = V> + Checker,
 {
     type Value = SimpleMeasurement;
     type Error = Either<InvalidPath, <V as Visitor<N::Type<'a>>>::Error>;
 
     fn check(&mut self, node: &'a N) -> Result<Violations, Self::Error> {
         Ok(Violations::new(
-            self.visitor
-                .clone()
+            V::default()
                 .visit(node, 0)
                 .map_err(|e| Either::Right(e))?
                 .continue_value()

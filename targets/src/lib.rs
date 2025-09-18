@@ -7,9 +7,6 @@
 
 extern crate alloc;
 
-use alloc::collections::VecDeque;
-use alloc::vec::Vec;
-
 #[cfg(feature = "csv")]
 pub mod csv;
 #[cfg(feature = "rest")]
@@ -18,9 +15,3 @@ pub mod rest;
 pub mod scriptsizec;
 #[cfg(feature = "xml")]
 pub mod xml;
-
-/// Trait for visitors which collect violations of a given constraint.
-pub trait Checker {
-    /// Consume the checker and collect the violations.
-    fn violations(self) -> Vec<VecDeque<usize>>;
-}

@@ -270,10 +270,12 @@ where
         if matches!(node.definition(), FandangoNode::Nonterminal(_)) {
             self.count += 1;
         }
-        T::from(node).visit_each(self)
+        node.opaque().visit_each(self)
     }
 }
 
-pub trait CheckVisitor<T>: Clone + Visitor<T, Continue = Self, Break = Infallible> {
+/// Trait for visitors which collect violations of a given constraint.
+pub trait Checker: Default {
+    /// Consume the checker and collect the violations.
     fn violations(self) -> Vec<VecDeque<usize>>;
 }

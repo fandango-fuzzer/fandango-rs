@@ -22,7 +22,6 @@ mod defs {
 
 #[cfg(feature = "static_defs")]
 mod defs {
-    use crate::Checker;
     use alloc::collections::VecDeque;
     use alloc::vec::Vec;
     use core::convert::Infallible;
@@ -30,10 +29,13 @@ mod defs {
     use core::ops::ControlFlow;
     use fandango::Fandango;
     use fandango::generation::Generated;
-    use fandango::typing::{AsNodeMut, AsNodeRef, ChildAccessor, Downcast, Node, Nth, Opaque};
+    use fandango::typing::{
+        AsNodeMut, AsNodeRef, ChildAccessor, Downcast, Node, Nth, Opaque, OpaqueMut,
+    };
     use fandango::visitor::{
         VisitMutResult, VisitResult, VisitableChildren, VisitableChildrenMut, Visitor, VisitorMut,
     };
+    use fandango_runtime::operators::Checker;
 
     /// Base for the CSV grammar stored in csv.fan.
     #[derive(Fandango)]
@@ -167,7 +169,7 @@ mod defs {
             N: Node<TypeMut<'program> = T>,
             T: From<&'program mut N> + AsNodeMut<N>,
         {
-            let mut visited = T::from(node);
+            let mut visited = node.opaque_mut();
             if let Some(tree) = AsNodeMut::<nonterminal_csv_records>::as_node_mut(&mut visited) {
                 if let Some(seq) = tree.child_mut().nth_mut::<0>() {
                     let (base, mut remaining) = seq.children_mut();

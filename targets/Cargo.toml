@@ -16,12 +16,11 @@ xml = []
 static_defs = []
 
 [dev-dependencies]
-fandango-runtime = { path = "../runtime" }
-
 rand = { workspace = true, features = ["default"] }
 
 [dependencies]
 fandango = { path = ".." }
+fandango-runtime = { path = "../runtime" }
 
 embedded-io.workspace = true
 hashbrown.workspace = true

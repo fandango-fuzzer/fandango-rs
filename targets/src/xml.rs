@@ -24,7 +24,6 @@ mod defs {
 
 #[cfg(feature = "static_defs")]
 mod defs {
-    use crate::Checker;
     use alloc::borrow::ToOwned;
     use alloc::collections::{BTreeSet, VecDeque};
     use alloc::vec::Vec;
@@ -38,6 +37,7 @@ mod defs {
     use fandango::visitor::{
         VisitMutResult, VisitResult, VisitableChildren, VisitableChildrenMut, Visitor, VisitorMut,
     };
+    use fandango_runtime::operators::Checker;
 
     /// Base for the XML grammar stored in xml.fan.
     #[derive(Fandango)]
@@ -170,7 +170,7 @@ mod defs {
             N: Node<TypeMut<'program> = T>,
             T: From<&'program mut N> + AsNodeMut<N>,
         {
-            let mut visited = T::from(node);
+            let mut visited = node.opaque_mut();
             if let Some(tree) = visited.downcast_mut::<nonterminal_xml_tree>() {
                 let (open, _, close) = tree.child_mut().children_mut();
                 let id = match open.child() {
