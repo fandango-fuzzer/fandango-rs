@@ -30,7 +30,7 @@ mod defs {
     use core::ops::ControlFlow;
     use fandango::Fandango;
     use fandango::generation::Generated;
-    use fandango::typing::{AsNodeMut, AsNodeRef, ChildAccessor, Downcast, Node, Nth};
+    use fandango::typing::{AsNodeMut, AsNodeRef, ChildAccessor, Downcast, Node, Nth, Opaque};
     use fandango::visitor::{
         VisitMutResult, VisitResult, VisitableChildren, VisitableChildrenMut, Visitor, VisitorMut,
     };
@@ -91,7 +91,7 @@ mod defs {
             T: From<&'program N> + AsNodeRef<N>,
         {
             self.path.push_back(idx);
-            let visited = T::from(node);
+            let visited = node.opaque();
             if let Some(tree) = visited.downcast::<nonterminal_csv_records>()
                 && let Some(seq) = tree.nth::<0>().nth::<0>()
             {
@@ -238,7 +238,6 @@ mod defs {
     #[cfg(test)]
     mod test {
         use crate::csv;
-        use crate::operators::DepthLimiter;
         use alloc::boxed::Box;
         use core::error::Error;
         use core::ops::ControlFlow;
@@ -247,6 +246,7 @@ mod defs {
         use fandango::typing::{ChildAccessor, Nth, Structured};
         use fandango::visitor::navigation::GoTo;
         use fandango::visitor::{Visitor, VisitorMut};
+        use fandango_runtime::operators::DepthLimiter;
         use rand::SeedableRng;
         use rand::rngs::StdRng;
 

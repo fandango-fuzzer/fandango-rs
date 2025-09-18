@@ -13,9 +13,6 @@ pest_derive.workspace = true
 tuple_list.workspace = true
 
 [dev-dependencies]
-num-bigint.workspace = true
-num-traits.workspace = true
-hashbrown.workspace = true
 rand = { workspace = true, features = ["default"] }
 
 [profile.release]
@@ -36,7 +33,7 @@ overflow-checks = false
 workspace = true
 
 [workspace]
-members = [".", "core", "derive", "targets", "generator"] #, libafl
+members = [".", "core", "derive", "targets", "generator", "runtime"] #, libafl
 resolver = "3"
 
 [workspace.package]
@@ -45,6 +42,7 @@ edition = "2024"
 authors = ["Addison Crump <addison.crump@cispa.de>"]
 
 [workspace.dependencies]
+anyhow = { version = "1.0", default-features = false }
 either = { version = "1.13", default-features = false }
 embedded-io = { version = "0.6.1", features = ["alloc"] }
 hashbrown = "0.16.0"
@@ -53,6 +51,7 @@ libafl_bolts = { version = "0.15.3", default-features = false }
 mappable-rc = { version = "0.1.1", default-features = false }
 num-bigint = { version = "0.4.6", default-features = false }
 num-integer = { version = "0.1.46", default-features = false }
+num-rational = { version = "0.4.2", default-features = false }
 num-traits = { version = "0.2.19", default-features = false }
 pest = { version = "2.7", default-features = false }
 pest_derive = { version = "2.7", default-features = false }

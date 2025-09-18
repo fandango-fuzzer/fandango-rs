@@ -1,0 +1,16 @@
+[package]
+name = "fandango-runtime"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+
+[dependencies]
+fandango = { path = ".." }
+
+anyhow.workspace = true
+either.workspace = true
+hashbrown.workspace = true
+num-rational.workspace = true
+
+[lints]
+workspace = true

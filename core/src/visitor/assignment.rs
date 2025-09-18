@@ -1,6 +1,6 @@
 //! Utility visitors for manipulating the value of nodes directly.
 
-use crate::typing::{AsNodeMut, Discriminable, Node};
+use crate::typing::{AsNodeMut, Discriminable, Node, OpaqueMut};
 use crate::visitor::{VisitMutResult, VisitorMut};
 use core::convert::Infallible;
 use core::ops::ControlFlow;
@@ -24,7 +24,7 @@ where
         N: Node<TypeMut<'program> = T>,
         T: From<&'program mut N> + AsNodeMut<N>,
     {
-        let mut visited = T::from(node);
+        let mut visited = node.opaque_mut();
         match <T as AsNodeMut<U>>::as_node_mut(&mut visited) {
             Some(inner) if inner.discriminant() == self.0.discriminant() => {
                 *inner = self.0;

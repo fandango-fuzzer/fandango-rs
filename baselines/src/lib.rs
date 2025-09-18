@@ -24,7 +24,7 @@ mod defs {
     use fandango::visitor::Visitor;
     use fandango::visitor::navigation::{Advance, CountNodes, GoToMut};
     use fandango::visitor::write::WriteVisitor;
-    use fandango_targets::operators::{DepthLimiter, NonterminalVisitor, crossover};
+    use fandango_runtime::operators::{DepthLimiter, NonterminalVisitor, crossover};
     use hashbrown::HashMap;
     use rand::rngs::StdRng;
     use rand::seq::IndexedRandom;
@@ -356,7 +356,7 @@ mod defs {
     use fandango::lang::FandangoNode;
     use fandango::tuple_list::tuple_list;
     use fandango::visitor::Visitor;
-    use fandango_targets::operators::{DepthLimiter, NonterminalVisitor};
+    use fandango_runtime::operators::{DepthLimiter, NonterminalVisitor};
     use rand::SeedableRng;
     use rand::seq::IndexedRandom;
 

@@ -10,15 +10,15 @@
 //! 3. Depth-limiting Generator/Sampler:
 //!   - FANDANGO restricts the depth of produced derivation trees; we approximate this behavior
 
+use alloc::collections::VecDeque;
 use alloc::vec::Vec;
 use core::convert::Infallible;
 use core::marker::PhantomData;
-#[allow(deprecated)]
 use fandango::dynamic::{DefinitionOf, HasDynamicSampler};
 use fandango::generation::{Generated, Generator, GeneratorTuple, Sampler};
 use fandango::graph::{IntoGraph, shortest_path};
 use fandango::lang::{FandangoNode, Program};
-use fandango::typing::{AsNodeRef, AssignFrom, Discriminable, Node, StaticDiscriminable};
+use fandango::typing::{AsNodeRef, AssignFrom, Discriminable, Node, Opaque, StaticDiscriminable};
 use fandango::visitor::error::InvalidPath;
 use fandango::visitor::{VisitResult, VisitableChildren, Visitor};
 use fandango::{impl_definition_of, impl_has_dynamic_sampler};
@@ -206,9 +206,9 @@ where
         T: From<&'program N> + AsNodeRef<N>,
     {
         if node.discriminant() == self.discriminant {
-            self.matches.push(T::from(node));
+            self.matches.push(node.opaque());
         }
-        T::from(node).visit_each(self)
+        node.opaque().visit_each(self)
     }
 }
 
@@ -220,7 +220,7 @@ pub fn crossover<'a, N, S>(
 ) -> Result<bool, InvalidPath>
 where
     N: Node,
-    S: Sampler<()>,
+    S: Sampler<N>,
 {
     let discriminant = node.discriminant();
 
@@ -272,4 +272,8 @@ where
         }
         T::from(node).visit_each(self)
     }
+}
+
+pub trait CheckVisitor<T>: Clone + Visitor<T, Continue = Self, Break = Infallible> {
+    fn violations(self) -> Vec<VecDeque<usize>>;
 }

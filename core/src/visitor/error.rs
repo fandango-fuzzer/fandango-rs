@@ -2,7 +2,7 @@
 
 #![allow(missing_docs)]
 
-use crate::typing::Node;
+use crate::typing::{Node, Opaque};
 use crate::visitor::NodeTrace;
 use alloc::vec::Vec;
 use core::error::Error;
@@ -19,7 +19,7 @@ impl<E, T> VisitErrorTrace<E, T> {
     where
         N::Type<'node>: From<&'node N>,
     {
-        self.trace.push((T::from(node), idx));
+        self.trace.push((node.opaque(), idx));
         self
     }
 }

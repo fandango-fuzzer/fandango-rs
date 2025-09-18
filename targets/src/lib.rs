@@ -10,8 +10,6 @@ extern crate alloc;
 use alloc::collections::VecDeque;
 use alloc::vec::Vec;
 
-pub mod operators;
-
 #[cfg(feature = "csv")]
 pub mod csv;
 #[cfg(feature = "rest")]

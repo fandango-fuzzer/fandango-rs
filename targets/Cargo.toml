@@ -16,6 +16,8 @@ xml = []
 static_defs = []
 
 [dev-dependencies]
+fandango-runtime = { path = "../runtime" }
+
 rand = { workspace = true, features = ["default"] }
 
 [dependencies]

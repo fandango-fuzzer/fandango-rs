@@ -42,7 +42,7 @@ mod defs {
     use core::ops::{ControlFlow, Deref};
     use embedded_io::{ErrorType, Write};
     use fandango::Fandango;
-    use fandango::typing::{AsNodeRef, Downcast, Node, Nth};
+    use fandango::typing::{AsNodeRef, Downcast, Node, Nth, Opaque};
     use fandango::visitor::write::WriteVisitor;
     use fandango::visitor::{VisitResult, VisitableChildren, Visitor};
     use hashbrown::HashSet;
@@ -120,7 +120,7 @@ mod defs {
             T: From<&'program N> + AsNodeRef<N>,
         {
             self.path.push_back(idx);
-            let visited = T::from(node);
+            let visited = node.opaque();
             if self.labels.is_empty()
                 && let Some(elements) = visited.downcast::<nonterminal_body_elements>()
             {
@@ -222,7 +222,6 @@ mod defs {
 
     #[cfg(test)]
     mod test {
-        use crate::operators::DepthLimiter;
         use crate::rest;
         use alloc::boxed::Box;
         use core::error::Error;
@@ -232,6 +231,7 @@ mod defs {
         use fandango::typing::Structured;
         use fandango::visitor::Visitor;
         use fandango::visitor::navigation::GoTo;
+        use fandango_runtime::operators::DepthLimiter;
         use rand::SeedableRng;
         use rand::rngs::StdRng;
 

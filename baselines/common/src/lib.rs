@@ -8,7 +8,7 @@ use alloc::vec::Vec;
 
 use fandango::lang::{FandangoNode, Program};
 use fandango::tuple_list::tuple_list_type;
-use fandango_targets::operators::DepthLimiter;
+use fandango_runtime::operators::DepthLimiter;
 use hashbrown::HashMap;
 use rand::rngs::StdRng;
 

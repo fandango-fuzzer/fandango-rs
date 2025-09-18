@@ -32,7 +32,9 @@ mod defs {
     use core::ops::ControlFlow;
     use fandango::Fandango;
     use fandango::generation::Generated;
-    use fandango::typing::{AsNodeMut, AsNodeRef, ChildAccessor, Downcast, DowncastMut, Node, Nth};
+    use fandango::typing::{
+        AsNodeMut, AsNodeRef, ChildAccessor, Downcast, DowncastMut, Node, Nth, Opaque, OpaqueMut,
+    };
     use fandango::visitor::{
         VisitMutResult, VisitResult, VisitableChildren, VisitableChildrenMut, Visitor, VisitorMut,
     };
@@ -83,7 +85,7 @@ mod defs {
             T: From<&'program N> + AsNodeRef<N>,
         {
             self.path.push_back(idx);
-            let visited = T::from(node);
+            let visited = node.opaque();
             if let Some(tree) = visited.downcast::<nonterminal_xml_tree>() {
                 let (open, _, close) = tree.child().children();
                 let id = match open.child() {
@@ -229,7 +231,7 @@ mod defs {
             N: Node<TypeMut<'program> = T>,
             T: From<&'program mut N> + AsNodeMut<N>,
         {
-            let mut visited = T::from(node);
+            let mut visited = node.opaque_mut();
             if let Some(tree) = AsNodeMut::<nonterminal_xml_tree>::as_node_mut(&mut visited) {
                 let (open, _, close) = tree.child_mut().children_mut();
                 let id = match open.child() {

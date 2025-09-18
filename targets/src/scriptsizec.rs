@@ -32,7 +32,7 @@ mod defs {
     use core::convert::Infallible;
     use core::ops::ControlFlow;
     use fandango::Fandango;
-    use fandango::typing::{AsNodeRef, Downcast, Node, Nth};
+    use fandango::typing::{AsNodeRef, Downcast, Node, Nth, Opaque};
     use fandango::visitor::{VisitResult, VisitableChildren, Visitor};
     use hashbrown::HashSet;
 
@@ -49,10 +49,6 @@ mod defs {
         violations: Vec<VecDeque<usize>>,
     }
 
-    #[cfg(no_opt_indirect)]
-    type EvaluatedScope = HashSet<alloc::boxed::Box<nonterminal_id>>;
-
-    #[cfg(not(no_opt_indirect))]
     type EvaluatedScope = HashSet<nonterminal_id>;
 
     impl ConstraintVisitor<EvaluatedScope> {
@@ -83,7 +79,7 @@ mod defs {
             T: From<&'program N> + AsNodeRef<N>,
         {
             self.path.push_back(idx);
-            let visited = T::from(node);
+            let visited = node.opaque();
             if let Some(decl) = visited.downcast::<nonterminal_declaration>() {
                 let (id, path) = match decl.nth::<0>() {
                     nonterminal_declaration_0::variant_0(child) => (child.nth::<1>(), [0, 0, 1]),
@@ -140,7 +136,6 @@ mod defs {
 
     #[cfg(test)]
     mod test {
-        use crate::operators::DepthLimiter;
         use crate::scriptsizec;
         use alloc::boxed::Box;
         use core::error::Error;
@@ -150,6 +145,7 @@ mod defs {
         use fandango::typing::Structured;
         use fandango::visitor::Visitor;
         use fandango::visitor::navigation::GoTo;
+        use fandango_runtime::operators::DepthLimiter;
         use rand::SeedableRng;
         use rand::rngs::StdRng;
 

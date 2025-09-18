@@ -2,7 +2,7 @@
 //!
 //! This is currently not feature complete.
 
-#![allow(deprecated)]
+#![expect(deprecated)]
 
 use crate::generation::{DefaultGenerated, Generated, GeneratorTuple, InPlaceGenerated, Sampler};
 use crate::lang::{Operator, Symbol};

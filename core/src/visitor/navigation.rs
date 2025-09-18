@@ -1,6 +1,6 @@
 //! Utility visitors for navigating type trees.
 
-use crate::typing::{AsNodeMut, AsNodeRef, Node, Opaque};
+use crate::typing::{AsNodeMut, AsNodeRef, Node, Opaque, OpaqueMut};
 use crate::visitor::error::InvalidPath;
 use crate::visitor::{
     VisitMutResult, VisitResult, VisitWith, VisitableChildren, VisitableChildrenMut, Visitor,
@@ -47,7 +47,7 @@ impl<T, const DFS: bool> FindVisitor<T, DFS> {
         T: From<&'a N>,
     {
         Self {
-            reference: T::from(target),
+            reference: target.opaque(),
             from,
         }
     }
@@ -144,7 +144,7 @@ where
         let mut stack = Vec::new();
 
         let mut work = VecDeque::new();
-        work.push_back((usize::MAX, idx, T::from(node)));
+        work.push_back((usize::MAX, idx, node.opaque()));
 
         struct ChildCollector<'a, T, U> {
             reference: &'a U,
@@ -277,18 +277,18 @@ where
     {
         let mut traversal = if let Some(starting_at) = self.from.pop_front() {
             if FORWARD {
-                T::from(node).visit_each_from(self, starting_at)
+                node.opaque().visit_each_from(self, starting_at)
             } else {
-                T::from(node).visit_each_reverse_from(self, starting_at)
+                node.opaque().visit_each_reverse_from(self, starting_at)
             }
         } else if self.count == self.target {
             Ok(ControlFlow::Break(VecDeque::new()))
         } else {
             self.count += 1;
             if FORWARD {
-                T::from(node).visit_each(self)
+                node.opaque().visit_each(self)
             } else {
-                T::from(node).visit_each_reverse(self)
+                node.opaque().visit_each_reverse(self)
             }
         };
         if let Ok(ControlFlow::Break(trace)) = &mut traversal {
@@ -313,18 +313,55 @@ where
     {
         if let Some(starting_at) = self.from.pop_front() {
             if FORWARD {
-                T::from(node).visit_each_from(self, starting_at)
+                node.opaque().visit_each_from(self, starting_at)
             } else {
-                T::from(node).visit_each_reverse_from(self, starting_at)
+                node.opaque().visit_each_reverse_from(self, starting_at)
             }
         } else if self.count == self.target {
-            Ok(ControlFlow::Break(T::from(node)))
+            Ok(ControlFlow::Break(node.opaque()))
         } else {
             self.count += 1;
             if FORWARD {
-                T::from(node).visit_each(self)
+                node.opaque().visit_each(self)
             } else {
-                T::from(node).visit_each_reverse(self)
+                node.opaque().visit_each_reverse(self)
+            }
+        }
+    }
+}
+
+impl<T, const FORWARD: bool> VisitorMut<T> for Advance<FORWARD, true>
+where
+    T: VisitableChildrenMut<T>,
+{
+    type Continue = Self;
+    type Break = T;
+    type Error = Infallible;
+
+    fn visit_mut<'program, N>(
+        mut self,
+        node: &'program mut N,
+        _idx: usize,
+    ) -> VisitMutResult<Self, T>
+    where
+        N: Node<TypeMut<'program> = T>,
+        T: From<&'program mut N> + AsNodeMut<N>,
+    {
+        if let Some(starting_at) = self.from.pop_front() {
+            if FORWARD {
+                node.opaque_mut().visit_each_mut_from(self, starting_at)
+            } else {
+                node.opaque_mut()
+                    .visit_each_reverse_mut_from(self, starting_at)
+            }
+        } else if self.count == self.target {
+            Ok(ControlFlow::Break(node.opaque_mut()))
+        } else {
+            self.count += 1;
+            if FORWARD {
+                node.opaque_mut().visit_each_mut(self)
+            } else {
+                node.opaque_mut().visit_each_reverse_mut(self)
             }
         }
     }
@@ -358,11 +395,11 @@ where
         T: From<&'program N> + AsNodeRef<N>,
     {
         if let Some(next) = self.to.pop_front() {
-            T::from(node)
+            node.opaque()
                 .visit_nth(self, next)
                 .map_err(|_| InvalidPath)?
         } else {
-            Ok(ControlFlow::Break(T::from(node)))
+            Ok(ControlFlow::Break(node.opaque()))
         }
     }
 }
@@ -381,11 +418,11 @@ where
         T: From<&'program mut N> + AsNodeMut<N>,
     {
         if let Some(next) = self.to.pop_front() {
-            T::from(node)
+            node.opaque_mut()
                 .visit_nth_mut(self, next)
                 .map_err(|_| InvalidPath)?
         } else {
-            Ok(ControlFlow::Break(T::from(node)))
+            Ok(ControlFlow::Break(node.opaque_mut()))
         }
     }
 }

@@ -9,6 +9,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "683d7910e743518b0e34f1186f92494becacb047c7b6bf616c96772180fef923"
 
 [[package]]
+name = "anyhow"
+version = "1.0.99"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b0674a1ddeecb70197781e945de4b3b8ffb61fa939a5597bcf48503737663100"
+
+[[package]]
 name = "autocfg"
 version = "1.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -82,9 +88,6 @@ version = "0.1.0"
 dependencies = [
  "fandango-core",
  "fandango-derive",
- "hashbrown 0.16.0",
- "num-bigint",
- "num-traits",
  "pest",
  "pest_derive",
  "rand",
@@ -132,11 +135,23 @@ dependencies = [
 ]
 
 [[package]]
+name = "fandango-runtime"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "either",
+ "fandango",
+ "hashbrown 0.16.0",
+ "num-rational",
+]
+
+[[package]]
 name = "fandango-targets"
 version = "0.1.0"
 dependencies = [
  "embedded-io",
  "fandango",
+ "fandango-runtime",
  "hashbrown 0.16.0",
  "rand",
 ]
@@ -233,21 +248,21 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "32a282da65faaf38286cf3be983213fcf1d2e2a58700e808f83f4ea9a4804bc0"
 
 [[package]]
-name = "num-bigint"
-version = "0.4.6"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a5e44f723f1133c9deac646763579fdb3ac745e418f2a7af9cd0c431da1f20b9"
-dependencies = [
- "num-integer",
- "num-traits",
-]
-
-[[package]]
 name = "num-integer"
 version = "0.1.46"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7969661fd2958a5cb096e56c8e1ad0444ac2bbcd0061bd28660485a44879858f"
 dependencies = [
+ "num-traits",
+]
+
+[[package]]
+name = "num-rational"
+version = "0.4.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f83d14da390562dca69fc84082e73e548e1ad308d24accdedd2720017cb37824"
+dependencies = [
+ "num-integer",
  "num-traits",
 ]
 

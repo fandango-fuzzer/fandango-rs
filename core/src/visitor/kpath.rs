@@ -3,7 +3,7 @@
 //! See: https://publications.cispa.saarland/3572/1/tosem-codeine-arxiv.pdf
 
 use crate::lang::{FandangoNode, Operator, Program, Symbol};
-use crate::typing::{AsNodeRef, DiscriminantLookup, Node};
+use crate::typing::{AsNodeRef, DiscriminantLookup, Node, Opaque};
 use crate::visitor::{VisitResult, VisitableChildren, Visitor};
 use alloc::collections::{BTreeMap, BTreeSet, VecDeque};
 use alloc::vec;
@@ -314,7 +314,8 @@ where
                     .insert(rcd.clone())
             );
         }
-        let mut visitor = T::from(node)
+        let mut visitor = node
+            .opaque()
             .visit_each(self)
             .unwrap()
             .continue_value()
@@ -396,7 +397,7 @@ where
                 return Ok(ControlFlow::Break(b));
             }
         }
-        let mut result = T::from(node).visit_each(self);
+        let mut result = node.opaque().visit_each(self);
         if let Ok(ControlFlow::Continue(visitor)) = &mut result {
             visitor.stack.pop();
         }

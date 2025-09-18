@@ -348,7 +348,7 @@ pub fn derive_fandango_or_emit_error(
                     #(G: ::fandango::generation::GeneratorTuple<#node_names, S>),*,
                 {}
 
-                #[derive(Clone, Debug, Eq, PartialEq)]
+                #[derive(Clone, Copy, Debug, Eq, PartialEq)]
                 #[allow(missing_docs)]
                 pub enum Type<'program> {
                     #(#node_names(&'program #node_names)),*

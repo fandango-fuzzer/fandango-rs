@@ -9,6 +9,7 @@ static_defs = ["fandango-targets/static_defs"]
 
 [dependencies]
 fandango.workspace = true
+fandango-runtime.workspace = true
 fandango-targets.workspace = true
 
 hashbrown.workspace = true

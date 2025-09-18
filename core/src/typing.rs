@@ -3,6 +3,7 @@
 use crate::lang::FandangoNode;
 use crate::lang::{Program, Tagged};
 use crate::visitor::{VisitableChildren, VisitableChildrenMut};
+use core::fmt::Debug;
 
 /// Denotes that this type is structured in a tree shape with an associated [`FandangoNode`]. Only
 /// to be implemented by generated code.
@@ -85,6 +86,8 @@ pub trait Node: Sized + AsNode + Discriminable + Clone {
         + Eq
         + AsNodeRef<Self>
         + Discriminable
+        + Debug
+        + Copy
     where
         Self: 'program;
     /// An enum which describes all possible mutable nodes, and which may be visited with either
@@ -99,6 +102,7 @@ pub trait Node: Sized + AsNode + Discriminable + Clone {
         + Eq
         + AsNodeMut<Self>
         + Discriminable
+        + Debug
     where
         Self: 'program;
     /// The type which references each child individually.

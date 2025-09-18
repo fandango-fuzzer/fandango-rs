@@ -1,7 +1,7 @@
 //! Visitors for emitting FANDANGO-generated inputs.
 
 use crate::lang::FandangoNode;
-use crate::typing::{AsNodeRef, Node};
+use crate::typing::{AsNodeRef, Node, Opaque};
 use crate::visitor::navigation::StartingFrom;
 use crate::visitor::{VisitResult, VisitableChildren, Visitor};
 use alloc::collections::VecDeque;
@@ -66,7 +66,7 @@ where
             }
             _ => {
                 let from = self.from.pop_front().unwrap_or(0);
-                T::from(node).visit_each_from(self, from)
+                node.opaque().visit_each_from(self, from)
             }
         }
     }
