@@ -10,7 +10,7 @@
 //! 3. Depth-limiting Generator/Sampler:
 //!   - FANDANGO restricts the depth of produced derivation trees; we approximate this behavior
 
-use alloc::collections::VecDeque;
+use crate::measurement::Violations;
 use alloc::vec::Vec;
 use core::convert::Infallible;
 use core::marker::PhantomData;
@@ -276,6 +276,12 @@ where
 
 /// Trait for visitors which collect violations of a given constraint.
 pub trait Checker: Default {
-    /// Consume the checker and collect the violations.
-    fn violations(self) -> Vec<VecDeque<usize>>;
+    /// Consume the checker and collect the concrete violations.
+    fn violations(self) -> Violations;
+}
+
+/// Trait for visitors which automatically fix violations.
+pub trait Fixer<'a, S, G> {
+    /// Create a fixer with the provided sampler and generator.
+    fn new(sampler: &'a mut S, generators: &'a mut G) -> Self;
 }

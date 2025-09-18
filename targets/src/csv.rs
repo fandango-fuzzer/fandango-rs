@@ -35,6 +35,7 @@ mod defs {
     use fandango::visitor::{
         VisitMutResult, VisitResult, VisitableChildren, VisitableChildrenMut, Visitor, VisitorMut,
     };
+    use fandango_runtime::measurement::Violations;
     use fandango_runtime::operators::Checker;
 
     /// Base for the CSV grammar stored in csv.fan.
@@ -65,8 +66,8 @@ mod defs {
     }
 
     impl<const FIXED: bool> Checker for ConstraintVisitor<FIXED> {
-        fn violations(self) -> Vec<VecDeque<usize>> {
-            self.violations
+        fn violations(self) -> Violations {
+            Violations::new(self.violations.len(), self.violations)
         }
     }
 

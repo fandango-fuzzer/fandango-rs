@@ -1,6 +1,7 @@
 use crate::operators::Checker;
 use alloc::collections::VecDeque;
 use alloc::vec::Vec;
+use anyhow::Error;
 use core::convert::Infallible;
 use core::marker::PhantomData;
 use core::ops::ControlFlow;
@@ -33,22 +34,19 @@ pub trait HasViolations {
 }
 
 pub struct Violations {
+    count: usize,
     violations: Vec<VecDeque<usize>>,
 }
 
 impl Violations {
     /// A list of violations, potentially unsimplified
-    pub fn new(mut violations: Vec<VecDeque<usize>>) -> Self {
-        Self::simplify(&mut violations);
-        Self { violations }
+    pub fn new(mut count: usize, mut violations: Vec<VecDeque<usize>>) -> Self {
+        count -= Self::simplify(&mut violations);
+        Self { count, violations }
     }
 
     pub fn violations(&self) -> &[VecDeque<usize>] {
         &self.violations
-    }
-
-    pub fn violations_mut(&mut self) -> &mut Vec<VecDeque<usize>> {
-        &mut self.violations
     }
 
     pub fn simplify(violations: &mut Vec<VecDeque<usize>>) -> usize {
@@ -56,6 +54,10 @@ impl Violations {
         let before = violations.len();
         violations.dedup_by(|p1, p2| p1.iter().zip(p2.iter()).all(|(e1, e2)| e1 == e2));
         before - violations.len()
+    }
+
+    pub fn count(&self) -> usize {
+        self.count
     }
 }
 
@@ -163,20 +165,17 @@ impl<V> ViolationFitness<V> {
 impl<'a, N, V> FitnessMeasurer<'a, N> for ViolationFitness<V>
 where
     N: Node + 'a,
-    V: Visitor<N::Type<'a>, Break = Infallible, Continue = V> + Checker,
+    V: Visitor<N::Type<'a>, Error = Infallible, Break = Infallible, Continue = V> + Checker,
 {
     type Value = SimpleMeasurement;
-    type Error = Either<InvalidPath, <V as Visitor<N::Type<'a>>>::Error>;
+    type Error = Error;
 
     fn check(&mut self, node: &'a N) -> Result<Violations, Self::Error> {
-        Ok(Violations::new(
-            V::default()
-                .visit(node, 0)
-                .map_err(|e| Either::Right(e))?
-                .continue_value()
-                .unwrap()
-                .violations(),
-        ))
+        Ok(V::default()
+            .visit(node, 0)?
+            .continue_value()
+            .unwrap()
+            .violations())
     }
 
     fn evaluate(
@@ -185,18 +184,19 @@ where
         violations: Violations,
     ) -> Result<Self::Value, Self::Error> {
         let total = node.count_nodes();
+        let unaccounted = violations.count() - violations.violations().len();
         let num_violations =
             if let Some(visitor) = ViolationsVisitor::new(&violations, NodeCountVisitor::new()) {
                 visitor
                     .visit(node, 0)
-                    .map_err(|e| Either::Left(e.left().expect("node counting is infallible")))?
+                    .map_err(|e| e.left().expect("node counting is infallible"))?
                     .break_value()
-                    .ok_or(Either::Left(InvalidPath))?
+                    .ok_or(InvalidPath)?
                     .count()
             } else {
                 0
             };
-        let fitness = Ratio::new(total - num_violations, total);
+        let fitness = Ratio::new(total - num_violations, total * (unaccounted + 1));
         Ok(SimpleMeasurement {
             fitness,
             violations,

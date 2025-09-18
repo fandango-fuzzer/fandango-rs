@@ -16,14 +16,21 @@ xml = []
 static_defs = []
 
 [dev-dependencies]
+num-rational.workspace = true
 rand = { workspace = true, features = ["default"] }
 
 [dependencies]
 fandango = { path = ".." }
 fandango-runtime = { path = "../runtime" }
 
+anyhow.workspace = true
 embedded-io.workspace = true
 hashbrown.workspace = true
 
 [lints]
 workspace = true
+
+[[example]]
+name = "xml_basic"
+path = "examples/xml_basic.rs"
+required-features = ["xml", "static_defs"]

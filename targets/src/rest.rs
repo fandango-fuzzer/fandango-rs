@@ -44,6 +44,7 @@ mod defs {
     use fandango::typing::{AsNodeRef, Downcast, Node, Nth, Opaque};
     use fandango::visitor::write::WriteVisitor;
     use fandango::visitor::{VisitResult, VisitableChildren, Visitor};
+    use fandango_runtime::measurement::Violations;
     use fandango_runtime::operators::Checker;
     use hashbrown::HashSet;
 
@@ -69,8 +70,8 @@ mod defs {
     }
 
     impl<const FIXED: bool> Checker for ConstraintVisitor<FIXED> {
-        fn violations(self) -> Vec<VecDeque<usize>> {
-            self.violations
+        fn violations(self) -> Violations {
+            Violations::new(self.violations.len(), self.violations)
         }
     }
 

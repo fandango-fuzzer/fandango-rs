@@ -149,10 +149,12 @@ dependencies = [
 name = "fandango-targets"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
  "embedded-io",
  "fandango",
  "fandango-runtime",
  "hashbrown 0.16.0",
+ "num-rational",
  "rand",
 ]
 

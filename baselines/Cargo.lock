@@ -408,6 +408,7 @@ dependencies = [
 name = "fandango-targets"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
  "embedded-io",
  "fandango",
  "fandango-runtime",

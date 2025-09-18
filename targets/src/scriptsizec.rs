@@ -33,6 +33,7 @@ mod defs {
     use fandango::Fandango;
     use fandango::typing::{AsNodeRef, Downcast, Node, Nth, Opaque};
     use fandango::visitor::{VisitResult, VisitableChildren, Visitor};
+    use fandango_runtime::measurement::Violations;
     use fandango_runtime::operators::Checker;
     use hashbrown::HashSet;
 
@@ -63,8 +64,8 @@ mod defs {
     where
         S: Default,
     {
-        fn violations(self) -> Vec<VecDeque<usize>> {
-            self.violations
+        fn violations(self) -> Violations {
+            Violations::new(self.violations.len(), self.violations)
         }
     }
 

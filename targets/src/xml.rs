@@ -27,6 +27,7 @@ mod defs {
     use alloc::borrow::ToOwned;
     use alloc::collections::{BTreeSet, VecDeque};
     use alloc::vec::Vec;
+    use anyhow::Error;
     use core::convert::Infallible;
     use core::ops::ControlFlow;
     use fandango::Fandango;
@@ -37,6 +38,8 @@ mod defs {
     use fandango::visitor::{
         VisitMutResult, VisitResult, VisitableChildren, VisitableChildrenMut, Visitor, VisitorMut,
     };
+    use fandango_runtime::evolvers::basic::BasicHook;
+    use fandango_runtime::measurement::Violations;
     use fandango_runtime::operators::Checker;
 
     /// Base for the XML grammar stored in xml.fan.
@@ -64,8 +67,8 @@ mod defs {
     }
 
     impl Checker for ConstraintVisitor {
-        fn violations(self) -> Vec<VecDeque<usize>> {
-            self.violations
+        fn violations(self) -> Violations {
+            Violations::new(self.violations.len(), self.violations)
         }
     }
 
@@ -135,18 +138,24 @@ mod defs {
         generator: &'a mut G,
     }
 
+    impl<'a, S, G, const CORRECT: bool> ConstraintFixer<'a, S, G, CORRECT> {
+        fn new(sampler: &'a mut S, generator: &'a mut G) -> Self {
+            Self { sampler, generator }
+        }
+    }
+
     impl<'a, S, G> ConstraintFixer<'a, S, G, false> {
         /// Construct this fixer in the form that was originally evaluated in FANDANGO.
         #[deprecated(note = "The XML grammar fixer from FANDANGO is weaker than it could be.")]
         pub fn evaluated(sampler: &'a mut S, generator: &'a mut G) -> Self {
-            Self { sampler, generator }
+            Self::new(sampler, generator)
         }
     }
 
     impl<'a, S, G> ConstraintFixer<'a, S, G, true> {
         /// Construct this fixer in the form that ensures the correctness of generated inputs.
         pub fn corrected(sampler: &'a mut S, generator: &'a mut G) -> Self {
-            Self { sampler, generator }
+            Self::new(sampler, generator)
         }
     }
 
@@ -241,6 +250,38 @@ mod defs {
                 id.clone_into(close.child_mut().nth_mut::<1>());
             }
             visited.visit_each_mut(self)
+        }
+    }
+
+    pub struct XmlFixHook<const FIXED: bool>;
+
+    impl XmlFixHook<false> {
+        #[deprecated(note = "The XML grammar fixer from FANDANGO is weaker than it could be.")]
+        pub fn evaluated() -> Self {
+            Self
+        }
+    }
+
+    impl XmlFixHook<true> {
+        pub fn corrected() -> Self {
+            Self
+        }
+    }
+
+    impl<N, G, S, const FIXED: bool> BasicHook<N, G, S> for XmlFixHook<FIXED>
+    where
+        N: Node,
+        for<'a, 'b> ConstraintFixer<'a, S, G, FIXED>: VisitorMut<N::TypeMut<'b>>,
+    {
+        fn individual_created(
+            &mut self,
+            node: &mut N,
+            generators: &mut G,
+            sampler: &mut S,
+        ) -> Result<(), Error> {
+            let fixer = ConstraintFixer::<_, _, FIXED>::new(sampler, generators);
+            let _res = fixer.visit_mut(node, 0);
+            Ok(())
         }
     }
 }

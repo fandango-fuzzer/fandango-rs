@@ -1,12 +1,14 @@
 use crate::evolvers::Evolver;
 use crate::measurement::{FitnessMeasurer, HasFitness, HasViolations};
-use crate::operators::crossover;
+use crate::operators::{Fixer, crossover};
 use crate::population::Individual;
 use alloc::collections::BinaryHeap;
 use alloc::vec::Vec;
 use anyhow::Error;
 use core::cmp::{Ordering, Reverse};
+use core::convert::Infallible;
 use core::iter;
+use core::marker::PhantomData;
 use fandango::generation::{Generated, InPlaceGenerated, Sampler};
 use fandango::typing::Node;
 use fandango::visitor::VisitorMut;
@@ -50,6 +52,12 @@ impl<H, M> BasicEvolver<H, M> {
 pub struct BasicIndividual<N, V> {
     node: N,
     measurement: V,
+}
+
+impl<N, V> BasicIndividual<N, V> {
+    pub fn measurement(&self) -> &V {
+        &self.measurement
+    }
 }
 
 impl<N, V> Eq for BasicIndividual<N, V> where V: HasFitness {}
@@ -98,7 +106,7 @@ where
 
 impl<N, G, S, H, M, V> Evolver<BasicIndividual<N, V>, G, S> for BasicEvolver<H, M>
 where
-    H: BasicHook<N, G, S, M>,
+    H: BasicHook<N, G, S>,
     N: Node + Generated<S, G>,
     for<'a> N::TypeMut<'a>: InPlaceGenerated<S, G>,
     for<'a> M: FitnessMeasurer<'a, N, Error = Error, Value = V>,
@@ -182,12 +190,8 @@ where
     }
 }
 
-#[allow(unused)]
-pub trait BasicHook<N, G, S, M>
-where
-    M: for<'a> FitnessMeasurer<'a, N>,
-    N: Node,
-{
+pub trait BasicHook<N, G, S> {
+    #[allow(unused)]
     fn individual_created(
         &mut self,
         node: &mut N,
@@ -198,27 +202,4 @@ where
     }
 }
 
-impl<Head, Tail, N, G, S, M> BasicHook<N, G, S, M> for (Head, Tail)
-where
-    Head: BasicHook<N, G, S, M>,
-    Tail: BasicHook<N, G, S, M>,
-    M: for<'a> FitnessMeasurer<'a, N>,
-    N: Node,
-{
-    fn individual_created(
-        &mut self,
-        node: &mut N,
-        generators: &mut G,
-        sampler: &mut S,
-    ) -> Result<(), Error> {
-        self.0.individual_created(node, generators, sampler)?;
-        self.1.individual_created(node, generators, sampler)
-    }
-}
-
-impl<N, G, S, M> BasicHook<N, G, S, M> for ()
-where
-    M: for<'a> FitnessMeasurer<'a, N>,
-    N: Node,
-{
-}
+impl<N, G, S> BasicHook<N, G, S> for () {}
