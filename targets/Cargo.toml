@@ -21,6 +21,7 @@ num-rational.workspace = true
 rand = { workspace = true, features = ["default"] }
 
 [dependencies]
+rand = { workspace = true, features = ["default"] }
 fandango = { path = ".." }
 fandango-runtime = { path = "../runtime" }
 
