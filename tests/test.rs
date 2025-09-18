@@ -530,6 +530,8 @@ mod lang {
     use fandango_core::visitor::VisitResult;
     use fandango::typing::{AsNodeRef, Downcast, Nth};
     use core::ops::ControlFlow;
+    use fandango::typing::{AsNodeRef, Downcast, Nth};
+    use core::ops::ControlFlow;
 
     #[allow(dead_code)]
     #[derive(Fandango)]
@@ -568,6 +570,7 @@ mod lang {
         // Test to count variable names in generated code.
         let mut rng = StdRng::seed_from_u64(0);
 
+
         pub struct CountVarNamesVisitor {
             pub count: usize,
         }
@@ -579,7 +582,204 @@ mod lang {
             type Continue = Self;
             type Break = Infallible;
             type Error = Infallible;
+        impl<T> Visitor<T> for CountVarNamesVisitor
+        where
+            T: VisitableChildren<T> + AsNodeRef<nonterminal_var_name>,
+        {
+            type Continue = Self;
+            type Break = Infallible;
+            type Error = Infallible;
 
+            fn visit<'program, N>(mut self, node: &'program N, _idx: usize) -> VisitResult<Self, T>
+            where
+                N: Node<Type<'program> = T>,
+                T: From<&'program N> + AsNodeRef<N>,
+            {
+                let visited = T::from(node);
+                if let Some(_tree) = visited.downcast::<nonterminal_var_name>() {
+                    self.count += 1;
+                }
+                visited.visit_each(self)
+            }
+        }
+
+        // count variable names in 10 generated samples
+        let mut collected_names = Vec::new();
+        let mut collected_serialized = Vec::new();
+        for _ in 0..10 {
+            let mut start = nonterminal_start::generate_default(&mut rng, &mut (), 0);
+            
+            let result = CountVarNamesVisitor { count: 0 }
+                .visit(&start, 0)?
+                .continue_value()
+                .unwrap()
+                .count;
+    
+            let serialized = String::from_utf8(
+                WriteVisitor::new(Vec::new())
+                    .visit(&mut start, 0)?
+                    .continue_value()
+                    .unwrap()
+                    .output(),
+            )?;
+
+            collected_names.push(result);
+            collected_serialized.push(serialized.clone());
+        }
+
+        extern crate std;
+        std::println!("\n=== Variable Name Count Test ===");
+        for (i, (count, code)) in collected_names.iter().zip(collected_serialized.iter()).enumerate() {
+            std::println!("Sample {}: Variable names = {}, Code = \n{}", i + 1, count, code);
+        }
+        std::println!("=============================");
+        Ok(())
+    }
+
+    #[test]
+    fn get_all_var_decl_names() -> Result<(), Box<dyn Error>> {
+        // Test to get all variable declaration names in generated code.
+        let mut rng = StdRng::seed_from_u64(0);
+
+        pub struct VarDeclNamesVisitor {
+            pub names: Vec<String>,
+        }
+
+        impl<T> Visitor<T> for VarDeclNamesVisitor
+        where
+            T: VisitableChildren<T> + AsNodeRef<nonterminal_decl>,
+        {
+            type Continue = Self;
+            type Break = Infallible;
+            type Error = Infallible;
+
+            fn visit<'program, N>(mut self, node: &'program N, _idx: usize) -> VisitResult<Self, T>
+            where
+                N: Node<Type<'program> = T>,
+                T: From<&'program N> + AsNodeRef<N>,
+            {
+                let visited = T::from(node);
+                if let Some(tree) = visited.downcast::<nonterminal_decl>() {
+                    let var_decl_name = WriteVisitor::new(Vec::new())
+                        .visit(tree.nth::<0>().nth::<2>(), 0)
+                        .unwrap()
+                        .continue_value()
+                        .unwrap()
+                        .output();
+                    self.names.push(String::from_utf8(var_decl_name).unwrap());
+                }
+                visited.visit_each(self)
+            }
+        }
+
+        // get variable declaration names in 10 generated samples
+        let mut results = Vec::new();
+        let mut collected_serialized = Vec::new();
+        for _ in 0..10 {
+            let mut start = nonterminal_start::generate_default(&mut rng, &mut (), 0);
+
+            let result = VarDeclNamesVisitor { names: Vec::new() }
+                .visit(&start, 0)?
+                .continue_value()
+                .unwrap()
+                .names;
+
+            let serialized = String::from_utf8(
+                WriteVisitor::new(Vec::new())
+                    .visit(&mut start, 0)?
+                    .continue_value()
+                    .unwrap()
+                    .output(),
+            )?;
+
+            results.push(result);
+            collected_serialized.push(serialized.clone());
+        }
+
+        extern crate std;
+        std::println!("\n=== Variable Declaration Names Test ===");
+        for (i, (names, code)) in results.iter().zip(collected_serialized.iter()).enumerate() {
+            std::println!("Sample {}: Var Decl Names = {:?}, Code = \n{}", i + 1, names, code);
+        }
+        std::println!("=============================");
+        Ok(())
+    }
+
+    #[test]
+    fn lang_constraint_var_names_include_numbers() -> Result<(), Box<dyn Error>> {
+        // Test to ensure variable names include numbers in generated code.
+        let mut rng = StdRng::seed_from_u64(0);
+        let mut diff_count = 0;
+
+        pub struct LangConstraintNumbersInVarNamesVisitor {
+            pub violations: Vec<alloc::collections::VecDeque<usize>>,
+            pub path: alloc::collections::VecDeque<usize>,
+        }
+
+        impl<T> Visitor<T> for LangConstraintNumbersInVarNamesVisitor
+        where 
+            T: VisitableChildren<T> +
+            AsNodeRef<nonterminal_var_name>
+        {
+            type Continue = Self;
+            type Break = Infallible;
+            type Error = Infallible;
+
+            fn visit<'program, N>(mut self, node: &'program N, idx: usize) -> VisitResult<Self, T>
+            where
+                N: Node<Type<'program> = T>,
+                T: From<&'program N> + AsNodeRef<N>,
+            {
+                self.path.push_back(idx);
+                let visited = T::from(node);
+                if let Some(tree) = visited.downcast::<nonterminal_var_name>() {
+                    let var_name_str = String::from_utf8(
+                        WriteVisitor::new(Vec::new())
+                            .visit(tree, 0)
+                            .unwrap()
+                            .continue_value()
+                            .unwrap()
+                            .output(),
+                    ).unwrap();
+                    if !var_name_str.chars().any(|c| c.is_ascii_digit()) {
+                        self.violations.push(self.path.clone());
+                    }
+                }
+                let mut result = visited.visit_each(self);
+                if let Ok(ControlFlow::Continue(visitor)) = &mut result {
+                    visitor.path.pop_back();
+                }
+                result
+            }
+        }
+
+        let mut diffs_by_sample = alloc::vec::Vec::new();
+        let mut samples = alloc::vec::Vec::new();
+        for _ in 0..10 {
+            let start = nonterminal_start::generate_default(&mut rng, &mut (), 0);
+
+            let result = LangConstraintNumbersInVarNamesVisitor {
+                violations: Vec::new(),
+                path: alloc::collections::VecDeque::new(),
+            }
+                .visit(&start, 0)?
+                .continue_value()
+                .unwrap();
+            let violations = result.violations; 
+            if !violations.is_empty() {
+                diffs_by_sample.push(violations.len());
+            } else {
+                diffs_by_sample.push(0);
+            }
+            samples.push(String::from_utf8(
+                WriteVisitor::new(Vec::new())
+                    .visit(&start, 0)?
+                    .continue_value()
+                    .unwrap()
+                    .output(),
+            )?);
+        }
+        
             fn visit<'program, N>(mut self, node: &'program N, _idx: usize) -> VisitResult<Self, T>
             where
                 N: Node<Type<'program> = T>,
@@ -779,6 +979,104 @@ mod lang {
         std::println!("=============================");
 
         // assert_ne!(0, diff_count);
+        Ok(())
+    }
+
+    #[test]
+    fn lang_constraint_def_use() -> Result<(), Box<dyn Error>> {
+        // Test to ensure variable names are defined before use in generated code.
+        // Note: this doesn't work perfectly yet, no scoping, also declarations like let a = a are allowed.
+        let mut rng = StdRng::seed_from_u64(0);
+        let mut diff_count = 0;
+
+        pub struct LangConstraintDefUseVisitor {
+            pub violations: Vec<alloc::collections::VecDeque<usize>>,
+            pub defined_vars: alloc::collections::BTreeSet<String>,
+            pub path: alloc::collections::VecDeque<usize>,
+        }
+
+        impl<T> Visitor<T> for LangConstraintDefUseVisitor
+        where 
+            T: VisitableChildren<T> +
+            AsNodeRef<nonterminal_var_access> +
+            AsNodeRef<nonterminal_decl>
+        {
+            type Continue = Self;
+            type Break = Infallible;
+            type Error = Infallible;
+
+            fn visit<'program, N>(mut self, node: &'program N, idx: usize) -> VisitResult<Self, T>
+            where
+                N: Node<Type<'program> = T>,
+                T: From<&'program N> + AsNodeRef<N>,
+            {
+                self.path.push_back(idx);
+                let visited = T::from(node);
+                if let Some(tree) = visited.downcast::<nonterminal_var_access>() {
+                    let var_name_str = String::from_utf8(
+                        WriteVisitor::new(Vec::new())
+                            .visit(tree, 0)
+                            .unwrap()
+                            .continue_value()
+                            .unwrap()
+                            .output(),
+                    ).unwrap();
+                    if !self.defined_vars.contains(&var_name_str) {
+                        self.violations.push(self.path.clone());
+                    }
+                } else if let Some(decl_tree) = visited.downcast::<nonterminal_decl>() {
+                    let var_decl_name = String::from_utf8(
+                        WriteVisitor::new(Vec::new())
+                            .visit(decl_tree.nth::<0>().nth::<2>(), 0)
+                            .unwrap()
+                            .continue_value()
+                            .unwrap()
+                            .output(),
+                    ).unwrap();
+                    self.defined_vars.insert(var_decl_name);
+                }
+                let mut result = visited.visit_each(self);
+                if let Ok(ControlFlow::Continue(visitor)) = &mut result {
+                    visitor.path.pop_back();
+                }
+                result
+            }
+        }
+
+        let mut samples = alloc::vec::Vec::new();
+        let mut diffs_by_sample = alloc::vec::Vec::new();
+        for _ in 0..10 {
+            let mut tree = nonterminal_start::generate_default(&mut rng, &mut (), 0); 
+            let result = LangConstraintDefUseVisitor {
+                violations: Vec::new(),
+                defined_vars: alloc::collections::BTreeSet::new(),
+                path: alloc::collections::VecDeque::new(),
+            }
+                .visit(&tree, 0)?
+                .continue_value()
+                .unwrap();
+            let violations = result.violations;
+            if !violations.is_empty() {
+                diffs_by_sample.push(violations.len());
+            } else {
+                diffs_by_sample.push(0);
+            }
+            samples.push(String::from_utf8(
+                WriteVisitor::new(Vec::new())
+                    .visit(&mut tree, 0)?
+                    .continue_value()
+                    .unwrap()
+                    .output(),
+            )?);
+        }
+
+        extern crate std;
+        std::println!("\n=== Def Before Use Constraint Test ===");
+        for (i, (diffs, code)) in diffs_by_sample.iter().zip(samples.iter()).enumerate() {
+            std::println!("Sample {}: Violations = {}, Code = \n{}", i + 1, diffs, code);
+            diff_count += diffs;
+        }
+        std::println!("=============================");
         Ok(())
     }
 }

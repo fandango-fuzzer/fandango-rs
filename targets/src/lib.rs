@@ -12,6 +12,7 @@ use alloc::vec::Vec;
 
 pub mod operators;
 
+/// Target for the programming language grammar and constraints.
 #[cfg(feature = "lang")]
 pub mod lang;
 #[cfg(feature = "csv")]
