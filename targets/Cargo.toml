@@ -42,3 +42,8 @@ required-features = ["xml", "static_defs"]
 name = "xml_multiobjective"
 path = "examples/xml_multiobjective.rs"
 required-features = ["xml", "static_defs"]
+
+[[example]]
+name = "lang_basic"
+path = "examples/lang_basic.rs"
+required-features = ["lang", "static_defs"]
