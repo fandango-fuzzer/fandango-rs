@@ -36,3 +36,8 @@ workspace = true
 name = "xml_basic"
 path = "examples/xml_basic.rs"
 required-features = ["xml", "static_defs"]
+
+[[example]]
+name = "lang_basic"
+path = "examples/lang_basic.rs"
+required-features = ["lang", "static_defs"]

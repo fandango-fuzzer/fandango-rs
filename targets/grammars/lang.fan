@@ -2,30 +2,31 @@
 
 <statements> ::= <stmt> | <stmt> "\n" <statements> ;
 
-<stmt> ::= <decl> | <assignment> | <fn_def> | <expr> | <return> ;
+<stmt> ::= <decl> | <assignment> | <fn_def> | <expr> | <return_stmt> ;
 
-<decl> ::= <decl_kwd> <sep> <var_name> <sep> <decl_rhs_opt> ;
-<decl_rhs_opt> ::= <decl_rhs> | "" ;
+<decl> ::= <decl_kwd> <sep> <var_name> <sep> <decl_rhs_e> ;
+<decl_rhs_e> ::= <decl_rhs> | <e> ;
 <decl_kwd> ::= "let" | "const" ;
 <decl_rhs> ::= "=" <sep> <expr> ;
 
 <assignment> ::= <var_access> <sep> <assign_op> <sep> <expr> ;
 <assign_op> ::= "=" | "+=" | "-=" ;
 
-<fn_def> ::= <fn_kwd> <sep> <fn_name> "(" <param_list_e> ")" <sep> "{" <sep> <fn_body> <sep> "}" ;
+<fn_def> ::= <fn_kwd> <sep> <fn_name> "(" <param_list_e> ")" <sep> "{" <sep> <fn_body_e> <sep> "}" ;
 <fn_kwd> ::= "function" ;
 <fn_name> ::= <letter> <alnums> ;
-<param_list_e> ::= <empty> | <param_list> ;
+<param_list_e> ::= <param_list> | <e> ;
 <param_list> ::= <param_name> | <param_name> "," <sep> <param_list> ;
 <param_name> ::= <letter> <alnums> ;
-<fn_body> ::= <empty> | <statements> ;
+<fn_body_e> ::= <statements> | <e> ;
 
-<return> ::= <return_kwd> | <return_kwd> <sep> <expr> ;
+<return_stmt> ::= <return_kwd> | <return_kwd> <sep> <expr> ;
 <return_kwd> ::= "return" ;
 
 <expr> ::= <arith_expr> | <expr_unit> ;
 <expr_unit> ::= <var_access> | <value> | <fn_call> ;
-<fn_call> ::= <var_access> "(" <arg_list> ")" | <var_access> "(" <empty> ")" ;
+<fn_call> ::= <var_access> "(" <arg_list_e> ")" ;
+<arg_list_e> ::= <arg_list> | <e> ; 
 <arg_list> ::= <arg> | <arg> "," <sep> <arg_list> ;
 <arg> ::= <expr> ;
 
@@ -52,4 +53,4 @@
 <int> ::= <digit> | <digit> <int> ;
 <string_val> ::= "\"\"" | "\"" <alnums> "\"" ;
 <sep> ::= " " ;
-<empty> ::= "" ;
+<e> ::= " " ;
