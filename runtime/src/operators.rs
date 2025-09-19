@@ -14,13 +14,21 @@ use crate::measurement::Violations;
 use alloc::vec::Vec;
 use core::convert::Infallible;
 use core::marker::PhantomData;
+use core::ops::ControlFlow;
 use fandango::dynamic::{DefinitionOf, HasDynamicSampler};
-use fandango::generation::{Generated, Generator, GeneratorTuple, Sampler};
+use fandango::generation::{
+    Generated, Generator, GeneratorTuple, InPlaceGenerated, RawSampler, Sampler,
+};
 use fandango::graph::{IntoGraph, shortest_path};
 use fandango::lang::{FandangoNode, Program};
-use fandango::typing::{AsNodeRef, AssignFrom, Discriminable, Node, Opaque, StaticDiscriminable};
+use fandango::typing::{
+    AsNodeMut, AsNodeRef, AssignFrom, Discriminable, Node, Opaque, StaticDiscriminable,
+};
 use fandango::visitor::error::InvalidPath;
-use fandango::visitor::{VisitResult, VisitableChildren, Visitor};
+use fandango::visitor::navigation::{Advance, CountNodes};
+use fandango::visitor::{
+    VisitMutResult, VisitResult, VisitableChildren, VisitableChildrenMut, Visitor, VisitorMut,
+};
 use fandango::{impl_definition_of, impl_has_dynamic_sampler};
 use hashbrown::HashMap;
 
@@ -75,6 +83,19 @@ pub struct ShortestPathSampler<'a, S, SP> {
     shortest_path: &'a mut SP,
 }
 
+impl<S, SP> RawSampler for ShortestPathSampler<'_, S, SP>
+where
+    S: RawSampler,
+{
+    fn sample(&mut self) -> usize {
+        self.inner.sample()
+    }
+
+    fn reseed(&mut self, seed: u64) {
+        self.inner.reseed(seed)
+    }
+}
+
 impl<N, S, SP> Sampler<N> for ShortestPathSampler<'_, S, SP>
 where
     S: Sampler<N>,
@@ -100,14 +121,6 @@ where
         self.shortest_path
             .shortest_path(self.inner)
             .unwrap_or_else(|| self.inner.sample_alternative(count))
-    }
-
-    fn sample(&mut self) -> usize {
-        self.inner.sample()
-    }
-
-    fn reseed(&mut self, seed: u64) {
-        self.inner.reseed(seed)
     }
 }
 
@@ -212,6 +225,41 @@ where
     }
 }
 
+pub struct MutatorVisitor<'a, S, G> {
+    sampler: &'a mut S,
+    generator: &'a mut G,
+}
+
+impl<'a, S, G> MutatorVisitor<'a, S, G> {
+    pub fn new(sampler: &'a mut S, generator: &'a mut G) -> Self {
+        Self { sampler, generator }
+    }
+}
+
+impl<S, G, T> VisitorMut<T> for MutatorVisitor<'_, S, G>
+where
+    T: VisitableChildrenMut<T> + InPlaceGenerated<S, G>,
+    S: RawSampler,
+{
+    type Continue = Self;
+    type Break = Infallible;
+    type Error = Infallible;
+
+    fn visit_mut<'program, N>(self, node: &'program mut N, idx: usize) -> VisitMutResult<Self, T>
+    where
+        N: Node<TypeMut<'program> = T>,
+        T: From<&'program mut N> + AsNodeMut<N>,
+    {
+        let count = node.count_nodes();
+        Advance::forward_ref(self.sampler.sample() % count)
+            .visit_mut(node, idx)?
+            .break_value()
+            .unwrap()
+            .generate_in_place(self.sampler, self.generator, 0);
+        Ok(ControlFlow::Continue(self))
+    }
+}
+
 /// Crossover operator, which selects a random (matching) subtree from `base` into `node`
 pub fn crossover<'a, N, S>(
     node: &mut N::TypeMut<'a>,
@@ -220,7 +268,7 @@ pub fn crossover<'a, N, S>(
 ) -> Result<bool, InvalidPath>
 where
     N: Node,
-    S: Sampler<N>,
+    S: RawSampler,
 {
     let discriminant = node.discriminant();
 

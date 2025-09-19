@@ -1,6 +1,6 @@
 //! Utility generators, which perform some common generator routines.
 
-use crate::generation::{Generated, Generator, GeneratorTuple, Sampler};
+use crate::generation::{Generated, Generator, GeneratorTuple, RawSampler, Sampler};
 use crate::lang::{Operator, Symbol};
 use crate::typing::{AsStaticNode, Structured};
 use alloc::collections::BTreeMap;
@@ -175,6 +175,19 @@ impl<S> FlattenedSampler<'_, S> {
     }
 }
 
+impl<S> RawSampler for FlattenedSampler<'_, S>
+where
+    S: RawSampler,
+{
+    fn sample(&mut self) -> usize {
+        self.sampler.sample()
+    }
+
+    fn reseed(&mut self, seed: u64) {
+        self.sampler.reseed(seed)
+    }
+}
+
 impl<N, S> Sampler<N> for FlattenedSampler<'_, S>
 where
     N: AsStaticNode,
@@ -203,14 +216,6 @@ where
             .get(&N::static_definition())
             .expect("Attempted to generate something that wasn't in the graph");
         self.sample_alternative_from(current)
-    }
-
-    fn sample(&mut self) -> usize {
-        self.sampler.sample()
-    }
-
-    fn reseed(&mut self, seed: u64) {
-        self.sampler.reseed(seed)
     }
 }
 
@@ -316,14 +321,6 @@ mod dynamic_impls {
                 .get(&self.sampler.definition())
                 .expect("Attempted to generate something that wasn't in the graph");
             self.sample_alternative_from(current)
-        }
-
-        fn sample(&mut self) -> usize {
-            self.sampler.sample()
-        }
-
-        fn reseed(&mut self, seed: u64) {
-            self.sampler.reseed(seed)
         }
     }
 
