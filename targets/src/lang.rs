@@ -13,7 +13,7 @@ mod defs {
 
 #[cfg(feature = "static_defs")]
 mod defs {
-    use crate::Checker;
+    use fandango_runtime::measurement::Violations;
     use alloc::collections::VecDeque;
     use alloc::vec::Vec;
     use alloc::string::String;
@@ -21,9 +21,10 @@ mod defs {
     use core::ops::ControlFlow;
     use fandango::Fandango;
     use fandango::generation::Generated;
-    use fandango::typing::{AsNodeMut, AsNodeRef, Node, Nth, Downcast, DowncastMut};
+    use fandango::typing::{AsNodeMut, AsNodeRef, Node, Nth, Downcast, Opaque, DowncastMut};
     use fandango::visitor::{VisitMutResult, VisitResult, VisitableChildren, VisitableChildrenMut, Visitor, VisitorMut};
     use fandango::visitor::write::WriteVisitor;
+    use fandango_runtime::operators::Checker;
     use rand::Rng;
     
     /// Base for the lang grammar stored in lang.fan.
@@ -31,13 +32,149 @@ mod defs {
     #[fandango(grammar = "grammars/lang.fan", parse = false)]
     pub struct Lang(Infallible);
     
+    // ================= Combined def-use and at least one var access.
+    // Constraint visitor.
+    // Mainly for illustrative purposes; in the future, we will devise a strategy to 
+    // have multiple independent constraints running at once.
+    //
+    /// Basic combined constraint visitor.
+    #[derive(Debug, Default)]
+    pub struct ConstraintVisitorAtLeastOneVarAlsoDefUse {
+        /// The current path, to be used by the visitor when saving violations.
+        pub path: VecDeque<usize>,
+        /// The count of variable accesses found so far.
+        pub var_access_count: usize,
+        /// The set of currently defined variables, mapping names to nodes.
+        pub defined_vars: alloc::collections::BTreeSet<String>,
+        /// The list of violations found so far.
+        pub violations: Vec<VecDeque<usize>>,
+    }
+
+    impl Checker for ConstraintVisitorAtLeastOneVarAlsoDefUse {
+        fn violations(self) -> Violations {
+            // If there are no variable accesses, or if there are def-before-use violations, we have violations.
+            if self.var_access_count == 0 {
+                let mut violations = self.violations;
+                violations.push([0].into());
+                Violations::new(violations.len(), violations)
+            } else {
+                Violations::new(self.violations.len(), self.violations)
+            }
+        }
+    }
+
+    impl<T> Visitor<T> for ConstraintVisitorAtLeastOneVarAlsoDefUse
+    where 
+        T: VisitableChildren<T> + 
+        AsNodeRef<nonterminal_var_access> +
+        AsNodeRef<nonterminal_assignment> +
+        AsNodeRef<nonterminal_decl>
+    {
+        type Continue = Self;
+        type Break = Infallible;
+        type Error = Infallible;
+
+        fn visit<'program, N>(mut self, node: &'program N, idx: usize) -> VisitResult<Self, T>
+        where
+            N: Node<Type<'program> = T>,
+            T: From<&'program N> + AsNodeRef<N>,
+        {
+            self.path.push_back(idx);
+            let visited = T::from(node);
+            if let Some(_tree) = visited.downcast::<nonterminal_var_access>() {
+                self.var_access_count += 1;
+                let var_name_str = String::from_utf8(
+                    WriteVisitor::new(Vec::new())
+                        .visit(_tree, 0)
+                        .unwrap()
+                        .continue_value()
+                        .unwrap()
+                        .output(),
+                ).unwrap();
+                if !self.defined_vars.contains(&var_name_str) {
+                    self.violations.push(self.path.clone());
+                }
+            } else if let Some(decl_tree) = visited.downcast::<nonterminal_decl>() {
+                let var_decl_name = String::from_utf8(
+                    WriteVisitor::new(Vec::new())
+                        .visit(decl_tree.nth::<0>().nth::<2>(), 0)
+                        .unwrap()
+                        .continue_value()
+                        .unwrap()
+                        .output(),
+                ).unwrap();
+                self.defined_vars.insert(var_decl_name);
+            }
+            let mut result = visited.visit_each(self);
+            if let Ok(ControlFlow::Continue(visitor)) = &mut result {
+                visitor.path.pop_back();
+            }
+            result
+        }
+    }
+
+    // ================= Ensure sufficiently many variable accesses.
+    // Constraint visitor.
+    // Mostly to ensure that there are variable accesses in generated programs.
+    // Note: No scoping, not perfect.
+    //
+    /// Basic counter visitor.
+    #[derive(Debug, Default)]
+    pub struct ConstraintVisitorVarAccess {
+        /// The current path, to be used by the visitor when saving violations.
+        pub path: VecDeque<usize>,
+        /// The count of variable accesses found so far.
+        pub var_access_count: usize,
+        /// The list of violations found so far.
+        pub violations: Vec<VecDeque<usize>>,
+    }
+
+    impl Checker for ConstraintVisitorVarAccess {
+        fn violations(self) -> Violations {
+            // We consider it a violation if there are no variable accesses.
+            let mut violations = self.violations;
+            if self.var_access_count == 0 {
+                violations.push(self.path);
+            }
+            Violations::new(violations.len(), violations)
+        }
+    }
+
+    impl<T> Visitor<T> for ConstraintVisitorVarAccess
+    where 
+        T: VisitableChildren<T> + 
+        AsNodeRef<nonterminal_var_access>
+    {
+        type Continue = Self;
+        type Break = Infallible;
+        type Error = Infallible;
+
+        fn visit<'program, N>(mut self, node: &'program N, idx: usize) -> VisitResult<Self, T>
+        where
+            N: Node<Type<'program> = T>,
+            T: From<&'program N> + AsNodeRef<N>,
+        {
+            self.path.push_back(idx);
+            let visited = T::from(node);
+            if let Some(_tree) = visited.downcast::<nonterminal_var_access>() {
+                self.var_access_count += 1;
+            }
+            let mut result = visited.visit_each(self);
+            if let Ok(ControlFlow::Continue(visitor)) = &mut result {
+                visitor.path.pop_back();
+            }
+            result
+        }
+    }
+    // ================= end of Ensure sufficiently many variable accesses.
+
     // ================= Def before use.
     // Constraint visitor.
     // Note: Not yet perfect, no scoping, also declarations like let a = a are allowed. 
     //
     /// Basic def-before-use constraint visitor.
     #[derive(Debug, Default)]
-    pub struct ConstraintVisitorDefUse<const CORRECT: bool> {
+    pub struct ConstraintVisitorDefUse {
         /// The current path, to be used by the visitor when saving violations.
         pub path: VecDeque<usize>,
         /// The set of currently defined variables, mapping names to nodes.
@@ -46,20 +183,13 @@ mod defs {
         pub violations: Vec<VecDeque<usize>>,
     }
     
-    impl ConstraintVisitorDefUse<true> {
-        /// Construct this visitor in the form that produces correctly formatted data.
-        pub fn corrected() -> Self {
-            Self::default()
-        }
-    }
-    
-    impl<const FIXED: bool> Checker for ConstraintVisitorDefUse<FIXED> {
-        fn violations(self) -> Vec<VecDeque<usize>> {
-            self.violations
+    impl Checker for ConstraintVisitorDefUse {
+        fn violations(self) -> Violations {
+            Violations::new(self.violations.len(), self.violations)
         }
     }
 
-    impl<T> Visitor<T> for ConstraintVisitorDefUse<true>
+    impl<T> Visitor<T> for ConstraintVisitorDefUse
     where 
         T: VisitableChildren<T> +
         AsNodeRef<nonterminal_var_access> +
@@ -78,6 +208,7 @@ mod defs {
             self.path.push_back(idx);
             let visited = T::from(node);
             
+            // TODO Move decl thingy here.
             if let Some(tree) = visited.downcast::<nonterminal_var_access>() {
                 let var_name_str = String::from_utf8(
                     WriteVisitor::new(Vec::new())
@@ -109,19 +240,6 @@ mod defs {
         }
     }
 
-    impl<T> Visitor<T> for ConstraintVisitorDefUse<false> {
-        type Continue = Self;
-        type Break = Infallible;
-        type Error = Infallible;
-
-        fn visit<'program, N>(self, _node: &'program N, _idx: usize) -> VisitResult<Self, T>
-        where
-            N: Node<Type<'program> = T>,
-            T: From<&'program N> + AsNodeRef<N>,
-        {
-            Ok(ControlFlow::Continue(self)) // lang constraints are trivially true
-        }
-    }
     // ================= end of Def before use.
 
     // ================= Def before use fixer.
@@ -130,7 +248,7 @@ mod defs {
     //
     /// A fixer which applies fixes based on the def-before-use constraints in the lang grammar.
     #[derive(Debug)]
-    pub struct ConstraintFixerDefUse<'a, S, G, const CORRECT: bool> {
+    pub struct ConstraintFixerDefUse<'a, S, G> {
         /// Sampler is an external random number generator.
         pub sampler: &'a mut S,
         /// Generator is the tuple-list based generator.
@@ -140,7 +258,7 @@ mod defs {
     }
 
     // TODO: Test this and see if it helps.
-    impl<'a, S, G, T> VisitorMut<T> for ConstraintFixerDefUse<'a, S, G, true>
+    impl<'a, S, G, T> VisitorMut<T> for ConstraintFixerDefUse<'a, S, G>
     where
         nonterminal_var_access: Generated<S, G>,
         T: VisitableChildrenMut<T> + 
@@ -218,7 +336,7 @@ mod defs {
     impl<T> Visitor<T> for ConstraintVisitorReturnInFunc
     where
         T: VisitableChildren<T> +
-            AsNodeRef<nonterminal_return> +
+            AsNodeRef<nonterminal_return_stmt> +
             AsNodeRef<nonterminal_fn_def>,
     {
         type Continue = Self;
@@ -230,126 +348,33 @@ mod defs {
             N: Node<Type<'program> = T>,
             T: From<&'program N> + AsNodeRef<N>,
         {
-            // TODO: This
             self.path.push_back(idx);
-            let visited = T::from(node);    
-            if let Some(_tree) = visited.downcast::<nonterminal_return>() {
+            let visited = node.opaque();    
+            if let Some(_tree) = visited.downcast::<nonterminal_return_stmt>() {
                 if self.func_depth == 0 {
                     self.violations.push(self.path.clone());
                 }
-                // We do not go deeper into return statements.
-                Ok(ControlFlow::Continue(self))
             } else if let Some(_tree) = visited.downcast::<nonterminal_fn_def>() {
                 self.func_depth += 1;
+                // Visit the function, then decrease depth.
                 let result = visited.visit_each(self);
                 let Ok(ControlFlow::Continue(mut visitor)) = result;
                 visitor.func_depth -= 1;
                 visitor.path.pop_back();
-                Ok(ControlFlow::Continue(visitor))
-            } else {
-                let result = visited.visit_each(self);
-                let Ok(ControlFlow::Continue(mut visitor)) = result;
-                visitor.path.pop_back();
-                Ok(ControlFlow::Continue(visitor))
+                return Ok(ControlFlow::Continue(visitor));
             }
+            let result = visited.visit_each(self);
+            let Ok(ControlFlow::Continue(mut visitor)) = result;
+            visitor.path.pop_back();
+            Ok(ControlFlow::Continue(visitor))
         }
     }
     // ================= end of Returns only inside functions.
 
-    // ================= Functions called with correct number of arguments.
-
-    // Constraint visitor.
-    /// Basic function-arguments-count constraint visitor.
-    #[derive(Debug, Default)]
-    pub struct ConstraintVisitorFuncArgCount {
-        /// The current path, to be used by the visitor when saving violations.
-        pub path: VecDeque<usize>,
-        /// The list of violations found so far.
-        pub violations: Vec<VecDeque<usize>>,
-        /// The current function definitions, mapping function names to their parameter counts.
-        pub func_defs: alloc::collections::BTreeMap<String, usize>,
-    }   
-
-    // impl<T> Visitor<T> for ConstraintVisitorFuncArgCount
-    // where
-    //     T: VisitableChildren<T> +
-    //         AsNodeRef<nonterminal_fn_call> +
-    //         AsNodeRef<nonterminal_fn_def> +
-    //         AsNodeRef<nonterminal_arg_list> +
-    //         AsNodeRef<nonterminal_param_list> +
-    //         AsNodeRef<nonterminal_param_list_e>,
-    // {
-    //     type Continue = Self;
-    //     type Break = Infallible;
-    //     type Error = Infallible;
-
-    //     fn visit<'program, N>(mut self, node: &'program N, idx: usize) -> VisitResult<Self, T>
-    //     where
-    //         N: Node<Type<'program> = T>,
-    //         T: From<&'program N> + AsNodeRef<N>,
-    //     {
-    //         self.path.push_back(idx);
-    //         let visited = T::from(node);    
-    //         if let Some(tree) = visited.downcast::<nonterminal_fn_def>() {
-    //             let fn_name = String::from_utf8(
-    //                 WriteVisitor::new(Vec::new())
-    //                     .visit(tree.nth::<0>().nth::<2>(), 0)
-    //                     .unwrap()
-    //                     .continue_value()
-    //                     .unwrap()
-    //                     .output(),
-    //             ).unwrap();
-    //             // Get the param_list_e.
-    //             let Some(param_list_e) = tree.nth::<0>().nth::<4>().downcast::<nonterminal_param_list_e>();
-    //         } else if let Some(tree) = visited.downcast::<nonterminal_fn_call>() {
-    //             let fn_name = String::from_utf8(
-    //                 WriteVisitor::new(Vec::new())
-    //                     .visit(tree.nth::<0>(), 0)
-    //                     .unwrap()
-    //                     .continue_value()
-    //                     .unwrap()
-    //                     .output(),
-    //             ).unwrap();
-    //             let arg_count = match tree.nth::<2>().downcast::<nonterminal_arg_list>() {
-    //                 Some(arg_list) => {
-    //                     let mut count = 0;
-    //                     let mut current = Some(arg_list);
-    //                     while let Some(al) = current {
-    //                         count += 1;
-    //                         current = match al.child() {
-    //                             nonterminal_arg_list_0::variant_0(_) => None,
-    //                             nonterminal_arg_list_0::variant_1(seq) => {
-    //                                 let (_, _, rest) = seq.children();
-    //                                 rest.downcast::<nonterminal_arg_list>()
-    //                             }
-    //                         };
-    //                     }
-    //                     count
-    //                 },
-    //                 None => 0, // empty arg list
-    //             };
-    //             if let Some(&expected_count) = self.func_defs.get(&fn_name) {
-    //                 if expected_count != arg_count {
-    //                     self.violations.push(self.path.clone());
-    //                 }
-    //             } else {
-    //                 // Function not defined, we do not count this as a violation.
-    //             }
-    //         }
-    //         let mut result = visited.visit_each(self);
-    //         if let Ok(ControlFlow::Continue(visitor)) = &mut result {
-    //             visitor.path.pop_back();
-    //         }
-    //         result
-    //     }
-    // }
-
-    // ================ end of Functions called with correct number of arguments.
-
     #[cfg(test)]
     mod test {
         use crate::lang;
-        use crate::operators::DepthLimiter;
+        use fandango_runtime::operators::DepthLimiter;
         use alloc::boxed::Box;
         use core::error::Error;
         use core::ops::ControlFlow;
@@ -378,7 +403,7 @@ mod defs {
             for i in 0..10 {
                 tree = lang::nonterminal_start::generate(&mut rng, &mut generators, 0);
                 let Ok(ControlFlow::Continue(lang::ConstraintVisitorDefUse { violations, defined_vars, .. })) =
-                    lang::ConstraintVisitorDefUse::corrected().visit(&mut tree, 0);
+                    lang::ConstraintVisitorDefUse::default().visit(&mut tree, 0);
 
                 let total_violations = violations.len();
 
@@ -427,7 +452,7 @@ mod defs {
                 }
                 .visit_mut(&mut tree, 0)?;
                 let Ok(ControlFlow::Continue(lang::ConstraintVisitorDefUse { violations, .. })) =
-                    lang::ConstraintVisitorDefUse::corrected().visit(&mut tree, 0);
+                    lang::ConstraintVisitorDefUse::default().visit(&mut tree, 0);
 
                 std::println!("After fixing, found {} violations.", violations.len());
                 std::println!("Fixed program:\n{}", String::from_utf8(
@@ -459,7 +484,7 @@ mod defs {
             let mut rng = StdRng::seed_from_u64(0);
             let mut generators =
                 tuple_list!(DepthLimiter::new(lang::nonterminal_start::ROOT.inner(), 50));
-            // Generate 20 programs and check for violations.
+            // Generate 50 programs and check for violations.
             for i in 0..50 {
                 let tree = lang::nonterminal_start::generate(&mut rng, &mut generators, 0);
                 let Ok(ControlFlow::Continue(lang::ConstraintVisitorReturnInFunc { 
