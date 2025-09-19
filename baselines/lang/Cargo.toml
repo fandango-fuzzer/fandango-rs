@@ -8,8 +8,9 @@ publish = false
 static_defs = ["common/static_defs", "fandango-targets/static_defs"]
 
 [dependencies]
-fandango.workspace = true
-fandango-targets = { workspace = true, features = ["lang"] }
+fandango = { path = "../.." }
+fandango-runtime = { path = "../../runtime" }
+fandango-targets = { path = "../../targets", features = ["lang"] }
 
 common = { path = "../common" }
 
