@@ -22,12 +22,12 @@ impl DynamicBenchmarkSuite for Benchmark {
 #[cfg(feature = "static_defs")]
 mod static_defs {
     use crate::Benchmark;
-    use alloc::collections::VecDeque;
-    use alloc::vec::Vec;
     use common::{BenchmarkSuite, StdGenerator, StdSampler};
     use fandango::generation::Generated;
     use fandango::visitor::{Visitor, VisitorMut};
-    use fandango_targets::{Checker, crossover, lang};
+    use fandango_runtime::measurement::Violations;
+    use fandango_runtime::operators::Checker;
+    use fandango_targets::lang;
 
     impl BenchmarkSuite<StdSampler, StdGenerator> for Benchmark {
         type Start = lang::nonterminal_start;
@@ -48,22 +48,13 @@ mod static_defs {
                 .unwrap();
         }
 
-        fn check(item: &Self::Start) -> Vec<VecDeque<usize>> {
-            lang::ConstraintVisitorDefUse::corrected()
+        fn check(item: &Self::Start) -> Violations {
+            lang::ConstraintVisitorDefUse::default()
                 .visit(item, 0)
                 .unwrap()
                 .continue_value()
                 .unwrap()
                 .violations()
-        }
-
-        fn crossover(
-            item: &mut Self::Start,
-            other: &Self::Start,
-            mut choice: VecDeque<usize>,
-            sampler: &mut StdSampler,
-        ) -> bool {
-            crossover!(item, other, choice, sampler).unwrap()
         }
     }
 }

@@ -30,7 +30,7 @@ mod static_defs {
     use fandango::visitor::{Visitor, VisitorMut};
     use fandango_runtime::measurement::Violations;
     use fandango_runtime::operators::Checker;
-    use fandango_targets::{Checker, xml};
+    use fandango_targets::xml;
 
     impl BenchmarkSuite<StdSampler, StdGenerator> for Benchmark {
         type Start = xml::nonterminal_start;
