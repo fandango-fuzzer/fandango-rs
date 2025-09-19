@@ -1,6 +1,6 @@
 use crate::evolvers::Evolver;
 use crate::measurement::{FitnessMeasurer, HasFitness, HasViolations};
-use crate::operators::{ crossover};
+use crate::operators::crossover;
 use crate::population::Individual;
 use alloc::collections::BinaryHeap;
 use alloc::vec::Vec;
