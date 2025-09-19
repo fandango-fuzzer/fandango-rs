@@ -30,9 +30,8 @@ pub trait DynamicBenchmarkSuite {
 #[cfg(feature = "static_defs")]
 mod static_defs {
     use crate::DynamicBenchmarkSuite;
-    use alloc::collections::VecDeque;
-    use alloc::vec::Vec;
     use fandango::typing::Node;
+    use fandango_runtime::measurement::Violations;
 
     /// Trait which each benchmark target will implement, for consistency.
     pub trait BenchmarkSuite<S, G>: DynamicBenchmarkSuite {
@@ -48,7 +47,7 @@ mod static_defs {
         fn fix(item: &mut Self::Start, sampler: &mut S, generator: &mut G);
 
         /// Check a given start node's constraints and return any violations as paths.
-        fn check(item: &Self::Start) -> Vec<VecDeque<usize>>;
+        fn check(item: &Self::Start) -> Violations;
     }
 }
 

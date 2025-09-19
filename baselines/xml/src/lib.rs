@@ -6,6 +6,7 @@ extern crate alloc;
 
 use common::DynamicBenchmarkSuite;
 use core::convert::Infallible;
+use fandango_runtime::operators::Checker;
 use fandango_targets::xml;
 
 /// The [`BenchmarkSuite`] definition for XML.
@@ -27,6 +28,8 @@ mod static_defs {
     use common::{BenchmarkSuite, StdGenerator, StdSampler};
     use fandango::generation::Generated;
     use fandango::visitor::{Visitor, VisitorMut};
+    use fandango_runtime::measurement::Violations;
+    use fandango_runtime::operators::Checker;
     use fandango_targets::{Checker, xml};
 
     impl BenchmarkSuite<StdSampler, StdGenerator> for Benchmark {
@@ -44,7 +47,7 @@ mod static_defs {
                 .unwrap();
         }
 
-        fn check(item: &Self::Start) -> Vec<VecDeque<usize>> {
+        fn check(item: &Self::Start) -> Violations {
             xml::ConstraintVisitor::evaluated()
                 .visit(item, 0)
                 .unwrap()

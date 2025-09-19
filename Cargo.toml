@@ -48,7 +48,6 @@ members = [
     "baselines/rest",
     "baselines/scriptsizec",
     "baselines/xml",
-    "lm3s6965-demo"
 ]
 default-members = [
     ".", "core", "derive", "targets", "generator", "runtime"

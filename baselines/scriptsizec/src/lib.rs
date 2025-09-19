@@ -22,12 +22,12 @@ impl DynamicBenchmarkSuite for Benchmark {
 #[cfg(feature = "static_defs")]
 mod static_defs {
     use crate::Benchmark;
-    use alloc::collections::VecDeque;
-    use alloc::vec::Vec;
     use common::{BenchmarkSuite, StdGenerator, StdSampler};
     use fandango::generation::Generated;
     use fandango::visitor::Visitor;
-    use fandango_targets::{Checker, scriptsizec};
+    use fandango_runtime::measurement::Violations;
+    use fandango_runtime::operators::Checker;
+    use fandango_targets::scriptsizec;
 
     impl BenchmarkSuite<StdSampler, StdGenerator> for Benchmark {
         type Start = scriptsizec::nonterminal_start;
@@ -44,7 +44,7 @@ mod static_defs {
                 .unwrap();
         }
 
-        fn check(item: &Self::Start) -> Vec<VecDeque<usize>> {
+        fn check(item: &Self::Start) -> Violations {
             scriptsizec::ConstraintVisitor::evaluated()
                 .visit(item, 0)
                 .unwrap()

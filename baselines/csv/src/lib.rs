@@ -22,12 +22,12 @@ impl DynamicBenchmarkSuite for Benchmark {
 #[cfg(feature = "static_defs")]
 mod static_defs {
     use crate::Benchmark;
-    use alloc::collections::VecDeque;
-    use alloc::vec::Vec;
     use common::{BenchmarkSuite, StdGenerator, StdSampler};
     use fandango::generation::Generated;
     use fandango::visitor::{Visitor, VisitorMut};
-    use fandango_targets::{Checker, csv};
+    use fandango_runtime::measurement::Violations;
+    use fandango_runtime::operators::Checker;
+    use fandango_targets::csv;
 
     impl BenchmarkSuite<StdSampler, StdGenerator> for Benchmark {
         type Start = csv::nonterminal_start;
@@ -44,7 +44,7 @@ mod static_defs {
                 .unwrap();
         }
 
-        fn check(item: &Self::Start) -> Vec<VecDeque<usize>> {
+        fn check(item: &Self::Start) -> Violations {
             csv::ConstraintVisitor::evaluated()
                 .visit(item, 0)
                 .unwrap()

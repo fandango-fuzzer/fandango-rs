@@ -27,7 +27,9 @@ mod static_defs {
     use common::{BenchmarkSuite, StdGenerator, StdSampler};
     use fandango::generation::Generated;
     use fandango::visitor::Visitor;
-    use fandango_targets::{Checker, rest};
+    use fandango_runtime::measurement::Violations;
+    use fandango_runtime::operators::Checker;
+    use fandango_targets::rest;
 
     impl BenchmarkSuite<StdSampler, StdGenerator> for Benchmark {
         type Start = rest::nonterminal_start;
@@ -44,7 +46,7 @@ mod static_defs {
                 .unwrap();
         }
 
-        fn check(item: &Self::Start) -> Vec<VecDeque<usize>> {
+        fn check(item: &Self::Start) -> Violations {
             rest::ConstraintVisitor::evaluated()
                 .visit(item, 0)
                 .unwrap()
