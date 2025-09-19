@@ -8,9 +8,9 @@ publish = false
 static_defs = ["fandango-targets/static_defs"]
 
 [dependencies]
-fandango.workspace = true
-fandango-runtime.workspace = true
-fandango-targets.workspace = true
+fandango = { path = "../.." }
+fandango-runtime = { path = "../../runtime" }
+fandango-targets = { path = "../../targets" }
 
 hashbrown.workspace = true
 rand = { workspace = true, features = ["std_rng"] }

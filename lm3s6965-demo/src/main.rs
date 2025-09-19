@@ -31,7 +31,7 @@ mod app {
     use fandango::typing::Structured;
     use fandango::visitor::write::WriteVisitor;
     use fandango::visitor::{Visitor, VisitorMut};
-    use fandango_targets::operators::DepthLimiter;
+    use fandango_runtime::operators::DepthLimiter;
     use fandango_targets::xml;
     use rand::SeedableRng;
 

@@ -1,12 +1,11 @@
 use crate::evolvers::Evolver;
 use crate::measurement::{FitnessMeasurer, HasFitness, HasViolations};
-use crate::operators::{Fixer, crossover};
+use crate::operators::{ crossover};
 use crate::population::Individual;
 use alloc::collections::BinaryHeap;
 use alloc::vec::Vec;
 use anyhow::Error;
 use core::cmp::{Ordering, Reverse};
-use core::convert::Infallible;
 use core::iter;
 use core::marker::PhantomData;
 use fandango::generation::{Generated, InPlaceGenerated, Sampler};
@@ -15,7 +14,7 @@ use fandango::visitor::VisitorMut;
 use fandango::visitor::navigation::{Advance, CountNodes, GoToMut};
 use num_rational::Ratio;
 
-pub struct BasicEvolver<H, M> {
+pub struct BasicEvolver<H, M, N> {
     measurer: M,
     hooks: H,
 
@@ -24,27 +23,29 @@ pub struct BasicEvolver<H, M> {
     replication: usize,
 
     crossover_rate: Ratio<usize>,
+    phantom: PhantomData<N>,
 }
 
-impl<H, M> BasicEvolver<H, M> {
-    pub fn new(
+impl<H, M> BasicEvolver<H, M, ()> {
+    pub fn new<N>(
         measurer: M,
         hooks: H,
         size: usize,
         elites: usize,
         replication: usize,
         crossover_rate: Ratio<usize>,
-    ) -> Option<Self> {
+    ) -> Option<BasicEvolver<H, M, N>> {
         if crossover_rate.numer() > crossover_rate.denom() || size <= elites || replication < size {
             return None;
         }
-        Some(Self {
+        Some(BasicEvolver::<H, M, N> {
             measurer,
             hooks,
             size,
             elites,
             replication,
             crossover_rate,
+            phantom: PhantomData,
         })
     }
 }
@@ -104,7 +105,7 @@ where
     }
 }
 
-impl<N, G, S, H, M, V> Evolver<BasicIndividual<N, V>, G, S> for BasicEvolver<H, M>
+impl<N, G, S, H, M, V> Evolver<BasicIndividual<N, V>, G, S> for BasicEvolver<H, M, N>
 where
     H: BasicHook<N, G, S>,
     N: Node + Generated<S, G>,
