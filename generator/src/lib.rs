@@ -587,16 +587,12 @@ pub fn derive_fandango_or_emit_error(
                     }
                 }
 
-                impl<'a, 'program, V> ::fandango::visitor::VisitWithMut<'a, V> for TypeMut<'program>
-                where
-                    'program: 'a,
+                impl<'program, V> ::fandango::visitor::VisitWithMut<V> for TypeMut<'program>
                 {
-                    type Visited = TypeMut<'a>;
-
-                    fn visit_with_mut(&'a mut self, visitor: V, idx: usize) -> ::fandango::visitor::VisitMutResult<V, Self::Visited>
+                    fn visit_with_mut(self, visitor: V, idx: usize) -> ::fandango::visitor::VisitMutResult<V, Self>
                     where
-                        V: ::fandango::visitor::VisitorMut<TypeMut<'a>>, {
-                        match self.reborrow_mut() {
+                        V: ::fandango::visitor::VisitorMut<Self>, {
+                        match self {
                             #(TypeMut::#node_names(n) => visitor.visit_mut(n, idx)),*
                         }
                     }

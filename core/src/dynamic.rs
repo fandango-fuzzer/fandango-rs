@@ -4,7 +4,9 @@
 
 #![expect(deprecated)]
 
-use crate::generation::{DefaultGenerated, Generated, GeneratorTuple, InPlaceGenerated, Sampler};
+use crate::generation::{
+    DefaultGenerated, Generated, GeneratorTuple, InPlaceGenerated, RawSampler, Sampler,
+};
 use crate::lang::{Operator, Symbol};
 use crate::typing::{
     AsNode, AsNodeMut, AsNodeRef, AssignFrom, Discriminable, DiscriminantLookup, Node,
@@ -237,6 +239,19 @@ impl<'sampler, S> DynamicSampler<'sampler, S> {
     }
 }
 
+impl<S> RawSampler for DynamicSampler<'_, S>
+where
+    S: RawSampler,
+{
+    fn sample(&mut self) -> usize {
+        self.inner.sample()
+    }
+
+    fn reseed(&mut self, seed: u64) {
+        self.inner.reseed(seed)
+    }
+}
+
 impl<S> Sampler<DynamicNode> for DynamicSampler<'_, S>
 where
     S: Sampler<DynamicNode>,
@@ -259,14 +274,6 @@ where
 
     fn sample_alternative(&mut self, count: usize) -> usize {
         self.inner.sample_alternative(count)
-    }
-
-    fn sample(&mut self) -> usize {
-        self.inner.sample()
-    }
-
-    fn reseed(&mut self, seed: u64) {
-        self.inner.reseed(seed)
     }
 }
 
@@ -738,12 +745,10 @@ impl<'a, V> VisitWith<'a, V> for &'a DynamicNode {
     }
 }
 
-impl<'a, V> VisitWithMut<'a, V> for &'a mut DynamicNode {
-    type Visited = &'a mut DynamicNode;
-
-    fn visit_with_mut(&'a mut self, visitor: V, idx: usize) -> VisitMutResult<V, Self::Visited>
+impl<'a, V> VisitWithMut<V> for &'a mut DynamicNode {
+    fn visit_with_mut(self, visitor: V, idx: usize) -> VisitMutResult<V, Self>
     where
-        V: VisitorMut<Self::Visited>,
+        V: VisitorMut<Self>,
     {
         visitor.visit_mut(self, idx)
     }

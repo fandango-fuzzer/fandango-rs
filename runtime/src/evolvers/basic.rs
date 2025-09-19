@@ -1,6 +1,6 @@
 use crate::evolvers::Evolver;
 use crate::measurement::{FitnessMeasurer, HasFitness, HasViolations};
-use crate::operators::crossover;
+use crate::operators::{MutatorVisitor, crossover};
 use crate::population::Individual;
 use alloc::collections::BinaryHeap;
 use alloc::vec::Vec;
@@ -10,8 +10,12 @@ use core::iter;
 use core::marker::PhantomData;
 use fandango::generation::{Generated, InPlaceGenerated, Sampler};
 use fandango::typing::Node;
-use fandango::visitor::VisitorMut;
-use fandango::visitor::navigation::{Advance, CountNodes, GoToMut};
+use fandango::visitor::navigation::{
+    Advance, CountNodes, CountNodesWith, GoToMut, NodeCountVisitor,
+};
+use fandango::visitor::{
+    VisitWith, VisitWithMut, VisitableChildren, VisitableChildrenMut, VisitorMut,
+};
 use num_rational::Ratio;
 
 pub struct BasicEvolver<H, M, N> {
@@ -109,7 +113,9 @@ impl<N, G, S, H, M, V> Evolver<BasicIndividual<N, V>, G, S> for BasicEvolver<H, 
 where
     H: BasicHook<N, G, S>,
     N: Node + Generated<S, G>,
-    for<'a> N::TypeMut<'a>: InPlaceGenerated<S, G>,
+    for<'a, 'b, 'c> N::TypeMut<'a>: VisitWithMut<MutatorVisitor<'b, S, G>>
+        + InPlaceGenerated<S, G>
+        + VisitableChildrenMut<N::TypeMut<'a>>,
     for<'a> M: FitnessMeasurer<'a, N, Error = Error, Value = V>,
     V: HasFitness + HasViolations,
     S: Sampler<N>,
@@ -166,10 +172,14 @@ where
             if sampler.sample() % *self.crossover_rate.denom() < *self.crossover_rate.numer() {
                 let mate = &population[sampler.sample() % population.len()];
                 crossover(&mut mutated, mate.node(), sampler)?;
+                drop(mutated);
             } else {
-                mutated.generate_in_place(sampler, generators, 0);
+                let mutator = MutatorVisitor::new(sampler, generators);
+                mutated
+                    .visit_with_mut(mutator, 0)?
+                    .continue_value()
+                    .unwrap();
             }
-            drop(mutated);
 
             self.hooks
                 .individual_created(&mut child, generators, sampler)?;

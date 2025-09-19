@@ -62,15 +62,11 @@ pub trait VisitWith<'a, V>: Sized {
 }
 
 /// Visits a mutable opaque node with the provided visitor.
-pub trait VisitWithMut<'a, V>: Sized {
-    /// This type is an intermediary which represents what type *actually* gets visited by the
-    /// visitor.
-    type Visited;
-
+pub trait VisitWithMut<V>: Sized {
     /// Perform the visit on the opaque node.
-    fn visit_with_mut(&'a mut self, visitor: V, idx: usize) -> VisitMutResult<V, Self::Visited>
+    fn visit_with_mut(self, visitor: V, idx: usize) -> VisitMutResult<V, Self>
     where
-        V: VisitorMut<Self::Visited>;
+        V: VisitorMut<Self>;
 }
 
 /// The result type returned by visitors.

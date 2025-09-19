@@ -8,9 +8,18 @@ use crate::typing::AsStaticNode;
 use alloc::boxed::Box;
 use rand::{Rng, SeedableRng};
 
+/// Sampler which is not associated with any particular node.
+pub trait RawSampler {
+    /// Sample an arbitrary usize, without any tagging information.
+    fn sample(&mut self) -> usize;
+
+    /// Resets the seed with the provided value.
+    fn reseed(&mut self, seed: u64);
+}
+
 /// Sampler definition, allowing for tuning of the random generation. See [`util::Flattener`]'s
 /// source code for an example of how this might be used.
-pub trait Sampler<N> {
+pub trait Sampler<N>: RawSampler {
     /// Sample a kleene operator for a number of repetitions.
     fn sample_kleene(&mut self) -> usize;
     /// Sample a plus operator for a number of repetitions.
@@ -21,16 +30,24 @@ pub trait Sampler<N> {
     fn sample_repetition(&mut self, lower: usize, upper: usize) -> usize;
     /// Sample over an alternative.
     fn sample_alternative(&mut self, count: usize) -> usize;
-    /// Sample an arbitrary usize, without any tagging information.
-    fn sample(&mut self) -> usize;
-
-    /// Resets the seed with the provided value.
-    fn reseed(&mut self, seed: u64);
 }
 
 /// The default upper bound on the number of repetitions when an unmodified [`Rng`] is used as a
 /// [`Sampler`].
 pub const DEFAULT_UPPER_COUNT: usize = 5;
+
+impl<R> RawSampler for R
+where
+    R: Rng + SeedableRng,
+{
+    fn sample(&mut self) -> usize {
+        self.next_u64() as usize
+    }
+
+    fn reseed(&mut self, seed: u64) {
+        *self = R::seed_from_u64(seed)
+    }
+}
 
 impl<N, R> Sampler<N> for R
 where
@@ -54,14 +71,6 @@ where
 
     fn sample_alternative(&mut self, count: usize) -> usize {
         self.random_range(0..count)
-    }
-
-    fn sample(&mut self) -> usize {
-        self.next_u64() as usize
-    }
-
-    fn reseed(&mut self, seed: u64) {
-        *self = R::seed_from_u64(seed)
     }
 }
 
