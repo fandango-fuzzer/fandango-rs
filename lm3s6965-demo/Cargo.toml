@@ -16,3 +16,17 @@ fandango-targets = { path = "../targets", features = ["xml"] }
 lm3s6965 = { git = "https://github.com/japaric/lm3s6965.git", rev = "facf63aa0169c773175a143f6014a1d0977fb74f" }
 panic-semihosting = { version = "0.6.0", features = ["exit"] }
 rand = { version = "0.9.0", default-features = false, features = ["std_rng"] }
+
+[profile.dev]
+opt-level = "z"
+strip = true
+lto = true
+debug-assertions = false
+
+[profile.release]
+opt-level = "z"
+strip = true
+lto = true
+
+[workspace]
+members = ["."]

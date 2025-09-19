@@ -23,11 +23,9 @@ jobs:
       - run: sudo apt update && sudo apt install -y libfontconfig-dev pkg-config
       - run: rustup update ${{ matrix.toolchain }} && rustup default ${{ matrix.toolchain }}
       - name: Build
-        run: cargo build --verbose --workspace
+        run: cargo build --verbose --workspace --benches --tests --examples
       - name: Run tests
         run: cargo test --verbose --workspace
-      - name: Build baselines
-        run: cd baselines && cargo build --verbose --benches
 
   fmt:
     runs-on: ubuntu-latest
@@ -41,10 +39,6 @@ jobs:
       - run: rustup component add rustfmt
       - name: Format
         run: cargo fmt --check
-      - name: Format baselines
-        run: pushd baselines && cargo fmt --check && popd
-      - name: Format lm3s6965
-        run: pushd lm3s6965-demo && cargo fmt --check && popd
 
   check:
     runs-on: ubuntu-latest
@@ -58,9 +52,7 @@ jobs:
       - run: rustup update ${{ matrix.toolchain }} && rustup default ${{ matrix.toolchain }}
       - run: rustup component add clippy
       - name: Clippy
-        run: cargo clippy --all-features --workspace --tests --benches -- -D warnings
-      - name: Clippy baselines
-        run: pushd baselines && cargo clippy --all-features --workspace --tests --benches -- -D warnings && popd
+        run: cargo clippy --all-features --workspace --tests --benches --examples -- -D warnings
 
   lm3s6965:
     runs-on: ubuntu-latest
