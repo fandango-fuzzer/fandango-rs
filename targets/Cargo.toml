@@ -28,6 +28,7 @@ fandango-runtime = { path = "../runtime" }
 anyhow.workspace = true
 embedded-io.workspace = true
 hashbrown.workspace = true
+num-rational.workspace = true
 
 [lints]
 workspace = true

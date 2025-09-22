@@ -203,11 +203,12 @@ impl<'program, 'source> IntoRustSource<FandangoGenContext<'_, '_, 'program, 'sou
         ctx: FandangoGenContext<'_, '_, 'program, 'source>,
         output: &mut TokenStream,
     ) -> Result<(), Self::OutputError> {
+        #[allow(unused_assignments)]
         let (
             name,
             pest_name,
             node_weight,
-            span,
+            mut span,
             mut last_nonterminal,
             mapped_names,
             graph,
@@ -1003,12 +1004,19 @@ impl<'program, 'source> IntoRustSource<FandangoGenContext<'_, '_, 'program, 'sou
 
                 let child_range = 0usize..;
 
-                last_nonterminal = Span::new(
-                    span.get_input(),
-                    span.start(),
-                    children.last().unwrap().3.end(),
-                )
-                .unwrap();
+                if matches!(node_weight, FandangoNode::Nonterminal(_)) {
+                    for incoming in graph.edges_directed(*self, Direction::Incoming) {
+                        if let FandangoNode::Production(prod) = graph[incoming.source()] {
+                            span = prod.nonterminal().span();
+                            last_nonterminal = Span::new(
+                                span.get_input(),
+                                prod.nonterminal().span().start(),
+                                prod.alternative().span().end(),
+                            )
+                            .unwrap();
+                        }
+                    }
+                }
 
                 local_output.extend(quote! {
                     #derives

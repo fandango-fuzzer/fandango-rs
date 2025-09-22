@@ -10,12 +10,8 @@ use core::iter;
 use core::marker::PhantomData;
 use fandango::generation::{Generated, InPlaceGenerated, Sampler};
 use fandango::typing::Node;
-use fandango::visitor::navigation::{
-    Advance, CountNodes, CountNodesWith, GoToMut, NodeCountVisitor,
-};
-use fandango::visitor::{
-    VisitWith, VisitWithMut, VisitableChildren, VisitableChildrenMut, VisitorMut,
-};
+use fandango::visitor::navigation::{Advance, CountNodes, GoToMut};
+use fandango::visitor::{VisitWithMut, VisitableChildrenMut, VisitorMut};
 use num_rational::Ratio;
 
 pub struct BasicEvolver<H, M, N> {

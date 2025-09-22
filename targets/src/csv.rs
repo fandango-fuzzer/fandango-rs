@@ -37,6 +37,7 @@ mod defs {
     };
     use fandango_runtime::measurement::Violations;
     use fandango_runtime::operators::Checker;
+    use num_rational::Ratio;
 
     /// Base for the CSV grammar stored in csv.fan.
     #[derive(Fandango)]
@@ -47,6 +48,7 @@ mod defs {
     #[derive(Debug, Default)]
     pub struct ConstraintVisitor<const CORRECT: bool> {
         path: VecDeque<usize>,
+        checked: usize,
         violations: Vec<VecDeque<usize>>,
     }
 
@@ -67,7 +69,12 @@ mod defs {
 
     impl<const FIXED: bool> Checker for ConstraintVisitor<FIXED> {
         fn violations(self) -> Violations {
-            Violations::new(self.violations.len(), self.violations)
+            Violations::new(
+                (self.checked != 0)
+                    .then(|| Ratio::new(self.checked - self.violations.len(), self.checked))
+                    .unwrap_or_default(),
+                self.violations,
+            )
         }
     }
 
@@ -98,6 +105,7 @@ mod defs {
             if let Some(tree) = visited.downcast::<nonterminal_csv_records>()
                 && let Some(seq) = tree.nth::<0>().nth::<0>()
             {
+                self.checked += 1;
                 let base = count_fields(seq.nth::<0>().nth::<0>().nth::<0>());
                 // because this is a universal equality, we can just check this pairwise
                 if let Some(seq) = seq.nth::<1>().nth::<0>().nth::<0>() {
