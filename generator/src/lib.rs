@@ -7,7 +7,7 @@ mod structure;
 
 use ::pest::Span;
 use fandango_core::graph::IntoGraph;
-use fandango_core::lang::{FandangoNode, ParseError, Program};
+use fandango_core::lang::{FandangoNode, ParseError, Program, Statement};
 use hashbrown::HashMap;
 use pest::error::{InputLocation, LineColLocation};
 use quote::{format_ident, quote};
@@ -236,6 +236,25 @@ pub fn derive_fandango_or_emit_error(
     });
 
     let input = parsed.statements()[0].span().get_input();
+    let (decl, definition) = parsed
+        .statements()
+        .iter()
+        .find_map(|s| match s.inner() {
+            Statement::Production(p) => {
+                if p.inner().nonterminal().inner().name() == "start" {
+                    let decl = p.inner().nonterminal().span();
+                    let definition = p.inner().alternative().span();
+                    Some((
+                        decl,
+                        Span::new(decl.get_input(), decl.start(), definition.end()).unwrap(),
+                    ))
+                } else {
+                    None
+                }
+            }
+            _ => None,
+        })
+        .expect("No start node?");
 
     let (_lookup, graph) = (&parsed).into_graph();
     let mut tokenized = TokenStream::new();
@@ -243,7 +262,13 @@ pub fn derive_fandango_or_emit_error(
     let mut mapped_names = HashMap::new();
     graph
         .emit_rust(
-            (&mut mapped_names, source.parse(), source.serde()),
+            (
+                &mut mapped_names,
+                source.parse(),
+                source.serde(),
+                decl,
+                definition,
+            ),
             &mut tokenized,
         )
         .unwrap();
