@@ -9,7 +9,6 @@ use core::slice;
 use either::Either;
 use fandango::typing::{AsNodeRef, Node, Opaque};
 use fandango::visitor::error::InvalidPath;
-use fandango::visitor::navigation::{CountNodes, NodeCountVisitor};
 use fandango::visitor::{VisitResult, VisitableChildren, Visitor};
 use num_rational::Ratio;
 
@@ -34,15 +33,18 @@ pub trait HasViolations {
 }
 
 pub struct Violations {
-    count: usize,
+    pass_rate: Ratio<usize>,
     violations: Vec<VecDeque<usize>>,
 }
 
 impl Violations {
     /// A list of violations, potentially unsimplified
-    pub fn new(mut count: usize, mut violations: Vec<VecDeque<usize>>) -> Self {
-        count -= Self::simplify(&mut violations);
-        Self { count, violations }
+    pub fn new(pass_rate: Ratio<usize>, mut violations: Vec<VecDeque<usize>>) -> Self {
+        let removed = Self::simplify(&mut violations);
+        Self {
+            pass_rate: Ratio::new(*pass_rate.numer() - removed, *pass_rate.denom() - removed),
+            violations,
+        }
     }
 
     pub fn violations(&self) -> &[VecDeque<usize>] {
@@ -56,8 +58,8 @@ impl Violations {
         before - violations.len()
     }
 
-    pub fn count(&self) -> usize {
-        self.count
+    pub fn pass_rate(&self) -> Ratio<usize> {
+        self.pass_rate
     }
 }
 
@@ -180,25 +182,11 @@ where
 
     fn evaluate(
         &mut self,
-        node: &'a N,
+        _node: &'a N,
         violations: Violations,
     ) -> Result<Self::Value, Self::Error> {
-        let total = node.count_nodes();
-        let unaccounted = violations.count() - violations.violations().len();
-        let num_violations =
-            if let Some(visitor) = ViolationsVisitor::new(&violations, NodeCountVisitor::new()) {
-                visitor
-                    .visit(node, 0)
-                    .map_err(|e| e.left().expect("node counting is infallible"))?
-                    .break_value()
-                    .ok_or(InvalidPath)?
-                    .count()
-            } else {
-                0
-            };
-        let fitness = Ratio::new(total - num_violations, total * (unaccounted + 1));
         Ok(SimpleMeasurement {
-            fitness,
+            fitness: violations.pass_rate(),
             violations,
         })
     }

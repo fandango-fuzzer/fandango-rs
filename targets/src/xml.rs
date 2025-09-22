@@ -41,6 +41,7 @@ mod defs {
     use fandango_runtime::evolvers::basic::BasicHook;
     use fandango_runtime::measurement::Violations;
     use fandango_runtime::operators::Checker;
+    use num_rational::Ratio;
 
     /// Base for the XML grammar stored in xml.fan.
     #[derive(Fandango)]
@@ -51,6 +52,7 @@ mod defs {
     #[derive(Debug, Default)]
     pub struct ConstraintVisitor {
         path: VecDeque<usize>,
+        checked: usize,
         violations: Vec<VecDeque<usize>>,
     }
 
@@ -68,7 +70,12 @@ mod defs {
 
     impl Checker for ConstraintVisitor {
         fn violations(self) -> Violations {
-            Violations::new(self.violations.len(), self.violations)
+            Violations::new(
+                (self.checked != 0)
+                    .then(|| Ratio::new(self.checked - self.violations.len(), self.checked))
+                    .unwrap_or_default(),
+                self.violations,
+            )
         }
     }
 
@@ -90,6 +97,7 @@ mod defs {
             self.path.push_back(idx);
             let visited = node.opaque();
             if let Some(tree) = visited.downcast::<nonterminal_xml_tree>() {
+                self.checked += 1;
                 let (open, _, close) = tree.child().children();
                 let id = match open.child() {
                     nonterminal_xml_open_tag_0::variant_0(n) => n.nth::<1>(),
@@ -112,6 +120,7 @@ mod defs {
                             (cmp, Some(rest))
                         }
                     };
+                    self.checked += 1;
                     if base == cmp {
                         let mut violation = self.path.clone();
                         violation.extend([0, 1, 0, 0, 0]); // interior path to actual node

@@ -1,8 +1,5 @@
 pub mod basic;
 
-use crate::population::Individual;
-use ::fandango::typing::Node;
-
 pub trait Evolver<I, G, S> {
     type Population;
 

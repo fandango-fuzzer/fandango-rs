@@ -36,6 +36,7 @@ mod defs {
     use fandango_runtime::measurement::Violations;
     use fandango_runtime::operators::Checker;
     use hashbrown::HashSet;
+    use num_rational::Ratio;
 
     /// Base for the ScriptSizeC grammar stored in ssc.fan.
     #[derive(Fandango)]
@@ -46,6 +47,7 @@ mod defs {
     #[derive(Debug, Default)]
     pub struct ConstraintVisitor<S> {
         scope: S,
+        checked: usize,
         path: VecDeque<usize>,
         violations: Vec<VecDeque<usize>>,
     }
@@ -65,7 +67,12 @@ mod defs {
         S: Default,
     {
         fn violations(self) -> Violations {
-            Violations::new(self.violations.len(), self.violations)
+            Violations::new(
+                (self.checked != 0)
+                    .then(|| Ratio::new(self.checked - self.violations.len(), self.checked))
+                    .unwrap_or_default(),
+                self.violations,
+            )
         }
     }
 
@@ -85,6 +92,7 @@ mod defs {
             self.path.push_back(idx);
             let visited = node.opaque();
             if let Some(decl) = visited.downcast::<nonterminal_declaration>() {
+                self.checked += 1;
                 let (id, path) = match decl.nth::<0>() {
                     nonterminal_declaration_0::variant_0(child) => (child.nth::<1>(), [0, 0, 1]),
                     nonterminal_declaration_0::variant_1(child) => (child.nth::<1>(), [0, 1, 1]),
@@ -96,10 +104,11 @@ mod defs {
                 } else {
                     self.scope.insert(id.clone());
                 }
-            } else if let Some(id) = visited.downcast::<nonterminal_id>()
-                && !self.scope.contains(id)
-            {
-                self.violations.push(self.path.clone());
+            } else if let Some(id) = visited.downcast::<nonterminal_id>() {
+                self.checked += 1;
+                if !self.scope.contains(id) {
+                    self.violations.push(self.path.clone());
+                }
             }
             let result = visited.visit_each(self);
             let Ok(ControlFlow::Continue(mut visitor)) = result;

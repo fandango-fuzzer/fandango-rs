@@ -47,6 +47,7 @@ mod defs {
     use fandango_runtime::measurement::Violations;
     use fandango_runtime::operators::Checker;
     use hashbrown::HashSet;
+    use num_rational::Ratio;
 
     /// Base for the REST grammar stored in rest.fan.
     #[derive(Fandango)]
@@ -57,6 +58,7 @@ mod defs {
     #[derive(Debug, Default)]
     pub struct ConstraintVisitor<const FIXED: bool> {
         path: VecDeque<usize>,
+        checked: usize,
         violations: Vec<VecDeque<usize>>,
         labels: Labels,
     }
@@ -71,7 +73,12 @@ mod defs {
 
     impl<const FIXED: bool> Checker for ConstraintVisitor<FIXED> {
         fn violations(self) -> Violations {
-            Violations::new(self.violations.len(), self.violations)
+            Violations::new(
+                (self.checked != 0)
+                    .then(|| Ratio::new(self.checked - self.violations.len(), self.checked))
+                    .unwrap_or_default(),
+                self.violations,
+            )
         }
     }
 
@@ -133,6 +140,7 @@ mod defs {
             }
 
             if let Some(title) = visited.downcast::<nonterminal_section_title>() {
+                self.checked += 1;
                 if WriteVisitor::new(LengthCounter::default())
                     .visit(title.nth::<0>().nth::<0>().deref(), 0)?
                     .continue_value()
@@ -151,6 +159,7 @@ mod defs {
                     self.violations.push(path);
                 }
             } else if let Some(internal) = visited.downcast::<nonterminal_internal_reference>() {
+                self.checked += 1;
                 if !self.labels.contains(internal.nth::<0>().nth::<1>()) {
                     let mut path = self.path.clone();
                     path.extend([0, 1]);
@@ -160,6 +169,7 @@ mod defs {
                 visited.downcast::<nonterminal_internal_reference_nospace>()
                 && !self.labels.contains(internal.nth::<0>().nth::<0>())
             {
+                self.checked += 1;
                 let mut path = self.path.clone();
                 path.extend([0, 0]);
                 self.violations.push(path);
@@ -229,7 +239,7 @@ mod defs {
         use core::ops::ControlFlow;
         use fandango::generation::Generated;
         use fandango::tuple_list::tuple_list;
-        use fandango::typing::Structured;
+        use fandango::typing::{Nth, Structured};
         use fandango::visitor::Visitor;
         use fandango::visitor::navigation::GoTo;
         use fandango_runtime::operators::DepthLimiter;
