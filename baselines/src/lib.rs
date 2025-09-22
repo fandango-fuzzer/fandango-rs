@@ -1,5 +1,8 @@
 //! Generic baseline benchmark runners against FANDANGO.
 
+#![no_std]
+#![expect(deprecated)]
+
 extern crate alloc;
 
 use alloc::vec::Vec;
