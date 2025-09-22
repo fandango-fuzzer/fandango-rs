@@ -745,7 +745,7 @@ impl<'a, V> VisitWith<'a, V> for &'a DynamicNode {
     }
 }
 
-impl<'a, V> VisitWithMut<V> for &'a mut DynamicNode {
+impl<V> VisitWithMut<V> for &mut DynamicNode {
     fn visit_with_mut(self, visitor: V, idx: usize) -> VisitMutResult<V, Self>
     where
         V: VisitorMut<Self>,

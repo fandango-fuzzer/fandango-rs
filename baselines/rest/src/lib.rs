@@ -20,10 +20,11 @@ impl DynamicBenchmarkSuite for Benchmark {
 }
 
 #[cfg(feature = "static_defs")]
+#[expect(deprecated)]
 mod static_defs {
     use crate::Benchmark;
-    use alloc::collections::VecDeque;
-    use alloc::vec::Vec;
+    
+    
     use common::{BenchmarkSuite, StdGenerator, StdSampler};
     use fandango::generation::Generated;
     use fandango::visitor::Visitor;

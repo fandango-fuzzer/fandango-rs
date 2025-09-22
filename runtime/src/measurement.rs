@@ -136,7 +136,7 @@ where
                 self.inner = self
                     .inner
                     .visit(node, idx)
-                    .map_err(|e| Either::Right(e))?
+                    .map_err(Either::Right)?
                     .continue_value()
                     .unwrap();
                 if let Some(next) = self.rest.next() {
@@ -154,6 +154,12 @@ where
 
 pub struct ViolationFitness<V> {
     phantom: PhantomData<V>,
+}
+
+impl<V> Default for ViolationFitness<V> {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl<V> ViolationFitness<V> {

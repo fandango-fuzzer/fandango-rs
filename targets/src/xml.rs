@@ -71,9 +71,7 @@ mod defs {
     impl Checker for ConstraintVisitor {
         fn violations(self) -> Violations {
             Violations::new(
-                (self.checked != 0)
-                    .then(|| Ratio::new(self.checked - self.violations.len(), self.checked))
-                    .unwrap_or_default(),
+                if self.checked != 0 { Ratio::new(self.checked - self.violations.len(), self.checked) } else { Default::default() },
                 self.violations,
             )
         }

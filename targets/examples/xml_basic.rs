@@ -1,3 +1,5 @@
+//! This example demonstrates how to use the (basic) evolver
+
 use anyhow::Error;
 use fandango::tuple_list::tuple_list;
 use fandango::visitor::Visitor;
@@ -8,7 +10,6 @@ use fandango_runtime::measurement::{HasFitness, ViolationFitness};
 use fandango_runtime::operators::DepthLimiter;
 use fandango_runtime::population::Individual;
 use fandango_targets::xml;
-use fandango_targets::xml::XmlFixHook;
 use num_rational::Ratio;
 use rand::SeedableRng;
 use rand::rngs::StdRng;
