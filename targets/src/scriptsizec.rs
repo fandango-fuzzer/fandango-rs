@@ -68,11 +68,7 @@ mod defs {
     {
         fn violations(self) -> Violations {
             Violations::new(
-                if self.checked != 0 {
-                    Ratio::new(self.checked - self.violations.len(), self.checked)
-                } else {
-                    Default::default()
-                },
+                if self.checked != 0 { Ratio::new(self.checked - self.violations.len(), self.checked) } else { Default::default() },
                 self.violations,
             )
         }
