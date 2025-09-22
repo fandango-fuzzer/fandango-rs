@@ -74,9 +74,7 @@ mod defs {
     impl<const FIXED: bool> Checker for ConstraintVisitor<FIXED> {
         fn violations(self) -> Violations {
             Violations::new(
-                (self.checked != 0)
-                    .then(|| Ratio::new(self.checked - self.violations.len(), self.checked))
-                    .unwrap_or_default(),
+                if self.checked != 0 { Ratio::new(self.checked - self.violations.len(), self.checked) } else { Default::default() },
                 self.violations,
             )
         }
@@ -239,7 +237,7 @@ mod defs {
         use core::ops::ControlFlow;
         use fandango::generation::Generated;
         use fandango::tuple_list::tuple_list;
-        use fandango::typing::{Nth, Structured};
+        use fandango::typing::Structured;
         use fandango::visitor::Visitor;
         use fandango::visitor::navigation::GoTo;
         use fandango_runtime::operators::DepthLimiter;
