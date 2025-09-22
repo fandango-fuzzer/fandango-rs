@@ -5,7 +5,7 @@
 use crate::lang::{FandangoNode, Operator, Program, Symbol};
 use crate::typing::{AsNodeRef, DiscriminantLookup, Node, Opaque};
 use crate::visitor::{VisitResult, VisitableChildren, Visitor};
-use alloc::collections::{BTreeMap, BTreeSet, VecDeque};
+use alloc::collections::VecDeque;
 use alloc::vec;
 use alloc::vec::Vec;
 use core::convert::Infallible;
@@ -23,7 +23,6 @@ use serde::{Deserialize, Deserializer, Serialize, Serializer};
 #[derive(Clone, Debug)]
 pub struct KPaths {
     k: NonZeroUsize,
-    distribution: BTreeMap<usize, BTreeSet<Mrc<[usize]>>>,
     lookup: HashMap<Mrc<[usize]>, usize>,
 }
 
@@ -117,7 +116,6 @@ impl KPaths {
         Self {
             k,
             lookup: collected.iter().map(|path| (path.clone(), 0)).collect(),
-            distribution: BTreeMap::from([(0, BTreeSet::from_iter(collected))]),
         }
     }
 
@@ -222,21 +220,15 @@ impl KPaths {
 
     /// Get the current k-paths totals expressed as `(#uncovered, #total)`.
     pub fn k_paths(&self) -> (usize, usize) {
-        let total = self.distribution.values().map(|v| v.len()).sum::<usize>();
-        let zero = self.distribution.get(&0).map_or(0, |v| v.len());
-        (zero, total)
+        (
+            self.lookup.values().filter(|v| **v == 0).count(),
+            self.lookup.len(),
+        )
     }
 
     /// The `k` of k-path.
     pub fn k(&self) -> NonZeroUsize {
         self.k
-    }
-
-    /// Get the current distribution of paths.
-    ///
-    /// Keys are the number of times that the set (i.e. the value) members have been observed.
-    pub fn distribution(&self) -> &BTreeMap<usize, BTreeSet<Mrc<[usize]>>> {
-        &self.distribution
     }
 
     /// Get the lookup table, which maps a particular path to a number of observations of that path.
@@ -295,24 +287,12 @@ where
         self.stack.push(node.discriminant());
         for offset in self.stack.len().saturating_sub(self.kpaths.k.get())..self.stack.len() {
             let slice = &self.stack[offset..];
-            let (rcd, count) = self.kpaths.lookup.get_key_value_mut(slice).unwrap();
-            let old = self.kpaths.distribution.get_mut(count).unwrap();
-            assert!(old.remove(slice));
-            if old.is_empty() {
-                self.kpaths.distribution.remove(count);
-            }
+            let (_rcd, count) = self.kpaths.lookup.get_key_value_mut(slice).unwrap();
             if INSERT {
                 *count += 1;
             } else {
                 *count = count.checked_sub(1).unwrap(); // sanity
             };
-            assert!(
-                self.kpaths
-                    .distribution
-                    .entry(*count)
-                    .or_default()
-                    .insert(rcd.clone())
-            );
         }
         let mut visitor = node
             .opaque()
