@@ -8,16 +8,24 @@ use core::ops::ControlFlow;
 use fandango::typing::Node;
 use num_rational::Ratio;
 
-/// Pairwise evaluation of [`PartialOrd`] on two tuple lists
-///
-/// Evaluates a pair of tuple lists (i.e., a Haskell-style list of heterogeneous elements) into a
-/// tuple list of the same length, but where each member is the [`PartialOrd`] ordering as evaluated
-/// pairwise with the other list.
+pub trait TupleLen {
+    const LEN: usize;
+}
+
+impl<H, T> TupleLen for (H, T)
+where
+    T: TupleLen,
+{
+    const LEN: usize = T::LEN + 1;
+}
+
+impl TupleLen for () {
+    const LEN: usize = 0;
+}
+
 pub trait TuplePartialOrd<Rhs> {
-    /// The output tuple list
     type Output;
 
-    /// Evaluate [`PartialOrd`] across [`Self`] and [`Rhs`].
     fn partial_cmp_many(&self, other: &Rhs) -> Self::Output;
 }
 
@@ -39,15 +47,14 @@ where
 impl TuplePartialOrd<()> for () {
     type Output = ();
 
-    fn partial_cmp_many(&self, _other: &()) -> Self::Output {}
+    fn partial_cmp_many(&self, _other: &()) -> Self::Output {
+        ()
+    }
 }
 
-/// A type which can compute an output for two given inputs
 pub trait Reducer<I1, I2> {
-    /// The output of the reduction
     type Output;
 
-    /// Apply the reduction
     fn apply(&self, v1: I1, v2: I2) -> Self::Output;
 }
 
@@ -62,13 +69,9 @@ where
     }
 }
 
-/// Performs a [`Iterator::fold`]-like operation over a tuple list over the provided function [`F`]
-/// with data [`T`]
 pub trait TupleFold<F, T> {
-    /// Output of the fold operation
     type Output;
 
-    /// Perform the fold with [`T`] over [`F`]
     fn fold(self, reducer: F, with: T) -> Self::Output;
 }
 
@@ -93,9 +96,24 @@ impl<F, U> TupleFold<F, U> for () {
     }
 }
 
-/// Compute the domination relationship between this sequence and another comparable sequence
+pub trait TupleReduce<F> {
+    type Output;
+
+    fn reduce(self, reducer: F) -> Self::Output;
+}
+
+impl<F, H, T> TupleReduce<F> for (H, T)
+where
+    T: TupleFold<F, H>,
+{
+    type Output = T::Output;
+
+    fn reduce(self, reducer: F) -> Self::Output {
+        self.1.fold(reducer, self.0)
+    }
+}
+
 pub trait Dom<Rhs = Self> {
-    /// Compute the domination relationship
     fn dominates(&self, other: &Rhs) -> Option<Ordering>;
 }
 
@@ -167,14 +185,14 @@ where
     V: PartialOrd,
 {
     fn dominates(&self, other: &BTreeMap<K, V>) -> Option<Ordering> {
-        let first_iter = self.iter();
+        let mut first_iter = self.iter();
         let mut second_iter = other.iter();
 
         let mut first_greater = false;
         let mut second_greater = false;
 
         let mut maybe_second = second_iter.next();
-        for first in first_iter {
+        while let Some(first) = first_iter.next() {
             loop {
                 if let Some(second) = maybe_second {
                     match first.0.cmp(second.0) {
@@ -245,9 +263,6 @@ where
     }
 }
 
-/// A [newtype] wrapper for implementing [`PartialOrd`] based on [`Dom`]
-///
-/// [newtype]: https://doc.rust-lang.org/rust-by-example/generics/new_types.html
 pub struct DominationOrd<T>(pub T);
 
 impl<T> PartialEq<DominationOrd<T>> for DominationOrd<T>
@@ -255,7 +270,7 @@ where
     T: Dom<T>,
 {
     fn eq(&self, other: &DominationOrd<T>) -> bool {
-        self.0.dominates(&other.0).is_some_and(Ordering::is_eq)
+        self.0.dominates(&other.0).map_or(false, Ordering::is_eq)
     }
 }
 
@@ -268,12 +283,9 @@ where
     }
 }
 
-/// A function which evaluates over a given input
 pub trait Evaluator<I> {
-    /// The output of evaluation
     type Output;
 
-    /// Perform the evaluation
     fn evaluate(&mut self, input: &I) -> Self::Output;
 }
 
@@ -288,12 +300,9 @@ where
     }
 }
 
-/// Evaluates a tuple list of [`Evaluator`]s over a given tuple list
 pub trait EvaluateTuple<I> {
-    /// The tuple of outputs as a result of evaluation
     type Output;
 
-    /// Perform the evaluation
     fn evaluate(&mut self, value: &I) -> Self::Output;
 }
 
@@ -315,27 +324,19 @@ where
     }
 }
 
-/// A [newtype] over a tuple of objectives so that we can implement [`FitnessMeasurer`] over a tuple
-/// list of other [`FitnessMeasurer`]s
-///
-/// [newtype]: https://doc.rust-lang.org/rust-by-example/generics/new_types.html
 pub struct Multiobjective<MT> {
     measurers: MT,
 }
 
 impl<MT> Multiobjective<MT> {
-    /// Create a new [`Multiobjective`] over a tuple of other [`FitnessMeasurer`]s
     pub fn new(measurers: MT) -> Self {
         Self { measurers }
     }
 }
 
-/// A tuple list of [`FitnessMeasurer`]s
 pub trait FitnessMeasurerTuple<'a, N, E> {
-    /// A tuple list of [`FitnessMeasurer::Measurement`]s
     type Measurements;
 
-    /// Perform the evaluation over all measurers
     fn evaluate(&mut self, node: &'a N) -> Result<Self::Measurements, E>;
 }
 
@@ -354,21 +355,16 @@ where
     Tail: FitnessMeasurerTuple<'a, N, E>,
     N: Node,
 {
-    type Measurements = (Head::Measurement, Tail::Measurements);
+    type Measurements = (Head::Value, Tail::Measurements);
 
     fn evaluate(&mut self, node: &'a N) -> Result<Self::Measurements, E> {
         Ok((self.0.evaluate(node)?, self.1.evaluate(node)?))
     }
 }
 
-/// Computes the [`CombinedMeasurement`] over a list of measurements by composing their fitnesses
-/// and merging the violations lists
 pub trait MeasurementsCombined: Sized {
-    /// The fitnesses as a result of this computation
     type Fitnesses;
 
-    /// Compute the [`CombinedMeasurement`] by applying [`MeasurementsCombined::combine_step`] and
-    /// computing the merge
     fn combined(self) -> CombinedMeasurement<Self::Fitnesses> {
         let (fitnesses, pass_rate, violations) = self.combine_step();
         CombinedMeasurement {
@@ -377,7 +373,6 @@ pub trait MeasurementsCombined: Sized {
         }
     }
 
-    /// Iteration step for merging fitnesses, pass rates, and violations
     fn combine_step(self) -> (Self::Fitnesses, Ratio<usize>, Vec<VecDeque<usize>>);
 }
 
@@ -414,7 +409,6 @@ where
     }
 }
 
-/// A measurement which represents the combined results of multiple independent [`FitnessMeasurer`]s
 pub struct CombinedMeasurement<V> {
     fitnesses: V,
     violations: Violations,
@@ -451,10 +445,10 @@ where
     MT::Measurements: MeasurementsCombined,
     N: Node,
 {
-    type Measurement = CombinedMeasurement<<MT::Measurements as MeasurementsCombined>::Fitnesses>;
+    type Value = CombinedMeasurement<<MT::Measurements as MeasurementsCombined>::Fitnesses>;
     type Error = Error;
 
-    fn evaluate(&mut self, node: &'a N) -> Result<Self::Measurement, Self::Error> {
+    fn evaluate(&mut self, node: &'a N) -> Result<Self::Value, Self::Error> {
         Ok(self.measurers.evaluate(node)?.combined())
     }
 }
