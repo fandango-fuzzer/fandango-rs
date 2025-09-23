@@ -352,7 +352,6 @@ impl<'program, 'source> IntoRustSource<FandangoGenContext<'_, '_, 'program, 'sou
                 local_output.extend(quote! {
                     #derives
                     #[derive(Default)]
-                    #[allow(missing_docs)]
                     pub struct #name;
 
                     impl ::fandango::typing::Node for #name {
@@ -479,7 +478,6 @@ impl<'program, 'source> IntoRustSource<FandangoGenContext<'_, '_, 'program, 'sou
                 let default = &child_variants[default_choice];
                 local_output.extend(quote! {
                     #derives
-                    #[allow(missing_docs)]
                     pub enum #name {
                         #(
                             #[doc = concat!(#child_range_docs, "th variant of [`", stringify!(#name), "`] which maps to [`", stringify!(#child_types), "`]")]
@@ -786,7 +784,6 @@ impl<'program, 'source> IntoRustSource<FandangoGenContext<'_, '_, 'program, 'sou
 
                 local_output.extend(quote! {
                     #derives
-                    #[allow(missing_docs)]
                     pub struct #name {
                         child_0: #(#child_field_types)*
                     }
@@ -1025,7 +1022,6 @@ impl<'program, 'source> IntoRustSource<FandangoGenContext<'_, '_, 'program, 'sou
                 local_output.extend(quote! {
                     #derives
                     #[derive(Default)]
-                    #[allow(missing_docs)]
                     pub struct #name {
                         #( #child_names: #child_field_types ),*
                     }
