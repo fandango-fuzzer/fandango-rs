@@ -1,30 +1,50 @@
-//! This example demonstrates how to use the NSGA2 evolver
+//! This example demonstrates how to use the NSGA2 evolver and defining one's own fitness
 
 use anyhow::Error;
 use fandango::tuple_list::tuple_list;
+use fandango::typing::Node;
 use fandango::visitor::Visitor;
+use fandango::visitor::navigation::CountNodes;
 use fandango::visitor::write::WriteVisitor;
 use fandango_runtime::evolvers::Evolver;
 use fandango_runtime::evolvers::multi::{KPathDiversityHook, Nsga2Evolver};
-use fandango_runtime::measurement::{HasFitness, ViolationFitness};
-use fandango_runtime::measurement::{HasMeasurement, SizeFitness};
+use fandango_runtime::measurement::HasMeasurement;
+use fandango_runtime::measurement::{FitnessMeasurer, HasFitness, ViolationFitness};
 use fandango_runtime::operators::DepthLimiter;
 use fandango_runtime::population::Individual;
 use fandango_targets::xml;
 use num_rational::Ratio;
 use rand::SeedableRng;
 use rand::rngs::StdRng;
+use std::cmp::Reverse;
+use std::convert::Infallible;
 use std::num::NonZeroUsize;
+
+struct AtLeastNNodes {
+    n: usize,
+}
+
+impl<'a, N> FitnessMeasurer<'a, N> for AtLeastNNodes
+where
+    N: Node,
+{
+    type Value = Reverse<usize>;
+    type Error = Infallible;
+
+    fn evaluate(&mut self, node: &'a N) -> Result<Self::Value, Self::Error> {
+        Ok(Reverse(self.n.saturating_sub(node.count_nodes())))
+    }
+}
 
 #[allow(deprecated)]
 fn main() -> Result<(), Error> {
     let fitness = ViolationFitness::<xml::ConstraintVisitor>::new();
-    let size = SizeFitness;
+    let nodes = AtLeastNNodes { n: 500 };
     // let fixer = XmlFixHook::evaluated();
     let fixer = ();
     let hook = KPathDiversityHook::new(fixer, NonZeroUsize::new(5).unwrap());
     let mut runtime = Nsga2Evolver::new::<xml::nonterminal_start>(
-        tuple_list!(fitness, size),
+        tuple_list!(fitness, nodes),
         hook,
         100,
         1000,

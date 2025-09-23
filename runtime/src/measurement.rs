@@ -1,5 +1,6 @@
 use crate::operators::Checker;
 use alloc::collections::VecDeque;
+use alloc::vec;
 use alloc::vec::Vec;
 use anyhow::Error;
 use core::cmp::Reverse;
@@ -44,10 +45,23 @@ pub trait HasViolations {
     fn take_violations(&mut self) -> Violations;
 }
 
-#[derive(Default)]
+pub static EMPTY_VIOLATIONS: Violations = Violations {
+    pass_rate: Ratio::new_raw(1, 1),
+    violations: Vec::new(),
+};
+
 pub struct Violations {
     pass_rate: Ratio<usize>,
     violations: Vec<VecDeque<usize>>,
+}
+
+impl Default for Violations {
+    fn default() -> Self {
+        Violations {
+            pass_rate: Ratio::new(1, 1),
+            violations: vec![],
+        }
+    }
 }
 
 impl Violations {
@@ -220,44 +234,85 @@ where
 
 pub struct SizeFitness;
 
-pub struct SizeMeasurement {
-    size: Reverse<usize>,
-    violations: Violations,
-}
-
-impl HasFitness for SizeMeasurement {
-    type Fitness = Reverse<usize>;
-
-    fn fitness(&self) -> &Self::Fitness {
-        &self.size
-    }
-
-    fn take_fitness(&mut self) -> Self::Fitness {
-        mem::take(&mut self.size)
-    }
-}
-
-impl HasViolations for SizeMeasurement {
-    fn violations(&self) -> &Violations {
-        &self.violations
-    }
-
-    fn take_violations(&mut self) -> Violations {
-        mem::take(&mut self.violations)
-    }
-}
-
 impl<'a, N> FitnessMeasurer<'a, N> for SizeFitness
 where
     N: Node,
 {
-    type Value = SizeMeasurement;
+    type Value = Reverse<usize>;
     type Error = Infallible;
 
     fn evaluate(&mut self, node: &'a N) -> Result<Self::Value, Self::Error> {
-        Ok(SizeMeasurement {
-            size: Reverse(node.count_bytes()),
-            violations: Violations::default(),
-        })
+        Ok(Reverse(node.count_bytes()))
+    }
+}
+
+macro_rules! impl_trivial_fitness {
+    ($fitness: ty) => {
+        impl HasFitness for $fitness {
+            type Fitness = $fitness;
+
+            fn fitness(&self) -> &Self::Fitness {
+                self
+            }
+
+            fn take_fitness(&mut self) -> Self::Fitness {
+                ::core::mem::take(self)
+            }
+        }
+
+        impl HasViolations for $fitness {
+            fn violations(&self) -> &Violations {
+                &$crate::measurement::EMPTY_VIOLATIONS
+            }
+
+            fn take_violations(&mut self) -> Violations {
+                Violations::default()
+            }
+        }
+    };
+}
+
+impl_trivial_fitness!(usize);
+impl_trivial_fitness!(u128);
+impl_trivial_fitness!(u64);
+impl_trivial_fitness!(u32);
+impl_trivial_fitness!(u16);
+impl_trivial_fitness!(u8);
+
+impl_trivial_fitness!(isize);
+impl_trivial_fitness!(i128);
+impl_trivial_fitness!(i64);
+impl_trivial_fitness!(i32);
+impl_trivial_fitness!(i16);
+impl_trivial_fitness!(i8);
+
+impl_trivial_fitness!(f64);
+impl_trivial_fitness!(f32);
+
+impl<T> HasFitness for Reverse<T>
+where
+    T: HasFitness<Fitness = T> + Default,
+{
+    type Fitness = Reverse<T>;
+
+    fn fitness(&self) -> &Self::Fitness {
+        self
+    }
+
+    fn take_fitness(&mut self) -> Self::Fitness {
+        mem::take(self)
+    }
+}
+
+impl<T> HasViolations for Reverse<T>
+where
+    T: HasViolations,
+{
+    fn violations(&self) -> &Violations {
+        self.0.violations()
+    }
+
+    fn take_violations(&mut self) -> Violations {
+        self.0.take_violations()
     }
 }
