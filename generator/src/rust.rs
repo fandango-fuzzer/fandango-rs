@@ -1244,12 +1244,12 @@ impl<'program, 'source> IntoRustSource<FandangoGenContext<'_, '_, 'program, 'sou
         // underlines a segment of the grammar to show where a definition comes from
         let start_offset =
             span.as_str().as_ptr() as usize - last_nonterminal.as_str().as_ptr() as usize;
-        let end_offset = start_offset + span.as_str().as_bytes().len();
+        let end_offset = start_offset + span.as_str().len();
         let mut lines = Vec::new();
         for line in last_nonterminal.as_str().lines() {
             let line_start_offset =
                 line.as_ptr() as usize - last_nonterminal.as_str().as_ptr() as usize;
-            let line_end_offset = line_start_offset + line.as_bytes().len();
+            let line_end_offset = line_start_offset + line.len();
             if end_offset <= line_start_offset || start_offset >= line_end_offset {
                 lines.push(format!("`{}`", line.replace("`", "\\`")));
                 continue;
@@ -1262,7 +1262,7 @@ impl<'program, 'source> IntoRustSource<FandangoGenContext<'_, '_, 'program, 'sou
                 composed.extend(format!("`{}`", line[..start].replace("`", "\\`")).chars());
             }
             composed.extend(format!("<u>`{}`</u>", line[start..end].replace("`", "\\`")).chars());
-            if end != line.as_bytes().len() {
+            if end != line.len() {
                 composed.extend(format!("`{}`", line[end..].replace("`", "\\`")).chars());
             }
             lines.push(composed);
