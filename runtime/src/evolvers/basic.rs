@@ -74,7 +74,7 @@ where
     V::Fitness: PartialEq<V::Fitness>,
 {
     fn eq(&self, other: &Self) -> bool {
-        self.measurement.fitness().eq(&other.measurement.fitness())
+        self.measurement.fitness().eq(other.measurement.fitness())
     }
 }
 
@@ -96,7 +96,7 @@ where
     V::Fitness: Ord,
 {
     fn cmp(&self, other: &Self) -> Ordering {
-        self.measurement.fitness().cmp(&other.measurement.fitness())
+        self.measurement.fitness().cmp(other.measurement.fitness())
     }
 }
 

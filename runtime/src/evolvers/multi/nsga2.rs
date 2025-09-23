@@ -20,17 +20,16 @@ use fandango::visitor::navigation::{Advance, CountNodes, GoToMut};
 use fandango::visitor::{VisitWithMut, VisitableChildrenMut, Visitor, VisitorMut};
 use num_rational::Ratio;
 
-fn fast_non_dominated_sort<I>(mut popululation: Vec<I>, survivors: usize) -> Vec<Vec<I>>
+fn fast_non_dominated_sort<I>(mut population: Vec<I>, survivors: usize) -> Vec<Vec<I>>
 where
     I: Dom<I>,
 {
-    let mut s = vec![Vec::new(); popululation.len()];
-    let mut n = vec![0usize; popululation.len()];
+    let mut s = vec![Vec::new(); population.len()];
+    let mut n = vec![0usize; population.len()];
 
-    let mut front = Vec::with_capacity(popululation.len());
-    for (p, first) in popululation.iter().enumerate() {
-        for q in (p + 1)..popululation.len() {
-            let other = &popululation[q];
+    let mut front = Vec::with_capacity(population.len());
+    for (p, first) in population.iter().enumerate() {
+        for (q, other) in population.iter().enumerate().skip(p + 1) {
             let (dominator, dominated) = match first.dominates(other).unwrap_or(Ordering::Equal) {
                 Ordering::Greater => (p, q),
                 Ordering::Equal => continue,
@@ -44,10 +43,10 @@ where
         }
     }
 
-    let mut remaining = popululation.len() - front.len();
+    let mut remaining = population.len() - front.len();
     let mut fronts = vec![front];
     for i in 0.. {
-        if popululation.len() - remaining > survivors || remaining == 0 {
+        if population.len() - remaining > survivors || remaining == 0 {
             break;
         }
 
@@ -78,7 +77,7 @@ where
             .flat_map(|(idx, front)| front.into_iter().map(move |i| (i, idx))),
     );
     while let Some((extracted, front)) = extracted.pop() {
-        returned[front].push(popululation.swap_remove(extracted));
+        returned[front].push(population.swap_remove(extracted));
     }
     returned
 }
@@ -210,7 +209,7 @@ where
             descendents.push(BasicIndividual::new(child, measurement));
         }
 
-        descendents.extend(population.drain(..));
+        descendents.append(&mut population);
 
         let mut fronts = fast_non_dominated_sort(descendents, self.size);
         // only need to diversity sort the last chunk
@@ -276,7 +275,8 @@ where
                 kpaths
                     .lookup()
                     .iter()
-                    .filter_map(|(k, v)| (*v != 0).then(|| k.clone()))
+                    .filter_map(|(k, v)| (*v != 0).then_some(k))
+                    .cloned()
                     .collect::<BTreeSet<_>>(),
             );
             // we could use clear, but for large k, the number of paths likely exceeds the number

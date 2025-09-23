@@ -48,7 +48,7 @@ impl TuplePartialOrd<()> for () {
     type Output = ();
 
     fn partial_cmp_many(&self, _other: &()) -> Self::Output {
-        ()
+        
     }
 }
 
@@ -185,14 +185,14 @@ where
     V: PartialOrd,
 {
     fn dominates(&self, other: &BTreeMap<K, V>) -> Option<Ordering> {
-        let mut first_iter = self.iter();
+        let first_iter = self.iter();
         let mut second_iter = other.iter();
 
         let mut first_greater = false;
         let mut second_greater = false;
 
         let mut maybe_second = second_iter.next();
-        while let Some(first) = first_iter.next() {
+        for first in first_iter {
             loop {
                 if let Some(second) = maybe_second {
                     match first.0.cmp(second.0) {
@@ -270,7 +270,7 @@ where
     T: Dom<T>,
 {
     fn eq(&self, other: &DominationOrd<T>) -> bool {
-        self.0.dominates(&other.0).map_or(false, Ordering::is_eq)
+        self.0.dominates(&other.0).is_some_and(Ordering::is_eq)
     }
 }
 
