@@ -1,4 +1,4 @@
-//! Here, we define the constraints for the scriptsizec.fan grammar, namely:
+//! Here, we define the constraints for the xml.fan grammar, namely:
 //! ```text,ignore
 //! forall <tree> in <xml_tree>:
 //!     <tree>.<xml_open_tag>.<id> == <tree>.<xml_close_tag>.<id>
