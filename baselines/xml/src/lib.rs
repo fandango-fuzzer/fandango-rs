@@ -23,8 +23,7 @@ impl DynamicBenchmarkSuite for Benchmark {
 #[expect(deprecated)]
 mod static_defs {
     use crate::Benchmark;
-    
-    
+
     use common::{BenchmarkSuite, StdGenerator, StdSampler};
     use fandango::generation::Generated;
     use fandango::visitor::{Visitor, VisitorMut};
