@@ -471,6 +471,7 @@ impl<'program, 'source> IntoRustSource<FandangoGenContext<'_, '_, 'program, 'sou
                     .collect::<Vec<_>>();
                 let indices = (0..children.len()).collect::<Vec<_>>();
                 let count = children.len();
+                let child_range_docs = (0usize..).map(|v| v.to_string());
                 let child_range = 0usize..;
 
                 let shortest = shortest_paths.get(&node_weight).unwrap();
@@ -480,7 +481,10 @@ impl<'program, 'source> IntoRustSource<FandangoGenContext<'_, '_, 'program, 'sou
                     #derives
                     #[allow(missing_docs)]
                     pub enum #name {
-                        #( #child_variants ( #child_field_types ) ),*
+                        #(
+                            #[doc = concat!(#child_range_docs, "th variant of [`", stringify!(#name), "`] which maps to [`", stringify!(#child_types), "`]")]
+                            #child_variants ( #child_field_types )
+                        ),*
                     }
 
                     impl Default for #name {
@@ -1237,7 +1241,36 @@ impl<'program, 'source> IntoRustSource<FandangoGenContext<'_, '_, 'program, 'sou
             }
         }
 
-        // TODO extend with documentation
+        // underlines a segment of the grammar to show where a definition comes from
+        let start_offset =
+            span.as_str().as_ptr() as usize - last_nonterminal.as_str().as_ptr() as usize;
+        let end_offset = start_offset + span.as_str().as_bytes().len();
+        let mut lines = Vec::new();
+        for line in last_nonterminal.as_str().lines() {
+            let line_start_offset =
+                line.as_ptr() as usize - last_nonterminal.as_str().as_ptr() as usize;
+            let line_end_offset = line_start_offset + line.as_bytes().len();
+            if end_offset <= line_start_offset || start_offset >= line_end_offset {
+                lines.push(format!("`{}`", line.replace("`", "\\`")));
+                continue;
+            }
+            let start = line_start_offset.max(start_offset) - line_start_offset;
+            let end = line_end_offset.min(end_offset) - line_start_offset;
+
+            let mut composed = String::new();
+            if start != 0 {
+                composed.extend(format!("`{}`", line[..start].replace("`", "\\`")).chars());
+            }
+            composed.extend(format!("<u>`{}`</u>", line[start..end].replace("`", "\\`")).chars());
+            if end != line.as_bytes().len() {
+                composed.extend(format!("`{}`", line[end..].replace("`", "\\`")).chars());
+            }
+            lines.push(composed);
+        }
+        let documentation = lines.join("\n");
+        output.extend(quote! {
+            #[doc = concat!("This type is derived from the following grammar segment:\n\n", #documentation)]
+        });
         output.extend(local_output);
 
         for (((_, child, child_weight, span), name), pest_name) in

@@ -286,6 +286,7 @@ pub fn derive_fandango_or_emit_error(
         &mut referenced,
     );
 
+    let ident = &source.ident;
     let dyn_content = quote! {
         #(#arrays)*
 
@@ -296,7 +297,7 @@ pub fn derive_fandango_or_emit_error(
             include_str!(#files)
         ),*];
 
-        #[allow(missing_docs)]
+        #[doc = concat!("The encoded structure of the [`", stringify!(#ident), "`] grammar.")]
         pub const STRUCTURE: &'static ::fandango::lang::Tagged<
             'static,
             ::fandango::lang::Program
@@ -312,7 +313,6 @@ pub fn derive_fandango_or_emit_error(
             )*
         })
     } else {
-        let ident = &source.ident;
         let module = format_ident!("__{ident}_defs");
 
         let grammar = if source.parse() {
@@ -328,7 +328,7 @@ pub fn derive_fandango_or_emit_error(
             // rewrite: we don't want to force people to import other dependencies
             grammar.extend(quote! {
             impl #ident {
-                #[allow(missing_docs)]
+                /// Extract the [`nonterminal_start`] node from the corresponding string
                 pub fn extract(
                     source: &str
                 ) -> ::core::result::Result<nonterminal_start, ParseError> {
@@ -374,9 +374,12 @@ pub fn derive_fandango_or_emit_error(
                 {}
 
                 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-                #[allow(missing_docs)]
+                #[doc = concat!("Immutable opaque type for the [`", stringify!(#ident), "`] grammar.")]
                 pub enum Type<'program> {
-                    #(#node_names(&'program #node_names)),*
+                    #(
+                        #[doc = concat!("Immutable reference to [`", stringify!(#node_names), "`]")]
+                        #node_names(&'program #node_names)
+                    ),*
                 }
 
                 impl<'program> PartialEq<TypeMut<'program>> for Type<'program> {
@@ -508,9 +511,12 @@ pub fn derive_fandango_or_emit_error(
                 }
 
                 #[derive(Debug, Eq, PartialEq)]
-                #[allow(missing_docs)]
+                #[doc = concat!("Mutable opaque type for the [`", stringify!(#ident), "`] grammar.")]
                 pub enum TypeMut<'program> {
-                    #(#node_names(&'program mut #node_names)),*
+                    #(
+                        #[doc = concat!("Mutable reference to [`", stringify!(#node_names), "`]")]
+                        #node_names(&'program mut #node_names)
+                    ),*
                 }
 
                 impl<'program> PartialEq<Type<'program>> for TypeMut<'program> {
