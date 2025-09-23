@@ -285,6 +285,7 @@ dependencies = [
  "fandango",
  "fandango-runtime",
  "hashbrown 0.16.0",
+ "num-rational",
 ]
 
 [[package]]
