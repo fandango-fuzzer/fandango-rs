@@ -4,20 +4,22 @@ use crate::evolvers::multi::{Dom, Multiobjective};
 use crate::measurement::{FitnessMeasurer, HasFitness, HasMeasurement, HasViolations};
 use crate::operators::{MutatorVisitor, crossover};
 use crate::population::Individual;
-use alloc::collections::{BTreeSet, BinaryHeap};
+use alloc::collections::BinaryHeap;
 use alloc::vec;
 use alloc::vec::Vec;
 use anyhow::Error;
 use core::cmp::Ordering;
+use core::convert::Infallible;
 use core::marker::PhantomData;
 use core::num::NonZeroUsize;
-use core::ops::Sub;
+use core::ops::ControlFlow;
 use fandango::generation::{Generated, InPlaceGenerated, Sampler};
 use fandango::lang::FandangoNode;
-use fandango::typing::{AsNode, Node};
-use fandango::visitor::kpath::{KPathUpdate, KPaths};
+use fandango::typing::{AsNode, Node, NodeLookup};
+use fandango::visitor::kpath::{KPathUpdate, KPathVisit, KPathVisitor, KPaths};
 use fandango::visitor::navigation::{Advance, CountNodes, GoToMut};
 use fandango::visitor::{VisitWithMut, VisitableChildrenMut, Visitor, VisitorMut};
+use mappable_rc::Mrc;
 use num_rational::Ratio;
 
 fn fast_non_dominated_sort<I>(mut population: Vec<I>, survivors: usize) -> Vec<Vec<I>>
@@ -246,8 +248,7 @@ where
 
 impl<I, G, S> Nsga2Hook<I, G, S> for () where I: Individual {}
 
-/// A [`Nsga2Hook`] which wraps a [`BasicHook`] and optimizes diversity by greedy set cover over
-/// [`KPaths`].
+/// A [`Nsga2Hook`] which wraps a [`BasicHook`] and optimizes diversity by rare k-paths
 pub struct KPathDiversityHook<H> {
     k: NonZeroUsize,
     inner: H,
@@ -279,44 +280,73 @@ where
     H: BasicHook<I::Node, G, S>,
     I: Individual,
     I::Node: Node + AsNode,
+    for<'a> <I::Node as Node>::Type<'a>: NodeLookup,
 {
     fn diversity_sort(&mut self, individuals: &mut [I]) {
         let FandangoNode::Program(program) = individuals[0].node().root() else {
             panic!("The root node wasn't a program node!")
         };
-        let mut covered = Vec::with_capacity(individuals.len());
         let mut kpaths = KPaths::new::<<I::Node as Node>::Type<'_>>(self.k, program);
+        let mut update = KPathUpdate::inserting(&mut kpaths);
         for individual in individuals.iter() {
-            let _ = KPathUpdate::inserting(&mut kpaths).visit(individual.node(), 0);
-            covered.push(
-                kpaths
-                    .lookup()
-                    .iter()
-                    .filter_map(|(k, v)| (*v != 0).then_some(k))
-                    .cloned()
-                    .collect::<BTreeSet<_>>(),
-            );
-            // we could use clear, but for large k, the number of paths likely exceeds the number
-            // of paths we actually visit!
-            let _ = KPathUpdate::removing(&mut kpaths).visit(individual.node(), 0);
-        }
-        // greedy set cover
-        for i in 0..individuals.len() {
-            let (best_individual, best_set) = covered
-                .iter()
-                .enumerate()
-                .max_by_key(|(_i, set)| set.len())
+            update = update
+                .visit(individual.node(), 0)
+                .unwrap()
+                .continue_value()
                 .unwrap();
-            if best_set.is_empty() {
-                break;
-            }
-            covered.swap(i, best_individual);
-            individuals.swap(i, best_individual);
-            let (seen, unevaluated) = covered.split_at_mut(i + 1);
-            let best_set = &seen[i];
-            for set in unevaluated {
-                *set = set.sub(best_set);
+        }
+
+        struct MinObserved<T> {
+            fewest: usize,
+            phantom: PhantomData<T>,
+        }
+
+        impl<T> MinObserved<T> {
+            pub fn new() -> Self {
+                Self {
+                    fewest: usize::MAX,
+                    phantom: PhantomData,
+                }
             }
         }
+
+        impl<T> KPathVisitor for MinObserved<T>
+        where
+            T: NodeLookup,
+        {
+            type Value = usize;
+            type Break = Infallible;
+            type Error = Infallible;
+
+            fn visit_path(
+                &mut self,
+                count: usize,
+                path: &Mrc<[usize]>,
+            ) -> Result<ControlFlow<Self::Break>, Self::Error> {
+                if !matches!(
+                    T::lookup_node(*path.last().unwrap()),
+                    FandangoNode::String(_)
+                ) {
+                    self.fewest = self.fewest.min(count);
+                }
+                Ok(ControlFlow::Continue(()))
+            }
+
+            fn value(self) -> Self::Value {
+                self.fewest
+            }
+        }
+
+        individuals.sort_by_cached_key(|individual| {
+            KPathVisit::new(
+                update.kpaths(),
+                MinObserved::<<I::Node as Node>::Type<'_>>::new(),
+            )
+            .visit(individual.node(), 0)
+            .unwrap()
+            .continue_value()
+            .unwrap()
+            .value()
+        });
     }
 }

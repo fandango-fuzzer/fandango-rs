@@ -404,6 +404,7 @@ dependencies = [
  "either",
  "fandango",
  "hashbrown 0.16.0",
+ "mappable-rc",
  "num-rational",
 ]
 

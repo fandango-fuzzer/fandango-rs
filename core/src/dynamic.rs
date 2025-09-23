@@ -25,7 +25,7 @@ use hashbrown::{DefaultHashBuilder, HashMap};
 type FandangoNode = crate::lang::FandangoNode<'static, 'static>;
 
 /// Content of a [`DynamicNode`], without the typing information.
-#[derive(Debug, PartialEq, Eq, Clone)]
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone)]
 pub enum DynamicNodeVariant {
     /// This node is a terminal for which the content is entirely determined by its definition.
     Terminal,
@@ -71,7 +71,7 @@ impl DynamicNodeVariant {
 /// and offers significantly fewer guarantees regarding the correctness of your operations on
 /// derivation trees. As there are exceedingly few use cases which justify the use of dynamic nodes,
 /// this type is marked with `#[deprecated]`.
-#[derive(Debug, PartialEq, Eq, Clone)]
+#[derive(Debug, PartialEq, Eq, Clone, PartialOrd, Ord)]
 #[deprecated(
     note = "DynamicNode was only created for performing an ablation study. It is universally less performant. Unless you are absolutely certain that you need dynamic typing (e.g., with dynamic grammars), do not use this."
 )]
