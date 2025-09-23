@@ -13,6 +13,7 @@ use fandango_runtime::measurement::{FitnessMeasurer, HasFitness, ViolationFitnes
 use fandango_runtime::operators::DepthLimiter;
 use fandango_runtime::population::Individual;
 use fandango_targets::xml;
+use fandango_targets::xml::XmlFixHook;
 use num_rational::Ratio;
 use rand::SeedableRng;
 use rand::rngs::StdRng;
@@ -20,11 +21,11 @@ use std::cmp::Reverse;
 use std::convert::Infallible;
 use std::num::NonZeroUsize;
 
-struct AtLeastNNodes {
+struct NodeGoal {
     n: usize,
 }
 
-impl<'a, N> FitnessMeasurer<'a, N> for AtLeastNNodes
+impl<'a, N> FitnessMeasurer<'a, N> for NodeGoal
 where
     N: Node,
 {
@@ -32,17 +33,17 @@ where
     type Error = Infallible;
 
     fn evaluate(&mut self, node: &'a N) -> Result<Self::Measurement, Self::Error> {
-        Ok(Reverse(self.n.saturating_sub(node.count_nodes())))
+        Ok(Reverse(self.n.abs_diff(node.count_nodes())))
     }
 }
 
 #[allow(deprecated)]
 fn main() -> Result<(), Error> {
     let fitness = ViolationFitness::<xml::ConstraintVisitor>::new();
-    let nodes = AtLeastNNodes { n: 500 };
+    let nodes = NodeGoal { n: 1000 };
     // let fixer = XmlFixHook::evaluated();
     let fixer = ();
-    let hook = KPathDiversityHook::new(fixer, NonZeroUsize::new(5).unwrap());
+    let hook = KPathDiversityHook::new(fixer, NonZeroUsize::new(10).unwrap());
     let mut runtime = Nsga2Evolver::new::<xml::nonterminal_start>(
         tuple_list!(fitness, nodes),
         hook,

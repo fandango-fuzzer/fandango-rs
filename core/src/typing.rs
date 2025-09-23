@@ -76,7 +76,7 @@ pub trait StaticDiscriminable {
 }
 
 /// A node representing an entry in a grammar or a derivation tree.
-pub trait Node: Sized + AsNode + Discriminable + Clone {
+pub trait Node: Sized + AsNode + Discriminable + Clone + Ord {
     /// An enum which describes all possible nodes, and which may be visited with [`VisitWith`].
     type Type<'program>: From<&'program Self>
         + DiscriminantLookup

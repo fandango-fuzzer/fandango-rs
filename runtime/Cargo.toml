@@ -10,6 +10,7 @@ fandango = { path = ".." }
 anyhow.workspace = true
 either.workspace = true
 hashbrown.workspace = true
+mappable-rc.workspace = true
 num-rational.workspace = true
 
 [lints]
