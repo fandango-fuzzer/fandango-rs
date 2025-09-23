@@ -28,10 +28,10 @@ impl<'a, N> FitnessMeasurer<'a, N> for AtLeastNNodes
 where
     N: Node,
 {
-    type Value = Reverse<usize>;
+    type Measurement = Reverse<usize>;
     type Error = Infallible;
 
-    fn evaluate(&mut self, node: &'a N) -> Result<Self::Value, Self::Error> {
+    fn evaluate(&mut self, node: &'a N) -> Result<Self::Measurement, Self::Error> {
         Ok(Reverse(self.n.saturating_sub(node.count_nodes())))
     }
 }

@@ -225,12 +225,17 @@ where
     }
 }
 
+/// A [`VisitorMut`] which simply performs mutation on a node
+///
+/// This is a helper which is necessary to avoid uncomfortable lifetime shenanigans. With the
+/// current [`VisitWith`] pattern, it is sadly not feasible to do this over opaques directly.
 pub struct MutatorVisitor<'a, S, G> {
     sampler: &'a mut S,
     generator: &'a mut G,
 }
 
 impl<'a, S, G> MutatorVisitor<'a, S, G> {
+    /// Create the [`MutatorVisitor`], generating the mutated node with `sampler` and `generator`
     pub fn new(sampler: &'a mut S, generator: &'a mut G) -> Self {
         Self { sampler, generator }
     }

@@ -1,3 +1,5 @@
+//! Runtimes which enable the generation of inputs with [`fandango`] using evolutionary algorithms
+
 #![no_std]
 
 extern crate alloc;
