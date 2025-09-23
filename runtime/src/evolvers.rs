@@ -1,4 +1,5 @@
 pub mod basic;
+pub mod multi;
 
 pub trait Evolver<I, G, S> {
     type Population;

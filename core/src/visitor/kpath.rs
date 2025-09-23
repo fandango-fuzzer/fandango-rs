@@ -235,6 +235,13 @@ impl KPaths {
     pub fn lookup(&self) -> &HashMap<Mrc<[usize]>, usize> {
         &self.lookup
     }
+
+    /// Clear the state of the kpaths table.
+    pub fn clear(&mut self) {
+        for v in self.lookup.values_mut() {
+            *v = 0;
+        }
+    }
 }
 
 /// Visitor used to update the [`KPaths`] values.

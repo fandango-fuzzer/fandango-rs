@@ -2,13 +2,15 @@ use crate::operators::Checker;
 use alloc::collections::VecDeque;
 use alloc::vec::Vec;
 use anyhow::Error;
+use core::cmp::Reverse;
 use core::convert::Infallible;
 use core::marker::PhantomData;
 use core::ops::ControlFlow;
-use core::slice;
+use core::{mem, slice};
 use either::Either;
 use fandango::typing::{AsNodeRef, Node, Opaque};
 use fandango::visitor::error::InvalidPath;
+use fandango::visitor::navigation::CountBytes;
 use fandango::visitor::{VisitResult, VisitableChildren, Visitor};
 use num_rational::Ratio;
 
@@ -19,19 +21,30 @@ where
     type Value;
     type Error;
 
-    fn check(&mut self, node: &'a N) -> Result<Violations, Self::Error>;
-    fn evaluate(&mut self, node: &'a N, violations: Violations)
-    -> Result<Self::Value, Self::Error>;
+    fn evaluate(&mut self, node: &'a N) -> Result<Self::Value, Self::Error>;
+}
+
+pub trait HasMeasurement {
+    type Measurement;
+
+    fn measurement(&self) -> &Self::Measurement;
 }
 
 pub trait HasFitness {
-    fn fitness(&self) -> Ratio<usize>;
+    type Fitness;
+
+    fn fitness(&self) -> &Self::Fitness;
+
+    fn take_fitness(&mut self) -> Self::Fitness;
 }
 
 pub trait HasViolations {
     fn violations(&self) -> &Violations;
+
+    fn take_violations(&mut self) -> Violations;
 }
 
+#[derive(Default)]
 pub struct Violations {
     pass_rate: Ratio<usize>,
     violations: Vec<VecDeque<usize>>,
@@ -51,6 +64,10 @@ impl Violations {
         &self.violations
     }
 
+    pub fn into_raw(self) -> (Ratio<usize>, Vec<VecDeque<usize>>) {
+        (self.pass_rate, self.violations)
+    }
+
     pub fn simplify(violations: &mut Vec<VecDeque<usize>>) -> usize {
         violations.sort();
         let before = violations.len();
@@ -64,19 +81,29 @@ impl Violations {
 }
 
 pub struct SimpleMeasurement {
-    fitness: Ratio<usize>,
-    violations: Violations,
+    pub fitness: Ratio<usize>,
+    pub violations: Violations,
 }
 
 impl HasFitness for SimpleMeasurement {
-    fn fitness(&self) -> Ratio<usize> {
-        self.fitness
+    type Fitness = Ratio<usize>;
+
+    fn fitness(&self) -> &Self::Fitness {
+        &self.fitness
+    }
+
+    fn take_fitness(&mut self) -> Self::Fitness {
+        mem::take(&mut self.fitness)
     }
 }
 
 impl HasViolations for SimpleMeasurement {
     fn violations(&self) -> &Violations {
         &self.violations
+    }
+
+    fn take_violations(&mut self) -> Violations {
+        mem::take(&mut self.violations)
     }
 }
 
@@ -178,22 +205,59 @@ where
     type Value = SimpleMeasurement;
     type Error = Error;
 
-    fn check(&mut self, node: &'a N) -> Result<Violations, Self::Error> {
-        Ok(V::default()
+    fn evaluate(&mut self, node: &'a N) -> Result<Self::Value, Self::Error> {
+        let violations = V::default()
             .visit(node, 0)?
             .continue_value()
             .unwrap()
-            .violations())
-    }
-
-    fn evaluate(
-        &mut self,
-        _node: &'a N,
-        violations: Violations,
-    ) -> Result<Self::Value, Self::Error> {
+            .violations();
         Ok(SimpleMeasurement {
             fitness: violations.pass_rate(),
             violations,
+        })
+    }
+}
+
+pub struct SizeFitness;
+
+pub struct SizeMeasurement {
+    size: Reverse<usize>,
+    violations: Violations,
+}
+
+impl HasFitness for SizeMeasurement {
+    type Fitness = Reverse<usize>;
+
+    fn fitness(&self) -> &Self::Fitness {
+        &self.size
+    }
+
+    fn take_fitness(&mut self) -> Self::Fitness {
+        mem::take(&mut self.size)
+    }
+}
+
+impl HasViolations for SizeMeasurement {
+    fn violations(&self) -> &Violations {
+        &self.violations
+    }
+
+    fn take_violations(&mut self) -> Violations {
+        mem::take(&mut self.violations)
+    }
+}
+
+impl<'a, N> FitnessMeasurer<'a, N> for SizeFitness
+where
+    N: Node,
+{
+    type Value = SizeMeasurement;
+    type Error = Infallible;
+
+    fn evaluate(&mut self, node: &'a N) -> Result<Self::Value, Self::Error> {
+        Ok(SizeMeasurement {
+            size: Reverse(node.count_bytes()),
+            violations: Violations::default(),
         })
     }
 }

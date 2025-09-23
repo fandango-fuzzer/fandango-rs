@@ -630,14 +630,14 @@ where
 /// node.
 pub trait CountBytes<'a> {
     /// Perform the count!
-    fn count_bytes(&'a mut self) -> usize;
+    fn count_bytes(&'a self) -> usize;
 }
 
 /// Helper trait to use [`ByteCountVisitor`] as a method on the derivation tree from the provided
 /// opaque node.
 pub trait CountBytesWith<'a> {
     /// Perform the count!
-    fn count_bytes(&'a mut self) -> usize;
+    fn count_bytes(&'a self) -> usize;
 }
 
 impl<'a, N> CountBytes<'a> for N
@@ -646,7 +646,7 @@ where
     ByteCountVisitor: Visitor<N::Type<'a>, Continue = ByteCountVisitor, Error = InvalidPath>,
     N::Type<'a>: From<&'a N> + AsNodeRef<N>,
 {
-    fn count_bytes(&'a mut self) -> usize {
+    fn count_bytes(&'a self) -> usize {
         ByteCountVisitor::new()
             .visit(self, 0)
             .unwrap()
@@ -661,7 +661,7 @@ where
     T: VisitWith<'a, ByteCountVisitor>,
     T::Visited: VisitableChildren<T::Visited>,
 {
-    fn count_bytes(&'a mut self) -> usize {
+    fn count_bytes(&'a self) -> usize {
         self.visit_with(ByteCountVisitor::new(), 0)
             .unwrap()
             .continue_value()

@@ -1,5 +1,5 @@
 use crate::evolvers::Evolver;
-use crate::measurement::{FitnessMeasurer, HasFitness, HasViolations};
+use crate::measurement::{FitnessMeasurer, HasFitness, HasMeasurement, HasViolations};
 use crate::operators::{MutatorVisitor, crossover};
 use crate::population::Individual;
 use alloc::collections::BinaryHeap;
@@ -35,7 +35,7 @@ impl<H, M> BasicEvolver<H, M, ()> {
         replication: usize,
         crossover_rate: Ratio<usize>,
     ) -> Option<BasicEvolver<H, M, N>> {
-        if crossover_rate.numer() > crossover_rate.denom() || size <= elites || replication < size {
+        if crossover_rate.numer() > crossover_rate.denom() || size <= elites {
             return None;
         }
         Some(BasicEvolver::<H, M, N> {
@@ -56,16 +56,22 @@ pub struct BasicIndividual<N, V> {
 }
 
 impl<N, V> BasicIndividual<N, V> {
-    pub fn measurement(&self) -> &V {
-        &self.measurement
+    pub fn new(node: N, measurement: V) -> Self {
+        Self { node, measurement }
     }
 }
 
-impl<N, V> Eq for BasicIndividual<N, V> where V: HasFitness {}
+impl<N, V> Eq for BasicIndividual<N, V>
+where
+    V: HasFitness,
+    V::Fitness: Eq,
+{
+}
 
 impl<N, V> PartialEq<Self> for BasicIndividual<N, V>
 where
     V: HasFitness,
+    V::Fitness: PartialEq<V::Fitness>,
 {
     fn eq(&self, other: &Self) -> bool {
         self.measurement.fitness().eq(&other.measurement.fitness())
@@ -75,18 +81,33 @@ where
 impl<N, V> PartialOrd<Self> for BasicIndividual<N, V>
 where
     V: HasFitness,
+    V::Fitness: PartialOrd<V::Fitness>,
 {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        Some(self.cmp(other))
+        self.measurement
+            .fitness()
+            .partial_cmp(other.measurement.fitness())
     }
 }
 
 impl<N, V> Ord for BasicIndividual<N, V>
 where
     V: HasFitness,
+    V::Fitness: Ord,
 {
     fn cmp(&self, other: &Self) -> Ordering {
         self.measurement.fitness().cmp(&other.measurement.fitness())
+    }
+}
+
+impl<N, V> HasMeasurement for BasicIndividual<N, V>
+where
+    N: Node,
+{
+    type Measurement = V;
+
+    fn measurement(&self) -> &Self::Measurement {
+        &self.measurement
     }
 }
 
@@ -114,6 +135,7 @@ where
         + VisitableChildrenMut<N::TypeMut<'a>>,
     for<'a> M: FitnessMeasurer<'a, N, Error = Error, Value = V>,
     V: HasFitness + HasViolations,
+    V::Fitness: Ord,
     S: Sampler<N>,
 {
     type Population = Vec<BasicIndividual<N, V>>;
@@ -125,17 +147,16 @@ where
         generators: &mut G,
         sampler: &mut S,
     ) -> Result<Self::Population, Self::Error> {
-        let mut population = Vec::with_capacity(self.size);
-        for _ in 0..self.size {
+        let mut population = BinaryHeap::with_capacity(self.size + self.replication);
+        for _ in 0..(self.size + self.replication) {
             let mut node = N::generate(sampler, generators, 0);
             self.hooks
                 .individual_created(&mut node, generators, sampler)?;
-            let violations = self.measurer.check(&node)?;
-            let measurement = self.measurer.evaluate(&node, violations)?;
-            let individual = BasicIndividual { node, measurement };
+            let measurement = self.measurer.evaluate(&node)?;
+            let individual = BasicIndividual::new(node, measurement);
             population.push(individual);
         }
-        population.sort_by_key(|n| Reverse(n.measurement.fitness()));
+        let population = Vec::from_iter(iter::from_fn(move || population.pop()).take(self.size));
         Ok(population)
     }
 
@@ -179,12 +200,8 @@ where
 
             self.hooks
                 .individual_created(&mut child, generators, sampler)?;
-            let violations = self.measurer.check(&child)?;
-            let measurement = self.measurer.evaluate(&child, violations)?;
-            descendents.push(BasicIndividual {
-                node: child,
-                measurement,
-            });
+            let measurement = self.measurer.evaluate(&child)?;
+            descendents.push(BasicIndividual::new(child, measurement));
         }
 
         // mix in the non-elites of the last population
@@ -192,7 +209,7 @@ where
         // take the top (size - #elites)
         population.extend(iter::from_fn(move || descendents.pop()).take(self.size - self.elites));
         // put into descending order
-        population.sort_by_key(|n| Reverse(n.measurement.fitness()));
+        population.sort_by(|n1, n2| n2.cmp(n1));
         Ok(population)
     }
 }

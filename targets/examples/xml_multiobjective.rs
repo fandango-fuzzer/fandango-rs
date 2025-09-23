@@ -1,32 +1,34 @@
-//! This example demonstrates how to use the (basic) evolver
+//! This example demonstrates how to use the NSGA2 evolver
 
 use anyhow::Error;
 use fandango::tuple_list::tuple_list;
 use fandango::visitor::Visitor;
 use fandango::visitor::write::WriteVisitor;
 use fandango_runtime::evolvers::Evolver;
-use fandango_runtime::evolvers::basic::BasicEvolver;
-use fandango_runtime::measurement::HasMeasurement;
+use fandango_runtime::evolvers::multi::{KPathDiversityHook, Nsga2Evolver};
 use fandango_runtime::measurement::{HasFitness, ViolationFitness};
+use fandango_runtime::measurement::{HasMeasurement, SizeFitness};
 use fandango_runtime::operators::DepthLimiter;
 use fandango_runtime::population::Individual;
 use fandango_targets::xml;
 use num_rational::Ratio;
 use rand::SeedableRng;
 use rand::rngs::StdRng;
+use std::num::NonZeroUsize;
 
 #[allow(deprecated)]
 fn main() -> Result<(), Error> {
     let fitness = ViolationFitness::<xml::ConstraintVisitor>::new();
+    let size = SizeFitness;
     // let fixer = XmlFixHook::evaluated();
     let fixer = ();
-    let mut runtime = BasicEvolver::new::<xml::nonterminal_start>(
-        fitness,
-        fixer,
+    let hook = KPathDiversityHook::new(fixer, NonZeroUsize::new(5).unwrap());
+    let mut runtime = Nsga2Evolver::new::<xml::nonterminal_start>(
+        tuple_list!(fitness, size),
+        hook,
         100,
-        10,
         1000,
-        Ratio::new(50, 100),
+        Ratio::new(80, 100),
     )
     .expect("Should be valid.");
 
@@ -40,7 +42,7 @@ fn main() -> Result<(), Error> {
         let fitness = population
             .iter()
             .map(|i| i.measurement().fitness())
-            .fold(0.0f64, |v, r| v + *r.numer() as f64 / *r.denom() as f64)
+            .fold(0.0f64, |v, r| v + *r.0.numer() as f64 / *r.0.denom() as f64)
             / population.len() as f64;
         if fitness == 1.0 {
             println!("saturated fitness at generation {i}");

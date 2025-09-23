@@ -1,4 +1,6 @@
-pub trait Individual {
+use crate::measurement::HasMeasurement;
+
+pub trait Individual: HasMeasurement {
     type Node;
 
     fn node(&self) -> &Self::Node;

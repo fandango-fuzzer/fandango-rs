@@ -35,3 +35,8 @@ workspace = true
 name = "xml_basic"
 path = "examples/xml_basic.rs"
 required-features = ["xml", "static_defs"]
+
+[[example]]
+name = "xml_multiobjective"
+path = "examples/xml_multiobjective.rs"
+required-features = ["xml", "static_defs"]
