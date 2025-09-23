@@ -264,9 +264,11 @@ mod defs {
         }
     }
 
+    /// A [`BasicHook`] which performs automatic fixes over the [`Xml`] grammar
     pub struct XmlFixHook<const FIXED: bool>;
 
     impl XmlFixHook<false> {
+        /// The fix hook with the fixes available from the original FANDANGO
         #[deprecated(note = "The XML grammar fixer from FANDANGO is weaker than it could be.")]
         pub fn evaluated() -> Self {
             Self
@@ -274,6 +276,7 @@ mod defs {
     }
 
     impl XmlFixHook<true> {
+        /// The fix hook with maximum possible fixes
         pub fn corrected() -> Self {
             Self
         }

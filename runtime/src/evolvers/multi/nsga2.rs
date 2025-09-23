@@ -96,9 +96,12 @@ where
     }
 }
 
+/// An evolver which implements [NSGA-II], but where diversity is handled by a hook
+///
+/// [NSGA-II]: https://web.njit.edu/~horacio/Math451H/download/2002-6-2-DEB-NSGA-II.pdf
 pub struct Nsga2Evolver<H, M, N> {
     measurer: M,
-    hooks: H,
+    hook: H,
 
     size: usize,
     replication: usize,
@@ -108,9 +111,18 @@ pub struct Nsga2Evolver<H, M, N> {
 }
 
 impl<H, MT> Nsga2Evolver<H, Multiobjective<MT>, ()> {
+    /// Create a new [`Nsga2Evolver`]
+    ///
+    /// - `measurers` specifies the tuple list of [`FitnessMeasurer`]s for this evolver.
+    /// - `hook` specifies the [`Nsga2Evolver`] that will be called at various hook points.
+    /// - `size` specifies the target size of the population.
+    /// - `replication` specifies the number of individuals which will be produced by mutation and
+    ///   crossover.
+    /// - `crossover_rate` specifies the rate at which crossover is performed instead of mutation.
+    ///   The function returns [`None`] if this is greater than 1.
     pub fn new<N>(
         measurers: MT,
-        hooks: H,
+        hook: H,
         size: usize,
         replication: usize,
         crossover_rate: Ratio<usize>,
@@ -120,7 +132,7 @@ impl<H, MT> Nsga2Evolver<H, Multiobjective<MT>, ()> {
         }
         Some(Nsga2Evolver::<H, Multiobjective<MT>, N> {
             measurer: Multiobjective::new(measurers),
-            hooks,
+            hook,
             size,
             replication,
             crossover_rate,
@@ -129,14 +141,14 @@ impl<H, MT> Nsga2Evolver<H, Multiobjective<MT>, ()> {
     }
 }
 
-impl<N, G, S, H, M, V> Evolver<BasicIndividual<N, V>, G, S> for Nsga2Evolver<H, M, N>
+impl<N, G, S, H, M, V> Evolver<G, S> for Nsga2Evolver<H, M, N>
 where
     H: Nsga2Hook<BasicIndividual<N, V>, G, S>,
     N: Node + Generated<S, G>,
     for<'a, 'b, 'c> N::TypeMut<'a>: VisitWithMut<MutatorVisitor<'b, S, G>>
         + InPlaceGenerated<S, G>
         + VisitableChildrenMut<N::TypeMut<'a>>,
-    for<'a> M: FitnessMeasurer<'a, N, Error = Error, Value = V>,
+    for<'a> M: FitnessMeasurer<'a, N, Error = Error, Measurement = V>,
     V: HasFitness + HasViolations,
     <V as HasFitness>::Fitness: Dom<<V as HasFitness>::Fitness>,
     S: Sampler<N>,
@@ -152,7 +164,7 @@ where
         let mut population = Vec::with_capacity(self.size + self.replication);
         for _ in 0..(self.size + self.replication) {
             let mut node = N::generate(sampler, generators, 0);
-            self.hooks
+            self.hook
                 .individual_created(&mut node, generators, sampler)?;
             let measurement = self.measurer.evaluate(&node)?;
             let individual = BasicIndividual::new(node, measurement);
@@ -161,7 +173,7 @@ where
 
         let mut fronts = fast_non_dominated_sort(population, self.size);
         // only need to diversity sort the last chunk
-        self.hooks.diversity_sort(fronts.last_mut().unwrap());
+        self.hook.diversity_sort(fronts.last_mut().unwrap());
 
         Ok(fronts.into_iter().flatten().take(self.size).collect())
     }
@@ -203,7 +215,7 @@ where
                     .unwrap();
             }
 
-            self.hooks
+            self.hook
                 .individual_created(&mut child, generators, sampler)?;
             let measurement = self.measurer.evaluate(&child)?;
             descendents.push(BasicIndividual::new(child, measurement));
@@ -213,7 +225,7 @@ where
 
         let mut fronts = fast_non_dominated_sort(descendents, self.size);
         // only need to diversity sort the last chunk
-        self.hooks.diversity_sort(fronts.last_mut().unwrap());
+        self.hook.diversity_sort(fronts.last_mut().unwrap());
 
         // memory reuse
         population.extend(fronts.into_iter().flatten().take(self.size));
@@ -222,22 +234,27 @@ where
     }
 }
 
+/// A hook for [`Nsga2Evolver`]s
 pub trait Nsga2Hook<I, G, S>: BasicHook<I::Node, G, S>
 where
     I: Individual,
 {
+    /// Perform the diversity-based sorting on the last Pareto front
     #[allow(unused)]
     fn diversity_sort(&mut self, individuals: &mut [I]) {}
 }
 
 impl<I, G, S> Nsga2Hook<I, G, S> for () where I: Individual {}
 
+/// A [`Nsga2Hook`] which wraps a [`BasicHook`] and optimizes diversity by greedy set cover over
+/// [`KPaths`].
 pub struct KPathDiversityHook<H> {
     k: NonZeroUsize,
     inner: H,
 }
 
 impl<H> KPathDiversityHook<H> {
+    /// Create the hook over the provided [`BasicHook`] and with some `k`
     pub fn new(inner: H, k: NonZeroUsize) -> Self {
         Self { k, inner }
     }

@@ -1,3 +1,5 @@
+//! Basic evolution strategy implementation
+
 use crate::evolvers::Evolver;
 use crate::measurement::{FitnessMeasurer, HasFitness, HasMeasurement, HasViolations};
 use crate::operators::{MutatorVisitor, crossover};
@@ -14,9 +16,10 @@ use fandango::visitor::navigation::{Advance, CountNodes, GoToMut};
 use fandango::visitor::{VisitWithMut, VisitableChildrenMut, VisitorMut};
 use num_rational::Ratio;
 
+/// An evolver which directly evolves based on a single fitness function
 pub struct BasicEvolver<H, M, N> {
     measurer: M,
-    hooks: H,
+    hook: H,
 
     size: usize,
     elites: usize,
@@ -27,9 +30,20 @@ pub struct BasicEvolver<H, M, N> {
 }
 
 impl<H, M> BasicEvolver<H, M, ()> {
+    /// Create a new [`BasicEvolver`]
+    ///
+    /// - `measurer` specifies the [`FitnessMeasurer`] for this evolver.
+    /// - `hook` specifies the [`BasicHook`] that will be called at various hook points.
+    /// - `size` specifies the target size of the population.
+    /// - `elites` specifies the number of best individuals that are guaranteed to be present in the
+    ///   next generation. The function returns [`None`] if this exceeds `size`.
+    /// - `replication` specifies the number of individuals which will be produced by mutation and
+    ///   crossover.
+    /// - `crossover_rate` specifies the rate at which crossover is performed instead of mutation.
+    ///   The function returns [`None`] if this is greater than 1.
     pub fn new<N>(
         measurer: M,
-        hooks: H,
+        hook: H,
         size: usize,
         elites: usize,
         replication: usize,
@@ -40,7 +54,7 @@ impl<H, M> BasicEvolver<H, M, ()> {
         }
         Some(BasicEvolver::<H, M, N> {
             measurer,
-            hooks,
+            hook,
             size,
             elites,
             replication,
@@ -50,12 +64,14 @@ impl<H, M> BasicEvolver<H, M, ()> {
     }
 }
 
+/// A simple individual which merely contains a node and a corresponding measurement
 pub struct BasicIndividual<N, V> {
     node: N,
     measurement: V,
 }
 
 impl<N, V> BasicIndividual<N, V> {
+    /// Create the individual
     pub fn new(node: N, measurement: V) -> Self {
         Self { node, measurement }
     }
@@ -126,14 +142,14 @@ where
     }
 }
 
-impl<N, G, S, H, M, V> Evolver<BasicIndividual<N, V>, G, S> for BasicEvolver<H, M, N>
+impl<N, G, S, H, M, V> Evolver<G, S> for BasicEvolver<H, M, N>
 where
     H: BasicHook<N, G, S>,
     N: Node + Generated<S, G>,
     for<'a, 'b, 'c> N::TypeMut<'a>: VisitWithMut<MutatorVisitor<'b, S, G>>
         + InPlaceGenerated<S, G>
         + VisitableChildrenMut<N::TypeMut<'a>>,
-    for<'a> M: FitnessMeasurer<'a, N, Error = Error, Value = V>,
+    for<'a> M: FitnessMeasurer<'a, N, Error = Error, Measurement = V>,
     V: HasFitness + HasViolations,
     V::Fitness: Ord,
     S: Sampler<N>,
@@ -150,7 +166,7 @@ where
         let mut population = BinaryHeap::with_capacity(self.size + self.replication);
         for _ in 0..(self.size + self.replication) {
             let mut node = N::generate(sampler, generators, 0);
-            self.hooks
+            self.hook
                 .individual_created(&mut node, generators, sampler)?;
             let measurement = self.measurer.evaluate(&node)?;
             let individual = BasicIndividual::new(node, measurement);
@@ -198,7 +214,7 @@ where
                     .unwrap();
             }
 
-            self.hooks
+            self.hook
                 .individual_created(&mut child, generators, sampler)?;
             let measurement = self.measurer.evaluate(&child)?;
             descendents.push(BasicIndividual::new(child, measurement));
@@ -214,7 +230,10 @@ where
     }
 }
 
+/// A hook which allows tampering with inputs during the evolution
 pub trait BasicHook<N, G, S> {
+    /// Hook which is executed immediately after an individual is created, but before it is
+    /// evaluated
     #[allow(unused)]
     fn individual_created(
         &mut self,
