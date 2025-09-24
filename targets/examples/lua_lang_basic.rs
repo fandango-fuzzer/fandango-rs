@@ -9,7 +9,7 @@ use fandango_runtime::evolvers::basic::{BasicEvolver, BasicIndividual};
 use fandango_runtime::measurement::{HasFitness, ViolationFitness};
 use fandango_runtime::operators::DepthLimiter;
 use fandango_runtime::population::Individual;
-use fandango_targets::lang;
+use fandango_targets::lualang as lang;
 use num_rational::Ratio;
 use rand::SeedableRng;
 use rand::rngs::StdRng;

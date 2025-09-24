@@ -12,7 +12,8 @@ csv = []
 rest = []
 scriptsizec = []
 xml = []
-lang = []
+lualang = []
+clang = []
 
 static_defs = []
 
@@ -44,6 +45,6 @@ path = "examples/xml_multiobjective.rs"
 required-features = ["xml", "static_defs"]
 
 [[example]]
-name = "lang_basic"
-path = "examples/lang_basic.rs"
-required-features = ["lang", "static_defs"]
+name = "lua_lang_basic"
+path = "examples/lua_lang_basic.rs"
+required-features = ["lualang", "static_defs"]

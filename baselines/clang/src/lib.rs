@@ -6,15 +6,15 @@ extern crate alloc;
 
 use common::DynamicBenchmarkSuite;
 use core::convert::Infallible;
-use fandango_targets::lang;
+use fandango_targets::clang as lang;
 
 /// The [`BenchmarkSuite`] definition for lang.
 pub struct Benchmark(Infallible);
 
 impl DynamicBenchmarkSuite for Benchmark {
-    const NAME: &'static str = "lang";
+    const NAME: &'static str = "clang";
 
-    fn program() -> &'static fandango::lang::Program<'static> {
+    fn program() -> &'static fandango::clang::Program<'static> {
         lang::STRUCTURE.inner()
     }
 }
@@ -27,7 +27,7 @@ mod static_defs {
     use fandango::visitor::{Visitor, VisitorMut};
     use fandango_runtime::measurement::Violations;
     use fandango_runtime::operators::Checker;
-    use fandango_targets::lang;
+    use fandango_targets::lualang as lang;
 
     impl BenchmarkSuite<StdSampler, StdGenerator> for Benchmark {
         type Start = lang::nonterminal_start;

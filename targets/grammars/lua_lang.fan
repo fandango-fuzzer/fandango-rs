@@ -17,7 +17,7 @@
 <fn_name> ::= <letter> <alnums> ;
 <param_list_e> ::= <param_list> | <e> ;
 <param_list> ::= <param_name> | <param_name> "," <sep> <param_list> ;
-<param_name> ::= <letter> <alnums> ;
+<param_name> ::= <var_name> ;
 <fn_body_e> ::= <statements> | <e> ;
 
 <return_stmt> ::= <return_kwd> | <return_kwd> <sep> <expr> ;
@@ -25,7 +25,7 @@
 
 <expr> ::= <arith_expr> | <expr_unit> ;
 <expr_unit> ::= <var_access> | <value> | <fn_call> ;
-<fn_call> ::= <var_access> "(" <arg_list_e> ")" ;
+<fn_call> ::= <fn_name> "(" <arg_list_e> ")" ;
 <arg_list_e> ::= <arg_list> | <e> ; 
 <arg_list> ::= <arg> | <arg> "," <sep> <arg_list> ;
 <arg> ::= <expr> ;
@@ -35,8 +35,8 @@
 <binop> ::= <expr_unit> <sep> <binop_op> <sep> <expr> ;
 <unop> ::= <unop_op> <expr> ;
 
-<binop_op> ::= "+" | "-" | "/" | "*" ;
-<unop_op> ::= "-" ;
+<binop_op> ::= "+" | "-" | "/" | "*" | "%" | "^" | "==" | "~=" | "<=" | ">=" | "<" | ">" | <sep> "and" <sep> | <sep> "or" <sep> | <sep> "in" <sep> ;
+<unop_op> ::= "-" | <sep> "not" <sep> ;
 
 <var_access> ::= <var_name> ;
 <var_name> ::= <letter> | <letter> <alnums> ;
@@ -49,8 +49,13 @@
 <value> ::= <bool_val> | <num_val> | <string_val> ;
 
 <bool_val> ::= "true" | "false" ;
-<num_val> ::= <int> ;
+<num_val> ::= <num_val_inner> | <num_val_inner> <exponent> ;
+<exponent> ::= "e" <int> | "e-" <int> | "E" <int> | "E-" <int> ;
+<num_val_inner> ::= <int> | <float> | <hex> ;
+<hex> ::= "0x" <hex_digit>+ ;
+<hex_digit> ::= "a" | "b" | "c" | "d" | "e" | "f" | <digit> ;
 <int> ::= <digit> | <digit> <int> ;
+<float> ::= <int> "." <int> ;
 <string_val> ::= "\"\"" | "\"" <alnums> "\"" ;
 <sep> ::= " " ;
 <e> ::= " " ;

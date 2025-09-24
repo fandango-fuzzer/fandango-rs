@@ -533,8 +533,8 @@ mod lang {
 
     #[allow(dead_code)]
     #[derive(Fandango)]
-    #[fandango(grammar = "targets/grammars/lang.fan")]
-    pub struct Lang;
+    #[fandango(grammar = "targets/grammars/lua_lang.fan")]
+    pub struct LuaLang;
 
     #[test]
     fn generate_lang() -> Result<(), Box<dyn Error>> {

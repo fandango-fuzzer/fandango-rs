@@ -1,5 +1,5 @@
 [package]
-name = "lang"
+name = "clang"
 version = "0.0.0"
 edition = "2024"
 publish = false
@@ -10,7 +10,7 @@ static_defs = ["common/static_defs", "fandango-targets/static_defs"]
 [dependencies]
 fandango = { path = "../.." }
 fandango-runtime = { path = "../../runtime" }
-fandango-targets = { path = "../../targets", features = ["lang"] }
+fandango-targets = { path = "../../targets", features = ["clang"] }
 
 common = { path = "../common" }
 

@@ -7,8 +7,8 @@ mod defs {
 
     /// Base for the lang grammar stored in lang.fan.
     #[derive(Fandango)]
-    #[fandango(grammar = "grammars/lang.fan", parse = false, dynamic = true)]
-    pub struct Lang(Infallible);
+    #[fandango(grammar = "grammars/lua_lang.fan", parse = false, dynamic = true)]
+    pub struct LuaLang(Infallible);
 }
 
 #[cfg(feature = "static_defs")]
@@ -29,8 +29,8 @@ mod defs {
     
     /// Base for the lang grammar stored in lang.fan.
     #[derive(Fandango)]
-    #[fandango(grammar = "grammars/lang.fan", parse = false)]
-    pub struct Lang(Infallible);
+    #[fandango(grammar = "grammars/lua_lang.fan", parse = false)]
+    pub struct LuaLang(Infallible);
     
     // ================= Combined def-use and at least one var access.
     // Constraint visitor.
@@ -68,7 +68,7 @@ mod defs {
         T: VisitableChildren<T> + 
         AsNodeRef<nonterminal_var_access> +
         AsNodeRef<nonterminal_assignment> +
-        AsNodeRef<nonterminal_decl>
+        AsNodeRef<nonterminal_decl> +
     {
         type Continue = Self;
         type Break = Infallible;
@@ -170,15 +170,74 @@ mod defs {
 
     // ================= Def before use.
     // Constraint visitor.
-    // Note: Not yet perfect, no scoping, also declarations like let a = a are allowed. 
     //
+
+    // First, a visitor that collects declarations, which will be used by the main visitor.
+    #[derive(Debug, Default)]
+    pub struct DeclarationCollector {
+        /// The current path, to be used by the visitor when saving violations.
+        pub path: VecDeque<usize>,
+        /// The current scope depth, to track variable scopes.
+        pub scope_depth: usize,
+        /// The set of currently defined variables, mapping names to nodes.
+        pub defined_vars: alloc::collections::BTreeSet<(nonterminal_var_name, usize)>,
+    }
+
+    impl<T> Visitor<T> for DeclarationCollector
+    where 
+        T: VisitableChildren<T> +
+        AsNodeRef<nonterminal_decl> +
+        AsNodeRef<nonterminal_var_name> +
+        AsNodeRef<nonterminal_fn_def> + 
+        AsNodeRef<nonterminal_param_name>,
+    {
+        type Continue = Self;
+        type Break = Infallible;
+        type Error = Infallible;
+
+        fn visit<'program, N>(mut self, node: &'program N, idx: usize) -> VisitResult<Self, T>
+        where
+            N: Node<Type<'program> = T>,
+            T: From<&'program N> + AsNodeRef<N>,
+        {
+            self.path.push_back(idx);
+            let visited = T::from(node);
+            // First, check if we are in a situation where we need to increase scope depth.
+            if let Some(_tree) = visited.downcast::<nonterminal_fn_def>() {
+                self.scope_depth += 1;
+                // Visit the function, then decrease depth.
+                let result = visited.visit_each(self);
+                let Ok(ControlFlow::Continue(mut visitor)) = result;
+                visitor.scope_depth -= 1;
+                visitor.path.pop_back();
+                return Ok(ControlFlow::Continue(visitor));
+            } // Functions are currently the only scope-increasing construct.
+
+            if let Some(decl_tree) = visited.downcast::<nonterminal_decl>() {
+                let var_decl_name = decl_tree.nth::<0>().nth::<2>().clone();
+                self.defined_vars.insert((var_decl_name, self.scope_depth));
+            } /* Check now for param_name */ else if let Some(param_tree) = visited.downcast::<nonterminal_param_name>() {
+                let var_name_inside = param_tree.nth::<0>().clone();
+                // The parameters should be scoped properly.
+                self.defined_vars.insert((var_name_inside, self.scope_depth));
+            }
+            let mut result = visited.visit_each(self);
+            if let Ok(ControlFlow::Continue(visitor)) = &mut result {
+                visitor.path.pop_back();
+            }
+            result
+        }
+    }
+
     /// Basic def-before-use constraint visitor.
     #[derive(Debug, Default)]
     pub struct ConstraintVisitorDefUse {
         /// The current path, to be used by the visitor when saving violations.
         pub path: VecDeque<usize>,
+        /// The current scope depth, to track variable scopes.
+        pub scope_depth: usize,
         /// The set of currently defined variables, mapping names to nodes.
-        pub defined_vars: alloc::collections::BTreeSet<String>,
+        pub defined_vars: alloc::collections::BTreeSet<(nonterminal_var_name, usize)>,
         /// The list of violations found so far.
         pub violations: Vec<VecDeque<usize>>,
     }
@@ -194,7 +253,9 @@ mod defs {
         T: VisitableChildren<T> +
         AsNodeRef<nonterminal_var_access> +
         AsNodeRef<nonterminal_assignment> +
-        AsNodeRef<nonterminal_decl>
+        AsNodeRef<nonterminal_decl> +
+        AsNodeRef<nonterminal_fn_def> +
+        AsNodeRef<nonterminal_var_name>,
     {
         type Continue = Self;
         type Break = Infallible;
@@ -207,31 +268,30 @@ mod defs {
         {
             self.path.push_back(idx);
             let visited = T::from(node);
-            
-            // TODO Move decl thingy here.
+
+            // Assume that defined_vars is correctly populated at the start of the visit.
+
+            // Check if we are in a situation where we need to increase scope depth.
+            if let Some(_tree) = visited.downcast::<nonterminal_fn_def>() {
+                self.scope_depth += 1;
+                // Visit the function, then decrease depth.
+                let result = visited.visit_each(self);
+                let Ok(ControlFlow::Continue(mut visitor)) = result;
+                visitor.scope_depth -= 1;
+                visitor.path.pop_back();
+                return Ok(ControlFlow::Continue(visitor));
+            } // Functions are currently the only scope-increasing construct.
+
             if let Some(tree) = visited.downcast::<nonterminal_var_access>() {
-                let var_name_str = String::from_utf8(
-                    WriteVisitor::new(Vec::new())
-                        .visit(tree, 0)
-                        .unwrap()
-                        .continue_value()
-                        .unwrap()
-                        .output(),
-                ).unwrap();
-                if !self.defined_vars.contains(&var_name_str) {
+                let var_name_accessed = tree.nth::<0>().clone();
+                // Look for it in the defined vars.
+                if !self.defined_vars.iter().any(|(name, depth)| {
+                    name == &var_name_accessed && *depth <= self.scope_depth
+                }) {
+                    // We have a violation, the variable was not defined in the current or any outer scope.
                     self.violations.push(self.path.clone());
                 }
-            } else if let Some(decl_tree) = visited.downcast::<nonterminal_decl>() {
-                let var_decl_name = String::from_utf8(
-                    WriteVisitor::new(Vec::new())
-                        .visit(decl_tree.nth::<0>().nth::<2>(), 0)
-                        .unwrap()
-                        .continue_value()
-                        .unwrap()
-                        .output(),
-                ).unwrap();
-                self.defined_vars.insert(var_decl_name);
-            }
+            } 
             let mut result = visited.visit_each(self);
             if let Ok(ControlFlow::Continue(visitor)) = &mut result {
                 visitor.path.pop_back();
@@ -239,7 +299,6 @@ mod defs {
             result
         }
     }
-
     // ================= end of Def before use.
 
     // ================= Def before use fixer.
@@ -371,9 +430,112 @@ mod defs {
     }
     // ================= end of Returns only inside functions.
 
+    // ================= Functions called with correct number of arguments.
+
+    // Constraint visitor.
+    /// Basic function-arguments-count constraint visitor.
+    #[derive(Debug, Default)]
+    pub struct ConstraintVisitorFuncArgCount {
+        /// The current path, to be used by the visitor when saving violations.
+        pub path: VecDeque<usize>,
+        /// The list of violations found so far.
+        pub violations: Vec<VecDeque<usize>>,
+        /// The current function definitions, mapping function names to their parameter counts.
+        pub func_defs: alloc::collections::BTreeMap<nonterminal_fn_name, usize>,
+    }   
+
+    impl<T> Visitor<T> for ConstraintVisitorFuncArgCount
+    where
+        T: VisitableChildren<T> +
+            AsNodeRef<nonterminal_fn_call> +
+            AsNodeRef<nonterminal_fn_def> +
+            AsNodeRef<nonterminal_arg_list> +
+            AsNodeRef<nonterminal_param_list> +
+            AsNodeRef<nonterminal_e> +
+            AsNodeRef<nonterminal_param_list_e>,
+    {
+        type Continue = Self;
+        type Break = Infallible;
+        type Error = Infallible;
+
+        fn visit<'program, N>(mut self, node: &'program N, idx: usize) -> VisitResult<Self, T>
+        where
+            N: Node<Type<'program> = T>,
+            T: From<&'program N> + AsNodeRef<N>,
+        {
+            self.path.push_back(idx);
+            let visited = node.opaque();    
+            if let Some(tree) = visited.downcast::<nonterminal_fn_def>() {
+                let fn_name = tree.nth::<0>().nth::<2>().clone();
+                // Get the param_list_e.
+                let param_list_e = tree.nth::<0>().nth::<4>();
+                // Is param_list_e <e> or <param_list>?
+                let param_count = if let Some(_e) = param_list_e.nth::<0>().nth::<1>() {
+                    0
+                } else {
+                    // In this case, we know it's param_list.
+                    let mut count = 0;
+                    let mut current = param_list_e.nth::<0>().nth::<0>();
+                    while let Some(pl) = current {
+                        count += 1;
+                        current = match pl.nth::<0>() {
+                            nonterminal_param_list_0::variant_0(_) => None,
+                            nonterminal_param_list_0::variant_1(seq) => {
+                                let (_, _, _, rest) = seq.children();
+                                Some(rest)
+                            }
+                        };
+                    }
+                    count
+                };
+                // Save the function definition using the node as key.
+                self.func_defs.insert(fn_name, param_count);
+            } else if let Some(tree) = visited.downcast::<nonterminal_fn_call>() {
+                let fn_name = tree.nth::<0>().nth::<0>().clone();
+                // Get the arg_list_e.
+                let arg_list_e = tree.nth::<0>().nth::<2>();
+                // Is arg_list_e <e> or <arg_list>?
+                let arg_count = if let Some(_e) = arg_list_e.nth::<0>().nth::<1>() {
+                    0
+                } else {
+                    // In this case, we know it's arg_list.
+                    let mut count = 0;
+                    let mut current = arg_list_e.nth::<0>().nth::<0>();
+                    while let Some(al) = current {
+                        count += 1;
+                        current = match al.nth::<0>() {
+                            nonterminal_arg_list_0::variant_0(_) => None,
+                            nonterminal_arg_list_0::variant_1(seq) => {
+                                let (_, _, _, rest) = seq.children();
+                                Some(rest)
+                            }
+                        };
+                    }
+                    count
+                };
+                // Check if the function name is in the definitions.
+                if let Some(expected_count) = self.func_defs.get(&fn_name) {
+                    if *expected_count != arg_count {
+                        self.violations.push(self.path.clone());
+                    }
+                } else {
+                    // Function not defined, consider it a violation.
+                    self.violations.push(self.path.clone());
+                }
+            }
+            let mut result = visited.visit_each(self);
+            if let Ok(ControlFlow::Continue(visitor)) = &mut result {
+                visitor.path.pop_back();
+            }
+            result
+        }
+    }
+
+    // ================ end of Functions called with correct number of arguments.
+
     #[cfg(test)]
     mod test {
-        use crate::lang;
+        use crate::lualang as lang;
         use fandango_runtime::operators::DepthLimiter;
         use alloc::boxed::Box;
         use core::error::Error;
@@ -398,13 +560,29 @@ mod defs {
             let mut diff_count = 0;
             let mut tree = lang::nonterminal_start::generate(&mut rng, &mut generators, 0);
             
-            // Run this 10 times and print to see violations and fixes.
+            // Run this 100 times and print to see violations and fixes.
             let i = 0;
-            for i in 0..10 {
+            for i in 0..100 {
                 tree = lang::nonterminal_start::generate(&mut rng, &mut generators, 0);
-                let Ok(ControlFlow::Continue(lang::ConstraintVisitorDefUse { violations, defined_vars, .. })) =
-                    lang::ConstraintVisitorDefUse::default().visit(&mut tree, 0);
 
+                std::println!("==============================");
+
+                // First collect declarations.
+                let Ok(ControlFlow::Continue(decl_visitor)) =
+                    lang::DeclarationCollector::default().visit(&tree, 0);
+                // let mut tree = tree;
+                let defined_vars = decl_visitor.defined_vars;
+                std::println!("Found {} defined variables.", defined_vars.len());
+
+                // Now check for violations.   
+                
+                let mut def_use_visitor = lang::ConstraintVisitorDefUse::default();
+                // Set the defined vars.
+                def_use_visitor.defined_vars = defined_vars.clone();
+                let Ok(ControlFlow::Continue(lang::ConstraintVisitorDefUse { violations, .. })) =
+                    def_use_visitor.visit(&tree, 0);
+                std::println!("Program {i} has {} def-before-use violations.", violations.len());
+                
                 let total_violations = violations.len();
 
                 for mut violation in violations {
@@ -429,8 +607,6 @@ mod defs {
                             .output(),
                     ).unwrap();
 
-                    assert!(!defined_vars.contains(&var_name_str), "at {violation:?}, found: {var_name_str}");
-
                     diff_count += 1;
                 }
 
@@ -445,24 +621,24 @@ mod defs {
                 ).unwrap());
 
                 // Now fix the tree.
-                let _ = lang::ConstraintFixerDefUse {
-                    sampler: &mut rng,
-                    generator: &mut generators,
-                    defined_vars: &mut alloc::collections::BTreeMap::new(),
-                }
-                .visit_mut(&mut tree, 0)?;
-                let Ok(ControlFlow::Continue(lang::ConstraintVisitorDefUse { violations, .. })) =
-                    lang::ConstraintVisitorDefUse::default().visit(&mut tree, 0);
+                // let _ = lang::ConstraintFixerDefUse {
+                //     sampler: &mut rng,
+                //     generator: &mut generators,
+                //     defined_vars: &mut alloc::collections::BTreeMap::new(),
+                // }
+                // .visit_mut(&mut tree, 0)?;
+                // let Ok(ControlFlow::Continue(lang::ConstraintVisitorDefUse { violations, .. })) =
+                //     lang::ConstraintVisitorDefUse::default().visit(&mut tree, 0);
 
-                std::println!("After fixing, found {} violations.", violations.len());
-                std::println!("Fixed program:\n{}", String::from_utf8(
-                    WriteVisitor::new(Vec::new())
-                        .visit(&tree, 0)
-                        .unwrap()
-                        .continue_value()
-                        .unwrap()
-                        .output(),
-                ).unwrap());
+                // std::println!("After fixing, found {} violations.", violations.len());
+                // std::println!("Fixed program:\n{}", String::from_utf8(
+                //     WriteVisitor::new(Vec::new())
+                //         .visit(&tree, 0)
+                //         .unwrap()
+                //         .continue_value()
+                //         .unwrap()
+                //         .output(),
+                // ).unwrap());
             }
 
             // ok at this point we found a program that worked.
@@ -492,6 +668,33 @@ mod defs {
                 })) = lang::ConstraintVisitorReturnInFunc::default().visit(&tree, 0);
                 std::println!("==============================");
                 std::println!("Program {i} has {} return-in-fn violations.", violations.len());
+                // Print the program.
+                std::println!("Program:\n{}", String::from_utf8(
+                    WriteVisitor::new(Vec::new())
+                        .visit(&tree, 0)
+                        .unwrap()
+                        .continue_value()
+                        .unwrap()
+                        .output(),
+                ).unwrap());
+            }
+            Ok(())
+        }
+
+        #[test]
+        fn check_fn_call_constraint() -> Result<(), Box<dyn Error>> {
+            extern crate std;
+            let mut rng = StdRng::seed_from_u64(0);
+            let mut generators =
+                tuple_list!(DepthLimiter::new(lang::nonterminal_start::ROOT.inner(), 50));
+            // Generate 50 programs and check for violations.
+            for i in 0..200 {
+                let tree = lang::nonterminal_start::generate(&mut rng, &mut generators, 0);
+                let Ok(ControlFlow::Continue(lang::ConstraintVisitorFuncArgCount { 
+                    violations, .. 
+                })) = lang::ConstraintVisitorFuncArgCount::default().visit(&tree, 0);
+                std::println!("==============================");
+                std::println!("Program {i} has {} fn-call-arg-count violations.", violations.len());
                 // Print the program.
                 std::println!("Program:\n{}", String::from_utf8(
                     WriteVisitor::new(Vec::new())

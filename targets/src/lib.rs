@@ -11,8 +11,10 @@ use alloc::collections::VecDeque;
 use alloc::vec::Vec;
 
 /// Target for the programming language grammar and constraints.
-#[cfg(feature = "lang")]
-pub mod lang;
+#[cfg(feature = "clang")]
+pub mod clang;
+#[cfg(feature = "lualang")]
+pub mod lualang;
 #[cfg(feature = "csv")]
 pub mod csv;
 #[cfg(feature = "rest")]
