@@ -13,7 +13,6 @@ use fandango_runtime::measurement::{FitnessMeasurer, HasFitness, ViolationFitnes
 use fandango_runtime::operators::DepthLimiter;
 use fandango_runtime::population::Individual;
 use fandango_targets::xml;
-use fandango_targets::xml::XmlFixHook;
 use num_rational::Ratio;
 use rand::SeedableRng;
 use rand::rngs::StdRng;
