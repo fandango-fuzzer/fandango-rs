@@ -271,11 +271,15 @@ impl<'program, 'source> IntoRustSource<FandangoGenContext<'_, '_, 'program, 'sou
             ref_visit_prefixes,
             visit_prefixes,
             generate_prefixes,
+            construction_argument,
+            construction_expr,
         ) = children
             .iter()
             .zip(&child_types)
-            .map(|((_, _, child, _), name)| {
+            .enumerate()
+            .map(|(i, ((_, _, child, _), name))| {
                 let base = quote! { #name };
+                let child_name = format_ident!("arg_{i}");
                 match node_weight {
                     FandangoNode::Operator(op) => match op {
                         Operator::Kleene(_) | Operator::Plus(_) | Operator::Repeat(_, _, _) => (
@@ -285,6 +289,8 @@ impl<'program, 'source> IntoRustSource<FandangoGenContext<'_, '_, 'program, 'sou
                             quote! {},
                             quote! {},
                             quote! {},
+                            quote! { #child_name: ::alloc::vec::Vec<#base> },
+                            quote! { #child_name },
                         ),
                         Operator::Option(_) => {
                             if needs_indirection.contains(&(node_weight, *child)) {
@@ -295,6 +301,8 @@ impl<'program, 'source> IntoRustSource<FandangoGenContext<'_, '_, 'program, 'sou
                                     quote! { ::core::ops::Deref::deref },
                                     quote! { ::core::ops::DerefMut::deref_mut },
                                     quote! { ::alloc::boxed::Box::new },
+                                    quote! { #child_name: ::core::option::Option<#base> },
+                                    quote! { #child_name.map(::alloc::boxed::Box::new) },
                                 )
                             } else {
                                 (
@@ -304,6 +312,8 @@ impl<'program, 'source> IntoRustSource<FandangoGenContext<'_, '_, 'program, 'sou
                                     quote! {},
                                     quote! {},
                                     quote! {},
+                                    quote! { #child_name: ::core::option::Option<#base> },
+                                    quote! { #child_name },
                                 )
                             }
                         }
@@ -320,21 +330,34 @@ impl<'program, 'source> IntoRustSource<FandangoGenContext<'_, '_, 'program, 'sou
                                 quote! { ::core::ops::Deref::deref },
                                 quote! { ::core::ops::DerefMut::deref_mut },
                                 quote! { ::alloc::boxed::Box::new },
+                                quote! { #child_name: #base },
+                                quote! { ::alloc::boxed::Box::new(#child_name) },
                             )
                         } else {
                             (
                                 quote! { &'a #base },
                                 quote! { &'a mut #base },
-                                base,
+                                base.clone(),
                                 quote! {},
                                 quote! {},
                                 quote! {},
+                                quote! { #child_name: #base },
+                                quote! { #child_name },
                             )
                         }
                     }
                 }
             })
-            .collect::<(Vec<_>, Vec<_>, Vec<_>, Vec<_>, Vec<_>, Vec<_>)>();
+            .collect::<(
+                Vec<_>,
+                Vec<_>,
+                Vec<_>,
+                Vec<_>,
+                Vec<_>,
+                Vec<_>,
+                Vec<_>,
+                Vec<_>,
+            )>();
 
         match node_weight {
             FandangoNode::String(orig) => {
@@ -471,6 +494,7 @@ impl<'program, 'source> IntoRustSource<FandangoGenContext<'_, '_, 'program, 'sou
                 let indices = (0..children.len()).collect::<Vec<_>>();
                 let count = children.len();
                 let child_range_docs = (0usize..).map(|v| v.to_string());
+                let constructors = (0..child_variants.len()).map(|i| format_ident!("from_{i}th"));
                 let child_range = 0usize..;
 
                 let shortest = shortest_paths.get(&node_weight).unwrap();
@@ -483,6 +507,15 @@ impl<'program, 'source> IntoRustSource<FandangoGenContext<'_, '_, 'program, 'sou
                             #[doc = concat!(#child_range_docs, "th variant of [`", stringify!(#name), "`] which maps to [`", stringify!(#child_types), "`]")]
                             #child_variants ( #child_field_types )
                         ),*
+                    }
+
+                    impl #name {
+                        #(
+                            #[doc = concat!("Create a new [`", stringify!(#name), "`] from its ", stringify!(#indices), " variant (a [`", stringify!(#child_types), "`]")]
+                            pub fn #constructors(#construction_argument) -> Self {
+                                Self::#child_variants(#construction_expr)
+                            }
+                        )*
                     }
 
                     impl Default for #name {
@@ -788,6 +821,17 @@ impl<'program, 'source> IntoRustSource<FandangoGenContext<'_, '_, 'program, 'sou
                         child_0: #(#child_field_types)*
                     }
 
+                    impl #name {
+                        #(
+                            #[doc = concat!("Create a new [`", stringify!(#name), "`] from a sequence of [`", stringify!(#child_types), "`]s")]
+                            pub fn new(#construction_argument) -> Self {
+                                Self {
+                                    child_0: #construction_expr
+                                }
+                            }
+                        )*
+                    }
+
                     impl Default for #name {
                         fn default() -> Self {
                             Self {
@@ -1024,6 +1068,17 @@ impl<'program, 'source> IntoRustSource<FandangoGenContext<'_, '_, 'program, 'sou
                     #[derive(Default)]
                     pub struct #name {
                         #( #child_names: #child_field_types ),*
+                    }
+
+                    impl #name {
+                        #[doc = concat!("Create a new [`", stringify!(#name), "`]")]
+                        pub fn new(#(#construction_argument),*) -> Self {
+                            Self {
+                                #(
+                                    #child_names: #construction_expr
+                                ),*
+                            }
+                        }
                     }
 
                     impl ::fandango::typing::Node for #name {
