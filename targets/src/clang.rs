@@ -32,6 +32,7 @@ mod defs {
     use fandango::visitor::write::WriteVisitor;
     use fandango_runtime::operators::Checker;
     use rand::Rng;
+    use num_rational::Ratio;
     
     /// Base for the C language grammar stored in c_lang.fan.
     #[derive(Fandango)]
@@ -75,142 +76,6 @@ mod defs {
         }
         None
     }
-
-    // ================= Combined def-use and at least one var access.
-    // Constraint visitor.
-    // Mainly for illustrative purposes; in the future, we will devise a strategy to 
-    // have multiple independent constraints running at once.
-    //
-    /// Basic combined constraint visitor.
-    #[derive(Debug, Default)]
-    pub struct ConstraintVisitorAtLeastOneVarAlsoDefUse {
-        /// The current path, to be used by the visitor when saving violations.
-        pub path: VecDeque<usize>,
-        /// The count of variable accesses found so far.
-        pub var_access_count: usize,
-        /// The set of currently defined variables, mapping names to nodes.
-        pub defined_vars: alloc::collections::BTreeSet<String>,
-        /// The list of violations found so far.
-        pub violations: Vec<VecDeque<usize>>,
-    }
-
-    impl Checker for ConstraintVisitorAtLeastOneVarAlsoDefUse {
-        fn violations(self) -> Violations {
-            // If there are no variable accesses, or if there are def-before-use violations, we have violations.
-            if self.var_access_count == 0 {
-                let mut violations = self.violations;
-                violations.push([0].into());
-                Violations::new(violations.len(), violations)
-            } else {
-                Violations::new(self.violations.len(), self.violations)
-            }
-        }
-    }
-
-    impl<T> Visitor<T> for ConstraintVisitorAtLeastOneVarAlsoDefUse
-    where 
-        T: VisitableChildren<T> + 
-        AsNodeRef<nonterminal_var_access> +
-        AsNodeRef<nonterminal_assignment> +
-        AsNodeRef<nonterminal_decl> +
-    {
-        type Continue = Self;
-        type Break = Infallible;
-        type Error = Infallible;
-
-        fn visit<'program, N>(mut self, node: &'program N, idx: usize) -> VisitResult<Self, T>
-        where
-            N: Node<Type<'program> = T>,
-            T: From<&'program N> + AsNodeRef<N>,
-        {
-            self.path.push_back(idx);
-            let visited = T::from(node);
-            if let Some(_tree) = visited.downcast::<nonterminal_var_access>() {
-                self.var_access_count += 1;
-                let var_name_str = String::from_utf8(
-                    WriteVisitor::new(Vec::new())
-                        .visit(_tree, 0)
-                        .unwrap()
-                        .continue_value()
-                        .unwrap()
-                        .output(),
-                ).unwrap();
-                if !self.defined_vars.contains(&var_name_str) {
-                    self.violations.push(self.path.clone());
-                }
-            } else if let Some(decl_tree) = visited.downcast::<nonterminal_decl>() {
-                let var_decl_name = String::from_utf8(
-                    WriteVisitor::new(Vec::new())
-                        .visit(decl_tree.nth::<0>().nth::<2>(), 0)
-                        .unwrap()
-                        .continue_value()
-                        .unwrap()
-                        .output(),
-                ).unwrap();
-                self.defined_vars.insert(var_decl_name);
-            }
-            let mut result = visited.visit_each(self);
-            if let Ok(ControlFlow::Continue(visitor)) = &mut result {
-                visitor.path.pop_back();
-            }
-            result
-        }
-    }
-
-    // ================= Ensure sufficiently many variable accesses.
-    // Constraint visitor.
-    // Mostly to ensure that there are variable accesses in generated programs.
-    // Note: No scoping, not perfect.
-    //
-    /// Basic counter visitor.
-    #[derive(Debug, Default)]
-    pub struct ConstraintVisitorVarAccess {
-        /// The current path, to be used by the visitor when saving violations.
-        pub path: VecDeque<usize>,
-        /// The count of variable accesses found so far.
-        pub var_access_count: usize,
-        /// The list of violations found so far.
-        pub violations: Vec<VecDeque<usize>>,
-    }
-
-    impl Checker for ConstraintVisitorVarAccess {
-        fn violations(self) -> Violations {
-            // We consider it a violation if there are no variable accesses.
-            let mut violations = self.violations;
-            if self.var_access_count == 0 {
-                violations.push(self.path);
-            }
-            Violations::new(violations.len(), violations)
-        }
-    }
-
-    impl<T> Visitor<T> for ConstraintVisitorVarAccess
-    where 
-        T: VisitableChildren<T> + 
-        AsNodeRef<nonterminal_var_access>
-    {
-        type Continue = Self;
-        type Break = Infallible;
-        type Error = Infallible;
-
-        fn visit<'program, N>(mut self, node: &'program N, idx: usize) -> VisitResult<Self, T>
-        where
-            N: Node<Type<'program> = T>,
-            T: From<&'program N> + AsNodeRef<N>,
-        {
-            self.path.push_back(idx);
-            let visited = T::from(node);
-            if let Some(_tree) = visited.downcast::<nonterminal_var_access>() {
-                self.var_access_count += 1;
-            }
-            let mut result = visited.visit_each(self);
-            if let Ok(ControlFlow::Continue(visitor)) = &mut result {
-                visitor.path.pop_back();
-            }
-            result
-        }
-    }
-    // ================= end of Ensure sufficiently many variable accesses.
 
     // ================= Def before use.
     // Constraint visitor.
@@ -298,6 +163,12 @@ mod defs {
                     }
                     param_type_list_inner
                 };
+                // Need to also record the return type.
+                // <fn_def> ::= <type> <sep> <fn_kwd> <sep> <fn_name> "(" <param_list_e> ")" <sep> "{" <sep> <fn_body_e> <sep> "}" ;
+                let return_type = tree.nth::<0>().nth::<0>().clone();
+                // Have it be the last element in the param_type_list.
+                let mut param_type_list = param_type_list;
+                param_type_list.push(return_type);
                 // Save the function definition using the node as key.
                 self.func_param_counts.insert((fn_name, self.scope_trace.clone()), param_type_list);
                 // Update the scope trace.
@@ -387,11 +258,18 @@ mod defs {
         pub defined_vars: VarSymbolTable,
         /// The list of violations found so far.
         pub violations: Vec<VecDeque<usize>>,
+        /// The list of places where violations _could_ have occurred, for computing the violation ratio.
+        pub paths_to_all_accesses: Vec<VecDeque<usize>>,
     }
     
     impl Checker for ConstraintVisitorDefUse {
         fn violations(self) -> Violations {
-            Violations::new(self.violations.len(), self.violations)
+            if self.paths_to_all_accesses.is_empty() {
+                // No violations.
+                Violations::new(Ratio::new(1, 1), self.violations)
+            } else {
+                Violations::new(Ratio::new(self.violations.len(), self.paths_to_all_accesses.len()), self.violations)
+            }
         }
     }
 
@@ -747,7 +625,7 @@ mod defs {
                 };
                 // Check if the function name is in the definitions.
                 if let Some(expected_count) = self.func_defs.get(&(fn_name, self.scope_depth)) {
-                    if *expected_count != arg_count {
+                    if *expected_count-1 != arg_count {
                         self.violations.push(self.path.clone());
                     }
                 } else {
@@ -773,10 +651,12 @@ mod defs {
         pub path: VecDeque<usize>,
         /// The current scope path.
         pub scope_trace: Vec<usize>,
-        /// The current scope depth.
-        pub scope_depth: usize,
+        /// The current scope id.
+        pub scope_id: usize,
         /// The list of violations found so far.
         pub violations: Vec<VecDeque<usize>>,
+        /// The list of locations where violations could have occurred.
+        pub paths_to_all_checks: Vec<VecDeque<usize>>,
         /// The current variable definitions, mapping variable names and scopes to their types.
         /// This should be initialized by a prior pass of DeclarationCollector.
         pub var_defs: alloc::collections::BTreeMap<(nonterminal_var_name, Vec<usize>), nonterminal_type>,
@@ -788,117 +668,238 @@ mod defs {
         pub struct_defs: alloc::collections::BTreeMap<nonterminal_struct_name, Vec<(nonterminal_field_name, nonterminal_type)>>,
     }
 
-    // impl<T> Visitor<T> for ConstraintVisitorTypeCheck
-    // where
-    //     T: VisitableChildren<T> +
-    //         AsNodeRef<nonterminal_assignment> +
-    //         AsNodeRef<nonterminal_expr> +
-    //         AsNodeRef<nonterminal_var_access> +
-    //         AsNodeRef<nonterminal_var_name> +
-    //         AsNodeRef<nonterminal_decl> +
-    //         AsNodeRef<nonterminal_type> +
-    //         AsNodeRef<nonterminal_fn_def> +
-    //         AsNodeRef<nonterminal_fn_name> +
-    //         AsNodeRef<nonterminal_return_stmt> +
-    //         AsNodeRef<nonterminal_struct_access> +
-    //         AsNodeRef<nonterminal_field_name> +
-    //         AsNodeRef<nonterminal_struct_name>,
-    // {
-    //     type Continue = Self;
-    //     type Break = Infallible;
-    //     type Error = Infallible;
+    // TODO [Type Checking] Could implement a path cache so we can save any type inference work we have already done.
 
-    //     fn visit<'program, N>(mut self, node: &'program N, idx: usize) -> VisitResult<Self, T>
-    //     where
-    //         N: Node<Type<'program> = T>,
-    //         T: From<&'program N> + AsNodeRef<N>,
-    //     {
-    //         self.path.push_back(idx);
-    //         let visited = node.opaque(); 
+    fn types_compatible(t1: &nonterminal_type, t2: &nonterminal_type) -> bool {
+        // For simplicity, we will consider types compatible if they are exactly the same.
+        // A more complete implementation would handle type coercion, subtyping, etc.
+        // TODO Finish
+        t1 == t2
+    }
 
-    //         // First, check if we are in a situation where we need to increase scope depth.
-    //         if let Some(_tree) = visited.downcast::<nonterminal_fn_def>() {
-    //             self.scope_depth += 1;
-    //             self.scope_trace.push(self.scope_depth);
-    //             // Visit the function, then decrease depth.
-    //             let result = visited.visit_each(self);
-    //             let Ok(ControlFlow::Continue(mut visitor)) = result;
-    //             visitor.scope_depth -= 1;
-    //             visitor.scope_trace.pop();
-    //             visitor.path.pop_back();
-    //             return Ok(ControlFlow::Continue(visitor));
-    //         }
+    // A helper function to infer the type of an expression.
+    fn infer_expr_type(
+        expr: &nonterminal_expr,
+        var_defs: &alloc::collections::BTreeMap<(nonterminal_var_name, Vec<usize>), nonterminal_type>,
+        func_defs: &alloc::collections::BTreeMap<(nonterminal_fn_name, Vec<usize>), nonterminal_type>,
+        struct_defs: &alloc::collections::BTreeMap<nonterminal_struct_name, Vec<(nonterminal_field_name, nonterminal_type)>>,
+        scope_trace: &Vec<usize>,
+    ) -> Option<nonterminal_type> {
+        // TODO Finish
 
-    //         if let Some(tree) = visited.downcast::<nonterminal_decl>() {
-    //             let var_name = tree.nth::<0>().nth::<2>().clone();
-    //             let var_type = tree.nth::<0>().nth::<0>().clone();
-    //             self.var_defs.insert((var_name, self.scope_trace.clone()), var_type);
-    //         } else if let Some(tree) = visited.downcast::<nonterminal_assignment>() {
-    //             let var_access = tree.nth::<0>().nth::<0>();
-    //             let expr = tree.nth::<0>().nth::<2>();
-    //             // Get the variable name from the var_access.
-    //             let var_name = var_access.nth::<0>().clone();
-    //             // Look up the variable type.
-    //             let var_type = self.var_defs.get(&(var_name, self.scope_trace.clone()));
-    //             // Get the expression type.
-    //             let expr_type = infer_expr_type(expr, &self.var_defs, &self.func_defs, &self.struct_defs, &self.scope_trace);
-    //             // Compare types.
-    //             if let (Some(vt), Some(et)) = (var_type, expr_type) {
-    //                 if !types_compatible(vt, &et, &self.struct_defs) {
-    //                     self.violations.push(self.path.clone());
-    //                 }
-    //             } else {
-    //                 // Either variable or expression type could not be determined, consider it a violation.
-    //                 self.violations.push(self.path.clone());
-    //             }
-    //         } else if let Some(tree) = visited.downcast::<nonterminal_return_stmt>() {
-    //             let expr = tree.nth::<0>().nth::<1>();
-    //             // Get the expression type.
-    //             let expr_type = infer_expr_type(expr, &self.var_defs, &self.func_defs, &self.struct_defs, &self.scope_trace);
-    //             // Get the function return type.
-    //             if let Some((fn_name, _)) = self.path.iter().rev().find_map(|&i| {
-    //                 let ancestor = visited.go_to(0, self.path.iter().cloned().take(i + 1).collect()).ok()?;
-    //                 if let Some(fn_def) = ancestor.downcast::<nonterminal_fn_def>() {
-    //                     Some((fn_def.nth::<0>().nth::<4>().clone(), ()))
-    //                 } else {
-    //                     None
-    //                 }
-    //             }) {
-    //                 let fn_return_type = self.func_defs.get(&(fn_name, self.scope_trace.clone()));
-    //                 // Compare types.
-    //                 if let (Some(rt), Some(et)) = (fn_return_type, expr_type) {
-    //                     if !types_compatible(rt, &et, &self.struct_defs) {
-    //                         self.violations.push(self.path.clone());
-    //                     }
-    //                 } else {
-    //                     // Either function return type or expression type could not be determined, consider it a violation.
-    //                     self.violations.push(self.path.clone());
-    //                 }
-    //             } else {
-    //                 // Return statement not inside a function, already handled by another visitor.
-    //             }
-    //         } else if let Some(tree) = visited.downcast::<nonterminal_struct_access>() {
-    //             // Get the var name.
-    //             let var_name = tree.nth::<0>().nth::<0>().clone();
-    //             // Look up the variable type.
-    //             let var_type = self.var_defs.get(&(var_name, self.scope_trace.clone()));
-    //             // Get the field name being accessed.
-    //             let field_name = tree.nth::<0>().nth::<2>().clone();
-    //             // Check if the variable type is a struct and if it has the field.
-    //             if let Some(vt) = var_type {
-    //                 if let nonterminal_type_0::variant_1(struct_type) = vt.nth::<0>() {
-    //                     let struct_name = struct_type.nth::<0>().nth::<2>().clone();
-    //                     if let Some(fields) = self.struct_defs.get(&struct_name) {
-    //                         if !fields.iter().any(|(fname, _ftype)| fname == &field_name) {
-    //                             // Field not found in struct definition, violation.
-    //                             self.violations.push(self.path.clone());
-    //                         }
-    //                     }
-    //                 }
-    //             }
-    //         }
-    //     }
-    // }
+        None
+
+        // This is being done at the <expr> level, so there are two variants: arith_expr and expr_unit.
+        // match expr.nth::<0>() {
+        //     nonterminal_expr_0::variant_0(arith_expr) => {
+        //         // For simplicity, assume arithmetic expressions evaluate to int for now.
+        //         // A more complete implementation would recursively infer the types of the sub-expressions.
+        //         Some(nonterminal_type::variant_0(nonterminal_type_0::variant_0(nonterminal_basic_type::variant_0(nonterminal_int_type::variant_0(nonterminal_int_type_0::variant_0(nonterminal_int_type_0_0::variant_0(())))))))
+        //     },
+        //     nonterminal_expr_0::variant_1(expr_unit) => {
+        //         // <expr_unit> ::= <var_access> | <value> | <fn_call> | <struct_expr> | <struct_access>
+        //         if let Some(var_access) = expr_unit.nth::<0>().nth::<0>() {
+        //             // Look up the variable type.
+        //             let last_var_type = get_var_definition(var_defs, &var_access.nth::<0>().clone(), scope_trace);
+        //             last_var_type.cloned()
+        //         } else if let Some(_value) = expr_unit.nth::<0>().nth::<1>() {
+        //             // <value> ::= <bool_val> | <num_val> | <string_val>
+        //             match _value.nth::<0>() {
+        //                 nonterminal_value_0::variant_0(_) => {
+        //                     // bool_val
+        //                     // <type> ::= <basic_type> | <struct_type>
+        //                     // <basic_type> ::= "int" | "float" | "double" | "bool" | "char" ;
+        //                     // Some(nonterminal_type::variant_0(nonterminal_type_0::variant_0(nonterminal_basic_type::variant_1(nonterminal_bool_type::variant_0(())))))
+        //                 },
+        //                 nonterminal_value_0::variant_1(_) => {
+        //                     // num_val
+        //                     Some(nonterminal_type::variant_0(nonterminal_type_0::variant_0(nonterminal_basic_type::variant_0(nonterminal_int_type::variant_0(nonterminal_int_type_0::variant_0(nonterminal_int_type_0_0::variant_0(())))))))
+        //                 },
+        //                 nonterminal_value_0::variant_2(_) => {
+        //                     // string_val
+        //                     Some(nonterminal_type::variant_0(nonterminal_type_0::variant_0(nonterminal_basic_type::variant_2(nonterminal_string_type::variant_0(())))))
+        //                 },
+        //             }
+        //         } else if let Some(fn_call) = expr_unit.nth::<0>().nth::<2>() {
+        //             // Look up the function return type.
+        //             let fn_name = fn_call.nth::<0>().nth::<0>().clone();
+        //             func_defs.get(&(fn_name, scope_trace.clone())).cloned()
+        //         } else if let Some(_struct_expr) = expr_unit.nth::<0>().nth::<3>() {
+        //             // For simplicity, assume struct expressions evaluate to some struct type.
+        //             // A more complete implementation would need to track the specific struct type.
+        //             None // Placeholder, as we don't have enough info here.
+        //         } else if let Some(struct_access) = expr_unit.nth::<0>().nth::<4>() {
+        //             // Get the var name.
+        //             let var_name = struct_access.nth::<0>().nth::<0>().clone();
+        //             // Look up the variable type.
+        //             let var_type = var_defs.get(&(var_name, scope_trace.clone())).cloned();
+        //             match var_type {
+        //                 Some(vt) => {
+        //                     // We have a variable type, check if it's a struct type.
+        //                     let var_type_0 = vt.nth::<0>();
+        //                     if let nonterminal_type_0::variant_1(struct_type) = var_type_0 {
+        //                         let struct_name = struct_type.nth::<0>().nth::<2>().clone();
+        //                         // Now get the field name being accessed.
+        //                         let field_name = struct_access.nth::<0>().nth::<2>().clone();
+        //                         // Look up the struct definition to see if the field exists and get its type.
+        //                         if let Some(fields) = struct_defs.get(&struct_name) {
+        //                             for (fname, ftype) in fields {
+        //                                 if fname == &field_name {
+        //                                     return Some(ftype.clone());
+        //                                 }
+        //                             }
+        //                             None // Field not found
+        //                         } else {
+        //                             None // Struct not found
+        //                         }
+        //                     } else {
+        //                         None // Variable is not of struct type
+        //                     }
+        //                 },
+        //                 None => None // Variable not found
+        //             }
+        //         } else {
+        //             None // Should not happen
+        //         }
+        //     }
+        // }
+    }
+
+    impl<T> Visitor<T> for ConstraintVisitorTypeCheck
+    where
+        T: VisitableChildren<T> +
+            AsNodeRef<nonterminal_assignment> +
+            AsNodeRef<nonterminal_expr> +
+            AsNodeRef<nonterminal_var_access> +
+            AsNodeRef<nonterminal_var_name> +
+            AsNodeRef<nonterminal_decl> +
+            AsNodeRef<nonterminal_type> +
+            AsNodeRef<nonterminal_fn_def> +
+            AsNodeRef<nonterminal_fn_name> +
+            AsNodeRef<nonterminal_return_stmt> +
+            AsNodeRef<nonterminal_struct_access> +
+            AsNodeRef<nonterminal_field_name> +
+            AsNodeRef<nonterminal_struct_name>,
+    {
+        type Continue = Self;
+        type Break = Infallible;
+        type Error = Infallible;
+
+        fn visit<'program, N>(mut self, node: &'program N, idx: usize) -> VisitResult<Self, T>
+        where
+            N: Node<Type<'program> = T>,
+            T: From<&'program N> + AsNodeRef<N>,
+        {
+            self.path.push_back(idx);
+            let visited = node.opaque(); 
+
+            // First, check if we are in a situation where we need to increase scope depth.
+            if let Some(_tree) = visited.downcast::<nonterminal_fn_def>() {
+                self.scope_id += 1;
+                self.scope_trace.push(self.scope_id);
+                // Visit the function, then decrease depth.
+                let result = visited.visit_each(self);
+                let Ok(ControlFlow::Continue(mut visitor)) = result;
+                visitor.scope_trace.pop();
+                visitor.path.pop_back();
+                return Ok(ControlFlow::Continue(visitor));
+            }
+
+            if let Some(tree) = visited.downcast::<nonterminal_decl>() {
+                // Get the type.
+                let var_type = tree.nth::<0>().nth::<0>().clone();
+                // Does the RHS match the type?
+                let rhs_e = tree.nth::<0>().nth::<4>();
+                if let Some(decl_rhs) = rhs_e.nth::<0>().nth::<0>() {
+                    // We have an RHS expression, infer its type.
+                    // <decl_rhs> ::= "=" <sep> <expr> ;
+                    let rhs_expr = decl_rhs.nth::<0>().nth::<2>();
+                    let expr_type = infer_expr_type(rhs_expr, &self.var_defs, &self.func_defs, &self.struct_defs, &self.scope_trace);
+                    if let Some(et) = expr_type {
+                        if !types_compatible(&var_type, &et) {
+                            self.violations.push(self.path.clone());
+                        }
+                    } else {
+                        // Could not infer expression type, consider it a violation.
+                        self.violations.push(self.path.clone());
+                    }
+                } else { /* Nothing to check if no RHS. */ }
+                // Declaration processed; continue visiting.
+                // No need to add to var_defs here, should be done by DeclarationCollector.
+            } else if let Some(tree) = visited.downcast::<nonterminal_assignment>() {
+                // <assignment> ::= <var_access> <sep> <assign_op> <sep> <expr> ;
+                let var_access = tree.nth::<0>().nth::<0>();
+                let expr = tree.nth::<0>().nth::<4>();
+                // Get the variable name from the var_access.
+                let var_name = var_access.nth::<0>().clone();
+                // Look up the variable type.
+                let var_type = get_var_definition(&self.var_defs, &var_name, &self.scope_trace);
+                // Get the expression type.
+                let expr_type = infer_expr_type(expr, &self.var_defs, &self.func_defs, &self.struct_defs, &self.scope_trace);
+                // Compare types.
+                if let (Some(vt), Some(et)) = (var_type, expr_type) {
+                    if !types_compatible(vt, &et) {
+                        self.violations.push(self.path.clone());
+                    }
+                } else {
+                    // Either variable or expression type could not be determined, consider it a violation.
+                    self.violations.push(self.path.clone());
+                }
+            } else if let Some(tree) = visited.downcast::<nonterminal_return_stmt>() {
+                let expr = tree.nth::<0>().nth::<1>();
+                // Get the expression type.
+                let expr_type = infer_expr_type(expr, &self.var_defs, &self.func_defs, &self.struct_defs, &self.scope_trace);
+                // Get the function return type.
+                if let Some((fn_name, _)) = self.path.iter().rev().find_map(|&i| {
+                    let ancestor = visited.go_to(0, self.path.iter().cloned().take(i + 1).collect()).ok()?;
+                    if let Some(fn_def) = ancestor.downcast::<nonterminal_fn_def>() {
+                        Some((fn_def.nth::<0>().nth::<4>().clone(), ()))
+                    } else {
+                        None
+                    }
+                }) {
+                    let fn_return_type = self.func_defs.get(&(fn_name, self.scope_trace.clone()));
+                    // Compare types.
+                    if let (Some(rt), Some(et)) = (fn_return_type, expr_type) {
+                        if !types_compatible(rt, &et, &self.struct_defs) {
+                            self.violations.push(self.path.clone());
+                        }
+                    } else {
+                        // Either function return type or expression type could not be determined, consider it a violation.
+                        self.violations.push(self.path.clone());
+                    }
+                } else {
+                    // Return statement not inside a function, already handled by another visitor.
+                }
+            } else if let Some(tree) = visited.downcast::<nonterminal_struct_access>() {
+                // Get the var name.
+                let var_name = tree.nth::<0>().nth::<0>().clone();
+                // Look up the variable type.
+                let var_type = self.var_defs.get(&(var_name, self.scope_trace.clone()));
+                // Get the field name being accessed.
+                let field_name = tree.nth::<0>().nth::<2>().clone();
+                // Check if the variable type is a struct and if it has the field.
+                if let Some(vt) = var_type {
+                    if let nonterminal_type_0::variant_1(struct_type) = vt.nth::<0>() {
+                        let struct_name = struct_type.nth::<0>().nth::<2>().clone();
+                        if let Some(fields) = self.struct_defs.get(&struct_name) {
+                            if !fields.iter().any(|(fname, _ftype)| fname == &field_name) {
+                                // Field not found in struct definition, violation.
+                                self.violations.push(self.path.clone());
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Finally, continue visiting children.
+            let mut result = visited.visit_each(self);
+                if let Ok(ControlFlow::Continue(visitor)) = &mut result {
+                    visitor.path.pop_back();
+                }
+            return result;
+        }
+    }
 
     #[cfg(test)]
     mod test {

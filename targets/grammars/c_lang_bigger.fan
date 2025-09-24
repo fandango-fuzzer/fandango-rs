@@ -5,7 +5,16 @@
 <stmt> ::= <decl> ";" | <assignment> ";" | <fn_def> | <struct_def> | <expr> ";" | <return_stmt> ";" ;
 
 <type> ::= <basic_type> | <struct_type> ;
-<basic_type> ::= "int" | "float" | "double" | "bool" | "char" ;
+<basic_type> ::= <int_type> | <float_type> | <double_type> | <bool_type> | <char_type> ;
+<int_type> ::= <int_short> | <int_long> | <int_long_long> | <signed> <sep> "int" | "int" ;
+<int_short> ::= <signed> <sep> "short" | <signed> <sep> "short" <sep> "int" | "short" <sep> "int" | "short" ;
+<int_long> ::= <signed> <sep> "long" | <signed> <sep> "long" <sep> "int" | "long" <sep> "int" | "long" ;
+<int_long_long> ::= <signed> <sep> "long long" | <signed> <sep> "long long" <sep> "int" | "long long" <sep> "int" | "long long" ;
+<float_type> ::= "float" ;
+<double_type> ::= "long" <sep> "double" | "double" ;
+<bool_type> ::= "bool" ;
+<char_type> ::= <signed> <sep> "char" | "char" ;
+<signed> ::= "signed" | "unsigned" ;
 
 <struct_type> ::= "struct" <sep> <struct_name> ;
 <struct_name> ::= <letter> <alnums> ;

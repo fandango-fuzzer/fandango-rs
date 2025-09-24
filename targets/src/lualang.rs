@@ -26,147 +26,12 @@ mod defs {
     use fandango::visitor::write::WriteVisitor;
     use fandango_runtime::operators::Checker;
     use rand::Rng;
+    use num_rational::Ratio;
     
     /// Base for the lang grammar stored in lang.fan.
     #[derive(Fandango)]
     #[fandango(grammar = "grammars/lua_lang.fan", parse = false)]
     pub struct LuaLang(Infallible);
-    
-    // ================= Combined def-use and at least one var access.
-    // Constraint visitor.
-    // Mainly for illustrative purposes; in the future, we will devise a strategy to 
-    // have multiple independent constraints running at once.
-    //
-    /// Basic combined constraint visitor.
-    #[derive(Debug, Default)]
-    pub struct ConstraintVisitorAtLeastOneVarAlsoDefUse {
-        /// The current path, to be used by the visitor when saving violations.
-        pub path: VecDeque<usize>,
-        /// The count of variable accesses found so far.
-        pub var_access_count: usize,
-        /// The set of currently defined variables, mapping names to nodes.
-        pub defined_vars: alloc::collections::BTreeSet<String>,
-        /// The list of violations found so far.
-        pub violations: Vec<VecDeque<usize>>,
-    }
-
-    impl Checker for ConstraintVisitorAtLeastOneVarAlsoDefUse {
-        fn violations(self) -> Violations {
-            // If there are no variable accesses, or if there are def-before-use violations, we have violations.
-            if self.var_access_count == 0 {
-                let mut violations = self.violations;
-                violations.push([0].into());
-                Violations::new(violations.len(), violations)
-            } else {
-                Violations::new(self.violations.len(), self.violations)
-            }
-        }
-    }
-
-    impl<T> Visitor<T> for ConstraintVisitorAtLeastOneVarAlsoDefUse
-    where 
-        T: VisitableChildren<T> + 
-        AsNodeRef<nonterminal_var_access> +
-        AsNodeRef<nonterminal_assignment> +
-        AsNodeRef<nonterminal_decl> +
-    {
-        type Continue = Self;
-        type Break = Infallible;
-        type Error = Infallible;
-
-        fn visit<'program, N>(mut self, node: &'program N, idx: usize) -> VisitResult<Self, T>
-        where
-            N: Node<Type<'program> = T>,
-            T: From<&'program N> + AsNodeRef<N>,
-        {
-            self.path.push_back(idx);
-            let visited = T::from(node);
-            if let Some(_tree) = visited.downcast::<nonterminal_var_access>() {
-                self.var_access_count += 1;
-                let var_name_str = String::from_utf8(
-                    WriteVisitor::new(Vec::new())
-                        .visit(_tree, 0)
-                        .unwrap()
-                        .continue_value()
-                        .unwrap()
-                        .output(),
-                ).unwrap();
-                if !self.defined_vars.contains(&var_name_str) {
-                    self.violations.push(self.path.clone());
-                }
-            } else if let Some(decl_tree) = visited.downcast::<nonterminal_decl>() {
-                let var_decl_name = String::from_utf8(
-                    WriteVisitor::new(Vec::new())
-                        .visit(decl_tree.nth::<0>().nth::<2>(), 0)
-                        .unwrap()
-                        .continue_value()
-                        .unwrap()
-                        .output(),
-                ).unwrap();
-                self.defined_vars.insert(var_decl_name);
-            }
-            let mut result = visited.visit_each(self);
-            if let Ok(ControlFlow::Continue(visitor)) = &mut result {
-                visitor.path.pop_back();
-            }
-            result
-        }
-    }
-
-    // ================= Ensure sufficiently many variable accesses.
-    // Constraint visitor.
-    // Mostly to ensure that there are variable accesses in generated programs.
-    // Note: No scoping, not perfect.
-    //
-    /// Basic counter visitor.
-    #[derive(Debug, Default)]
-    pub struct ConstraintVisitorVarAccess {
-        /// The current path, to be used by the visitor when saving violations.
-        pub path: VecDeque<usize>,
-        /// The count of variable accesses found so far.
-        pub var_access_count: usize,
-        /// The list of violations found so far.
-        pub violations: Vec<VecDeque<usize>>,
-    }
-
-    impl Checker for ConstraintVisitorVarAccess {
-        fn violations(self) -> Violations {
-            // We consider it a violation if there are no variable accesses.
-            let mut violations = self.violations;
-            if self.var_access_count == 0 {
-                violations.push(self.path);
-            }
-            Violations::new(violations.len(), violations)
-        }
-    }
-
-    impl<T> Visitor<T> for ConstraintVisitorVarAccess
-    where 
-        T: VisitableChildren<T> + 
-        AsNodeRef<nonterminal_var_access>
-    {
-        type Continue = Self;
-        type Break = Infallible;
-        type Error = Infallible;
-
-        fn visit<'program, N>(mut self, node: &'program N, idx: usize) -> VisitResult<Self, T>
-        where
-            N: Node<Type<'program> = T>,
-            T: From<&'program N> + AsNodeRef<N>,
-        {
-            self.path.push_back(idx);
-            let visited = T::from(node);
-            if let Some(_tree) = visited.downcast::<nonterminal_var_access>() {
-                self.var_access_count += 1;
-            }
-            let mut result = visited.visit_each(self);
-            if let Ok(ControlFlow::Continue(visitor)) = &mut result {
-                visitor.path.pop_back();
-            }
-            result
-        }
-    }
-    // ================= end of Ensure sufficiently many variable accesses.
 
     // ================= Def before use.
     // Constraint visitor.
@@ -240,11 +105,18 @@ mod defs {
         pub defined_vars: alloc::collections::BTreeSet<(nonterminal_var_name, usize)>,
         /// The list of violations found so far.
         pub violations: Vec<VecDeque<usize>>,
+        /// The list of places where violations _could_ have occurred, for computing the violation ratio.
+        pub paths_to_all_accesses: Vec<VecDeque<usize>>,
     }
     
     impl Checker for ConstraintVisitorDefUse {
         fn violations(self) -> Violations {
-            Violations::new(self.violations.len(), self.violations)
+            if self.paths_to_all_accesses.is_empty() {
+                // No violations.
+                Violations::new(Ratio::new(1, 1), self.violations)
+            } else {
+                Violations::new(Ratio::new(self.violations.len(), self.paths_to_all_accesses.len()), self.violations)
+            }
         }
     }
 
