@@ -2,7 +2,13 @@
 
 // General soundness TODOs:
 // 1. Possible issue with def-use but only in the same scope. Sub-scopes work, but not same scope.
+<<<<<<< HEAD
 // 2. Add constraint for no duplicate fields.
+=======
+
+// General completeness TODOs:
+// 1. Nested struct definitions (need to adjust grammar probably?)
+>>>>>>> 9152e20 (split lang into lua and c; more visitors; wip type checker)
 
 #[cfg(not(feature = "static_defs"))]
 mod defs {
@@ -17,6 +23,10 @@ mod defs {
 
 #[cfg(feature = "static_defs")]
 mod defs {
+<<<<<<< HEAD
+=======
+    use fandango_runtime::measurement::Violations;
+>>>>>>> 9152e20 (split lang into lua and c; more visitors; wip type checker)
     use alloc::collections::VecDeque;
     use alloc::vec::Vec;
     use alloc::string::String;
@@ -27,6 +37,7 @@ mod defs {
     use fandango::typing::{AsNodeMut, AsNodeRef, Node, Nth, Downcast, Opaque, DowncastMut};
     use fandango::visitor::{VisitMutResult, VisitResult, VisitableChildren, VisitableChildrenMut, Visitor, VisitorMut};
     use fandango::visitor::write::WriteVisitor;
+<<<<<<< HEAD
     use rand::Rng;
     use alloc::vec;
     
@@ -35,6 +46,10 @@ mod defs {
     use fandango_runtime::measurement::Violations;
     use fandango_runtime::operators::Checker;
     use num_rational::Ratio;
+=======
+    use fandango_runtime::operators::Checker;
+    use rand::Rng;
+>>>>>>> 9152e20 (split lang into lua and c; more visitors; wip type checker)
     
     /// Base for the C language grammar stored in c_lang.fan.
     #[derive(Fandango)]
@@ -50,6 +65,7 @@ mod defs {
     // For now, we will use a BTreeMap for simplicity, but a more efficient data structure may be needed for large programs.
     type ScopeTrace = Vec<usize>;
     
+<<<<<<< HEAD
     // TODO: These could easily be consolidated.
     // Now, a sort of symbol table to track variable definitions.
     type VarSymbolTable = alloc::collections::BTreeMap<(nonterminal_var_name, ScopeTrace), nonterminal_type>;
@@ -73,6 +89,11 @@ mod defs {
         
     }
 
+=======
+    // Now, a sort of symbol table to track variable definitions.
+    type VarSymbolTable = alloc::collections::BTreeMap<(nonterminal_var_name, ScopeTrace), nonterminal_type>;
+
+>>>>>>> 9152e20 (split lang into lua and c; more visitors; wip type checker)
     // A helper function to match two scope traces.
     // A scope trace A matches scope trace B if A is a prefix of B.
     fn scope_trace_matches(a: &ScopeTrace, b: &ScopeTrace) -> bool {
@@ -99,6 +120,7 @@ mod defs {
         None
     }
 
+<<<<<<< HEAD
     fn get_func_definition<'a>(symbol_table: &'a FuncSymbolTable, fn_name: &nonterminal_fn_name, current_scope: &ScopeTrace) -> Option<&'a Vec<nonterminal_type>> {
         // We will look for the function in the current scope and then in outer scopes.
         for scope_len in (0..=current_scope.len()).rev() {
@@ -143,16 +165,54 @@ mod defs {
                 path: VecDeque::new(),
                 violations: Vec::new(),
                 paths_to_passed_checks: Vec::new(),
+=======
+    // ================= Combined def-use and at least one var access.
+    // Constraint visitor.
+    // Mainly for illustrative purposes; in the future, we will devise a strategy to 
+    // have multiple independent constraints running at once.
+    //
+    /// Basic combined constraint visitor.
+    #[derive(Debug, Default)]
+    pub struct ConstraintVisitorAtLeastOneVarAlsoDefUse {
+        /// The current path, to be used by the visitor when saving violations.
+        pub path: VecDeque<usize>,
+        /// The count of variable accesses found so far.
+        pub var_access_count: usize,
+        /// The set of currently defined variables, mapping names to nodes.
+        pub defined_vars: alloc::collections::BTreeSet<String>,
+        /// The list of violations found so far.
+        pub violations: Vec<VecDeque<usize>>,
+    }
+
+    impl Checker for ConstraintVisitorAtLeastOneVarAlsoDefUse {
+        fn violations(self) -> Violations {
+            // If there are no variable accesses, or if there are def-before-use violations, we have violations.
+            if self.var_access_count == 0 {
+                let mut violations = self.violations;
+                violations.push([0].into());
+                Violations::new(violations.len(), violations)
+            } else {
+                Violations::new(self.violations.len(), self.violations)
+>>>>>>> 9152e20 (split lang into lua and c; more visitors; wip type checker)
             }
         }
     }
 
+<<<<<<< HEAD
     impl<T> Visitor<T> for KeepReasonableStructVisitor
     where
         T: VisitableChildren<T> +
             AsNodeRef<nonterminal_struct_def> +
             AsNodeRef<nonterminal_field_def_list> +
             AsNodeRef<nonterminal_field_def_list_e>,
+=======
+    impl<T> Visitor<T> for ConstraintVisitorAtLeastOneVarAlsoDefUse
+    where 
+        T: VisitableChildren<T> + 
+        AsNodeRef<nonterminal_var_access> +
+        AsNodeRef<nonterminal_assignment> +
+        AsNodeRef<nonterminal_decl> +
+>>>>>>> 9152e20 (split lang into lua and c; more visitors; wip type checker)
     {
         type Continue = Self;
         type Break = Infallible;
@@ -165,6 +225,7 @@ mod defs {
         {
             self.path.push_back(idx);
             let visited = T::from(node);
+<<<<<<< HEAD
             if let Some(struct_def) = visited.downcast::<nonterminal_struct_def>() {
                 self.structs_seen += 1;
                 if self.structs_seen > 1 {
@@ -202,10 +263,98 @@ mod defs {
             }
             self.path.pop_back();   
             let mut result = visited.visit_each(self);
+=======
+            if let Some(_tree) = visited.downcast::<nonterminal_var_access>() {
+                self.var_access_count += 1;
+                let var_name_str = String::from_utf8(
+                    WriteVisitor::new(Vec::new())
+                        .visit(_tree, 0)
+                        .unwrap()
+                        .continue_value()
+                        .unwrap()
+                        .output(),
+                ).unwrap();
+                if !self.defined_vars.contains(&var_name_str) {
+                    self.violations.push(self.path.clone());
+                }
+            } else if let Some(decl_tree) = visited.downcast::<nonterminal_decl>() {
+                let var_decl_name = String::from_utf8(
+                    WriteVisitor::new(Vec::new())
+                        .visit(decl_tree.nth::<0>().nth::<2>(), 0)
+                        .unwrap()
+                        .continue_value()
+                        .unwrap()
+                        .output(),
+                ).unwrap();
+                self.defined_vars.insert(var_decl_name);
+            }
+            let mut result = visited.visit_each(self);
+            if let Ok(ControlFlow::Continue(visitor)) = &mut result {
+                visitor.path.pop_back();
+            }
+>>>>>>> 9152e20 (split lang into lua and c; more visitors; wip type checker)
             result
         }
     }
 
+<<<<<<< HEAD
+=======
+    // ================= Ensure sufficiently many variable accesses.
+    // Constraint visitor.
+    // Mostly to ensure that there are variable accesses in generated programs.
+    // Note: No scoping, not perfect.
+    //
+    /// Basic counter visitor.
+    #[derive(Debug, Default)]
+    pub struct ConstraintVisitorVarAccess {
+        /// The current path, to be used by the visitor when saving violations.
+        pub path: VecDeque<usize>,
+        /// The count of variable accesses found so far.
+        pub var_access_count: usize,
+        /// The list of violations found so far.
+        pub violations: Vec<VecDeque<usize>>,
+    }
+
+    impl Checker for ConstraintVisitorVarAccess {
+        fn violations(self) -> Violations {
+            // We consider it a violation if there are no variable accesses.
+            let mut violations = self.violations;
+            if self.var_access_count == 0 {
+                violations.push(self.path);
+            }
+            Violations::new(violations.len(), violations)
+        }
+    }
+
+    impl<T> Visitor<T> for ConstraintVisitorVarAccess
+    where 
+        T: VisitableChildren<T> + 
+        AsNodeRef<nonterminal_var_access>
+    {
+        type Continue = Self;
+        type Break = Infallible;
+        type Error = Infallible;
+
+        fn visit<'program, N>(mut self, node: &'program N, idx: usize) -> VisitResult<Self, T>
+        where
+            N: Node<Type<'program> = T>,
+            T: From<&'program N> + AsNodeRef<N>,
+        {
+            self.path.push_back(idx);
+            let visited = T::from(node);
+            if let Some(_tree) = visited.downcast::<nonterminal_var_access>() {
+                self.var_access_count += 1;
+            }
+            let mut result = visited.visit_each(self);
+            if let Ok(ControlFlow::Continue(visitor)) = &mut result {
+                visitor.path.pop_back();
+            }
+            result
+        }
+    }
+    // ================= end of Ensure sufficiently many variable accesses.
+
+>>>>>>> 9152e20 (split lang into lua and c; more visitors; wip type checker)
     // ================= Def before use.
     // Constraint visitor.
     //
@@ -224,9 +373,15 @@ mod defs {
         /// The current scope depth, to track variable scopes.
         pub scope_trace: Vec<usize>,
         /// The set of currently defined variables, (var_name, scope) -> var_type
+<<<<<<< HEAD
         pub var_defs: VarSymbolTable,
         /// The set of currently defined functions. (fn_name, scope) -> Vec<param_type>
         pub func_defs: alloc::collections::BTreeMap<(nonterminal_fn_name, ScopeTrace), Vec<nonterminal_type>>,
+=======
+        pub defined_vars: VarSymbolTable,
+        /// The set of currently defined functions. (fn_name, scope) -> Vec<param_type>
+        pub func_param_counts: alloc::collections::BTreeMap<(nonterminal_fn_name, ScopeTrace), Vec<nonterminal_type>>,
+>>>>>>> 9152e20 (split lang into lua and c; more visitors; wip type checker)
         /// The set of currently defined structs. struct_name -> Vec<(field_name, field_type)>
         pub struct_defs: alloc::collections::BTreeMap<nonterminal_struct_name, Vec<(nonterminal_field_name, nonterminal_type)>>,
     }
@@ -292,6 +447,7 @@ mod defs {
                     }
                     param_type_list_inner
                 };
+<<<<<<< HEAD
                 // Need to also record the return type.
                 // <fn_def> ::= <type> <sep> <fn_kwd> <sep> <fn_name> "(" <param_list_e> ")" <sep> "{" <sep> <fn_body_e> <sep> "}" ;
                 let return_type = tree.nth::<0>().nth::<0>().clone();
@@ -300,6 +456,10 @@ mod defs {
                 param_type_list.push(return_type);
                 // Save the function definition using the node as key.
                 self.func_defs.insert((fn_name, self.scope_trace.clone()), param_type_list);
+=======
+                // Save the function definition using the node as key.
+                self.func_param_counts.insert((fn_name, self.scope_trace.clone()), param_type_list);
+>>>>>>> 9152e20 (split lang into lua and c; more visitors; wip type checker)
                 // Update the scope trace.
                 self.scope_id += 1;
                 self.scope_trace.push(self.scope_id);
@@ -314,13 +474,21 @@ mod defs {
             if let Some(decl_tree) = visited.downcast::<nonterminal_decl>() {
                 let var_decl_name = decl_tree.nth::<0>().nth::<2>().clone();
                 let var_decl_type = decl_tree.nth::<0>().nth::<0>().clone();
+<<<<<<< HEAD
                 self.var_defs.insert((var_decl_name, self.scope_trace.clone()), var_decl_type);
+=======
+                self.defined_vars.insert((var_decl_name, self.scope_trace.clone()), var_decl_type);
+>>>>>>> 9152e20 (split lang into lua and c; more visitors; wip type checker)
             } /* Check now for param_name */
             else if let Some(param_tree) = visited.downcast::<nonterminal_param>() {
                 let type_inside = param_tree.nth::<0>().nth::<0>().clone();
                 let var_name_inside = param_tree.nth::<0>().nth::<2>().nth::<0>().clone();
                 // The parameters should be scoped properly.
+<<<<<<< HEAD
                 self.var_defs.insert((var_name_inside, self.scope_trace.clone()), type_inside);
+=======
+                self.defined_vars.insert((var_name_inside, self.scope_trace.clone()), type_inside);
+>>>>>>> 9152e20 (split lang into lua and c; more visitors; wip type checker)
             } /* Check now for struct definitions */
             else if let Some(struct_tree) = visited.downcast::<nonterminal_struct_def>() {
                 let struct_name = struct_tree.nth::<0>().nth::<2>().clone();
@@ -375,14 +543,20 @@ mod defs {
     }
 
     /// Basic def-before-use constraint visitor.
+<<<<<<< HEAD
     #[derive(Debug)]
     pub struct ConstraintVisitorDefUse<'a> {
+=======
+    #[derive(Debug, Default)]
+    pub struct ConstraintVisitorDefUse {
+>>>>>>> 9152e20 (split lang into lua and c; more visitors; wip type checker)
         /// The current path, to be used by the visitor when saving violations.
         pub path: VecDeque<usize>,
         /// The current scope_id, to track variable scopes.
         pub scope_id: usize,
         /// The current scope depth, to track variable scopes.
         pub scope_trace: Vec<usize>,
+<<<<<<< HEAD
         /// These next three should be initialized by a prior pass of DeclarationCollector.
         /// The set of currently defined variables, (var_name, scope) -> var_type
         pub defined_vars: &'a VarSymbolTable,
@@ -418,15 +592,35 @@ mod defs {
 
     impl<T> Visitor<T> for ConstraintVisitorDefUse<'_>
     where
+=======
+        /// The set of currently defined variables, (var_name, scope) -> var_type
+        pub defined_vars: VarSymbolTable,
+        /// The list of violations found so far.
+        pub violations: Vec<VecDeque<usize>>,
+    }
+    
+    impl Checker for ConstraintVisitorDefUse {
+        fn violations(self) -> Violations {
+            Violations::new(self.violations.len(), self.violations)
+        }
+    }
+
+    impl<T> Visitor<T> for ConstraintVisitorDefUse
+    where 
+>>>>>>> 9152e20 (split lang into lua and c; more visitors; wip type checker)
         T: VisitableChildren<T> +
         AsNodeRef<nonterminal_var_access> +
         AsNodeRef<nonterminal_assignment> +
         AsNodeRef<nonterminal_decl> +
         AsNodeRef<nonterminal_fn_def> +
+<<<<<<< HEAD
         AsNodeRef<nonterminal_var_name> +
         AsNodeRef<nonterminal_fn_call> +
         AsNodeRef<nonterminal_type> +
         AsNodeRef<nonterminal_struct_type>,
+=======
+        AsNodeRef<nonterminal_var_name>,
+>>>>>>> 9152e20 (split lang into lua and c; more visitors; wip type checker)
     {
         type Continue = Self;
         type Break = Infallible;
@@ -444,6 +638,7 @@ mod defs {
 
             // Check if we are in a situation where we need to increase scope depth.
             if let Some(_tree) = visited.downcast::<nonterminal_fn_def>() {
+<<<<<<< HEAD
                 // First, check parameters for undefined struct types.
                 // <fn_def> ::= <type> <sep> <fn_kwd> <sep> <fn_name> "(" <param_list_e> ")" <sep> "{" <sep> <fn_body_e> <sep> "}" ;
                 // let param_list_e = _tree.nth::<0>().nth::<6>();
@@ -491,6 +686,8 @@ mod defs {
                 //         }
                 //     }
                 // }
+=======
+>>>>>>> 9152e20 (split lang into lua and c; more visitors; wip type checker)
                 self.scope_id += 1;
                 self.scope_trace.push(self.scope_id);
                 // Visit the function, then decrease depth.
@@ -501,6 +698,7 @@ mod defs {
                 return Ok(ControlFlow::Continue(visitor));
             } // Functions are currently the only scope-increasing construct.
 
+<<<<<<< HEAD
 
             if let Some(tree) = visited.downcast::<nonterminal_type>() {
                 // If the type is a struct type, check if it's defined.
@@ -554,6 +752,14 @@ mod defs {
                     self.paths_to_passed_checks.push(self.path.clone());
                 }
             }
+=======
+            if let Some(tree) = visited.downcast::<nonterminal_var_access>() {
+                let var_name_accessed = tree.nth::<0>().clone();
+                if get_var_definition(&self.defined_vars, &var_name_accessed, &self.scope_trace).is_none() {
+                    self.violations.push(self.path.clone());
+                }
+            } 
+>>>>>>> 9152e20 (split lang into lua and c; more visitors; wip type checker)
             let mut result = visited.visit_each(self);
             if let Ok(ControlFlow::Continue(visitor)) = &mut result {
                 visitor.path.pop_back();
@@ -650,8 +856,11 @@ mod defs {
         pub func_depth: usize,
         /// The list of violations found so far.
         pub violations: Vec<VecDeque<usize>>,
+<<<<<<< HEAD
         /// The list of places where violations _could_ have occurred, for computing the violation ratio.
         pub paths_to_passed_checks: Vec<VecDeque<usize>>,
+=======
+>>>>>>> 9152e20 (split lang into lua and c; more visitors; wip type checker)
     }
 
     // Visitor that checks for violations.
@@ -675,9 +884,12 @@ mod defs {
             if let Some(_tree) = visited.downcast::<nonterminal_return_stmt>() {
                 if self.func_depth == 0 {
                     self.violations.push(self.path.clone());
+<<<<<<< HEAD
                 } else {
                     // Valid return statement, but still counts as a place where a violation could have occurred.
                     self.paths_to_passed_checks.push(self.path.clone());
+=======
+>>>>>>> 9152e20 (split lang into lua and c; more visitors; wip type checker)
                 }
             } else if let Some(_tree) = visited.downcast::<nonterminal_fn_def>() {
                 self.func_depth += 1;
@@ -699,18 +911,27 @@ mod defs {
     // ================= Begin: Struct use must match declaration.
     // Constraint visitor.
     /// Basic struct-access constraint visitor.
+<<<<<<< HEAD
     #[derive(Debug)]
     pub struct ConstraintVisitorStructAccess<'a> {
+=======
+    #[derive(Debug, Default)]
+    pub struct ConstraintVisitorStructAccess {
+>>>>>>> 9152e20 (split lang into lua and c; more visitors; wip type checker)
         /// The current path, to be used by the visitor when saving violations.
         pub path: VecDeque<usize>,
         /// The list of violations found so far.
         pub violations: Vec<VecDeque<usize>>,
+<<<<<<< HEAD
         /// The list of places where violations did not occur, for computing the violation ratio.
         pub paths_to_passed_checks: Vec<VecDeque<usize>>,
+=======
+>>>>>>> 9152e20 (split lang into lua and c; more visitors; wip type checker)
         /// The current scope level.
         pub scope_depth: usize,
         /// The current struct definitions, mapping struct names to their field names and types.
         /// This should be initialized by a prior pass of DeclarationCollector.
+<<<<<<< HEAD
         pub struct_defs: &'a alloc::collections::BTreeMap<nonterminal_struct_name, Vec<(nonterminal_field_name, nonterminal_type)>>,
         /// The current variable definitions, mapping variable names to their types.
         pub var_defs: &'a VarSymbolTable,
@@ -734,6 +955,14 @@ mod defs {
     }
 
     impl<T> Visitor<T> for ConstraintVisitorStructAccess<'_>
+=======
+        pub struct_defs: alloc::collections::BTreeMap<nonterminal_struct_name, Vec<(nonterminal_field_name, nonterminal_type)>>,
+        /// The current variable definitions, mapping variable names to their types.
+        pub var_defs: alloc::collections::BTreeMap<(nonterminal_var_name, usize), nonterminal_type>,
+    }
+
+    impl<T> Visitor<T> for ConstraintVisitorStructAccess
+>>>>>>> 9152e20 (split lang into lua and c; more visitors; wip type checker)
     where
         T: VisitableChildren<T> +
             AsNodeRef<nonterminal_struct_access> +
@@ -774,7 +1003,13 @@ mod defs {
                 // First, the var name.
                 let var_name = tree.nth::<0>().nth::<0>().clone();
                 // Look up the var name in the var_defs to get its type.
+<<<<<<< HEAD
                 let pot_var_type = get_var_definition(&self.var_defs, &var_name, &vec![self.scope_depth]);
+=======
+                // Note: (Lowkey a TODO) This should look up the scope, not necessarily that it's the exact scope depth.
+                let pot_var_type = self.var_defs.get(&(var_name, self.scope_depth)).cloned();
+
+>>>>>>> 9152e20 (split lang into lua and c; more visitors; wip type checker)
                 match pot_var_type {
                     Some(var_type) => {
                         // We have a variable type, check if it's a struct type.
@@ -789,6 +1024,7 @@ mod defs {
                                 if !fields.iter().any(|(fname, _ftype)| fname == &field_name) {
                                     // Field not found in struct definition, violation.
                                     self.violations.push(self.path.clone());
+<<<<<<< HEAD
                                 } else {
                                     // Field found, no violation.
                                     self.paths_to_passed_checks.push(self.path.clone());
@@ -805,6 +1041,21 @@ mod defs {
                     None => {
                         // Variable not found, violation. But this should be caught by def-before-use.
                         // self.violations.push(self.path.clone());
+=======
+                                }
+                            } else {
+                                // Struct not found, violation.
+                                self.violations.push(self.path.clone());
+                            }
+                        } else {
+                            // Variable is not of struct type, violation.
+                            self.violations.push(self.path.clone());
+                        }
+                    },
+                    None => {
+                        // Variable not found, violation.
+                        self.violations.push(self.path.clone());
+>>>>>>> 9152e20 (split lang into lua and c; more visitors; wip type checker)
                     }
                 }
             }
@@ -816,6 +1067,7 @@ mod defs {
         }
     }
 
+<<<<<<< HEAD
     // ================ Type checking.
     // Helpers
 
@@ -1496,6 +1748,33 @@ mod defs {
             AsNodeRef<nonterminal_expr_stmt> +
             AsNodeRef<nonterminal_struct_expr> +
             AsNodeRef<nonterminal_struct_name>,
+=======
+    // ================= Functions called with correct number of arguments.
+    // Constraint visitor.
+    /// Basic function-arguments-count constraint visitor.
+    #[derive(Debug, Default)]
+    pub struct ConstraintVisitorFuncArgCount {
+        /// The current path, to be used by the visitor when saving violations.
+        pub path: VecDeque<usize>,
+        /// The current scope level.
+        pub scope_depth: usize,
+        /// The list of violations found so far.
+        pub violations: Vec<VecDeque<usize>>,
+        /// The current function definitions, mapping function names and scopes to their parameter counts.
+        /// This should be initialized by a prior pass of DeclarationCollector.
+        pub func_defs: alloc::collections::BTreeMap<(nonterminal_fn_name, usize), usize>,
+    }   
+
+    impl<T> Visitor<T> for ConstraintVisitorFuncArgCount
+    where
+        T: VisitableChildren<T> +
+            AsNodeRef<nonterminal_fn_call> +
+            AsNodeRef<nonterminal_fn_def> +
+            AsNodeRef<nonterminal_arg_list> +
+            AsNodeRef<nonterminal_param_list> +
+            AsNodeRef<nonterminal_e> +
+            AsNodeRef<nonterminal_param_list_e>,
+>>>>>>> 9152e20 (split lang into lua and c; more visitors; wip type checker)
     {
         type Continue = Self;
         type Break = Infallible;
@@ -1511,6 +1790,7 @@ mod defs {
 
             // First, check if we are in a situation where we need to increase scope depth.
             if let Some(_tree) = visited.downcast::<nonterminal_fn_def>() {
+<<<<<<< HEAD
                 // Before doing anything else, let's grab the return type.
                 // If it's not void, we need to make sure there's at least one return statement in the function body.
                 // <fn_def> ::= <type> <sep> <fn_kwd> <sep> <fn_name> "(" <param_list_e> ")" <sep> "{" <sep> <fn_body_e> <sep> "}" ;
@@ -2044,6 +2324,194 @@ mod defs {
             Ok(ControlFlow::Continue(self))
         }
     }
+=======
+                self.scope_depth += 1;
+                // Visit the function, then decrease depth.
+                let result = visited.visit_each(self);
+                let Ok(ControlFlow::Continue(mut visitor)) = result;
+                visitor.scope_depth -= 1;
+                visitor.path.pop_back();
+                return Ok(ControlFlow::Continue(visitor));
+            }
+            
+            if let Some(tree) = visited.downcast::<nonterminal_fn_call>() {
+                let fn_name = tree.nth::<0>().nth::<0>().clone();
+                // Get the arg_list_e.
+                let arg_list_e = tree.nth::<0>().nth::<2>();
+                // Is arg_list_e <e> or <arg_list>?
+                let arg_count = if let Some(_e) = arg_list_e.nth::<0>().nth::<1>() {
+                    0
+                } else {
+                    // In this case, we know it's arg_list.
+                    let mut count = 0;
+                    let mut current = arg_list_e.nth::<0>().nth::<0>();
+                    while let Some(al) = current {
+                        count += 1;
+                        current = match al.nth::<0>() {
+                            nonterminal_arg_list_0::variant_0(_) => None,
+                            nonterminal_arg_list_0::variant_1(seq) => {
+                                let (_, _, _, rest) = seq.children();
+                                Some(rest)
+                            }
+                        };
+                    }
+                    count
+                };
+                // Check if the function name is in the definitions.
+                if let Some(expected_count) = self.func_defs.get(&(fn_name, self.scope_depth)) {
+                    if *expected_count != arg_count {
+                        self.violations.push(self.path.clone());
+                    }
+                } else {
+                    // Function not defined, consider it a violation.
+                    self.violations.push(self.path.clone());
+                }
+            }
+            let mut result = visited.visit_each(self);
+            if let Ok(ControlFlow::Continue(visitor)) = &mut result {
+                visitor.path.pop_back();
+            }
+            result
+        }
+    }
+    // ================ end of Functions called with correct number of arguments.
+
+    // ================ Type checking.
+    // Constraint visitor.
+    /// Basic type-checking constraint visitor.
+    #[derive(Debug, Default)]
+    pub struct ConstraintVisitorTypeCheck {
+        /// The current path, to be used by the visitor when saving violations.
+        pub path: VecDeque<usize>,
+        /// The current scope path.
+        pub scope_trace: Vec<usize>,
+        /// The current scope depth.
+        pub scope_depth: usize,
+        /// The list of violations found so far.
+        pub violations: Vec<VecDeque<usize>>,
+        /// The current variable definitions, mapping variable names and scopes to their types.
+        /// This should be initialized by a prior pass of DeclarationCollector.
+        pub var_defs: alloc::collections::BTreeMap<(nonterminal_var_name, Vec<usize>), nonterminal_type>,
+        /// The current function definitions, mapping function names and scopes to their return types.
+        /// This should be initialized by a prior pass of DeclarationCollector.
+        pub func_defs: alloc::collections::BTreeMap<(nonterminal_fn_name, Vec<usize>), nonterminal_type>,
+        /// The current struct definitions, mapping struct names to their field names and types.
+        /// This should be initialized by a prior pass of DeclarationCollector.
+        pub struct_defs: alloc::collections::BTreeMap<nonterminal_struct_name, Vec<(nonterminal_field_name, nonterminal_type)>>,
+    }
+
+    // impl<T> Visitor<T> for ConstraintVisitorTypeCheck
+    // where
+    //     T: VisitableChildren<T> +
+    //         AsNodeRef<nonterminal_assignment> +
+    //         AsNodeRef<nonterminal_expr> +
+    //         AsNodeRef<nonterminal_var_access> +
+    //         AsNodeRef<nonterminal_var_name> +
+    //         AsNodeRef<nonterminal_decl> +
+    //         AsNodeRef<nonterminal_type> +
+    //         AsNodeRef<nonterminal_fn_def> +
+    //         AsNodeRef<nonterminal_fn_name> +
+    //         AsNodeRef<nonterminal_return_stmt> +
+    //         AsNodeRef<nonterminal_struct_access> +
+    //         AsNodeRef<nonterminal_field_name> +
+    //         AsNodeRef<nonterminal_struct_name>,
+    // {
+    //     type Continue = Self;
+    //     type Break = Infallible;
+    //     type Error = Infallible;
+
+    //     fn visit<'program, N>(mut self, node: &'program N, idx: usize) -> VisitResult<Self, T>
+    //     where
+    //         N: Node<Type<'program> = T>,
+    //         T: From<&'program N> + AsNodeRef<N>,
+    //     {
+    //         self.path.push_back(idx);
+    //         let visited = node.opaque(); 
+
+    //         // First, check if we are in a situation where we need to increase scope depth.
+    //         if let Some(_tree) = visited.downcast::<nonterminal_fn_def>() {
+    //             self.scope_depth += 1;
+    //             self.scope_trace.push(self.scope_depth);
+    //             // Visit the function, then decrease depth.
+    //             let result = visited.visit_each(self);
+    //             let Ok(ControlFlow::Continue(mut visitor)) = result;
+    //             visitor.scope_depth -= 1;
+    //             visitor.scope_trace.pop();
+    //             visitor.path.pop_back();
+    //             return Ok(ControlFlow::Continue(visitor));
+    //         }
+
+    //         if let Some(tree) = visited.downcast::<nonterminal_decl>() {
+    //             let var_name = tree.nth::<0>().nth::<2>().clone();
+    //             let var_type = tree.nth::<0>().nth::<0>().clone();
+    //             self.var_defs.insert((var_name, self.scope_trace.clone()), var_type);
+    //         } else if let Some(tree) = visited.downcast::<nonterminal_assignment>() {
+    //             let var_access = tree.nth::<0>().nth::<0>();
+    //             let expr = tree.nth::<0>().nth::<2>();
+    //             // Get the variable name from the var_access.
+    //             let var_name = var_access.nth::<0>().clone();
+    //             // Look up the variable type.
+    //             let var_type = self.var_defs.get(&(var_name, self.scope_trace.clone()));
+    //             // Get the expression type.
+    //             let expr_type = infer_expr_type(expr, &self.var_defs, &self.func_defs, &self.struct_defs, &self.scope_trace);
+    //             // Compare types.
+    //             if let (Some(vt), Some(et)) = (var_type, expr_type) {
+    //                 if !types_compatible(vt, &et, &self.struct_defs) {
+    //                     self.violations.push(self.path.clone());
+    //                 }
+    //             } else {
+    //                 // Either variable or expression type could not be determined, consider it a violation.
+    //                 self.violations.push(self.path.clone());
+    //             }
+    //         } else if let Some(tree) = visited.downcast::<nonterminal_return_stmt>() {
+    //             let expr = tree.nth::<0>().nth::<1>();
+    //             // Get the expression type.
+    //             let expr_type = infer_expr_type(expr, &self.var_defs, &self.func_defs, &self.struct_defs, &self.scope_trace);
+    //             // Get the function return type.
+    //             if let Some((fn_name, _)) = self.path.iter().rev().find_map(|&i| {
+    //                 let ancestor = visited.go_to(0, self.path.iter().cloned().take(i + 1).collect()).ok()?;
+    //                 if let Some(fn_def) = ancestor.downcast::<nonterminal_fn_def>() {
+    //                     Some((fn_def.nth::<0>().nth::<4>().clone(), ()))
+    //                 } else {
+    //                     None
+    //                 }
+    //             }) {
+    //                 let fn_return_type = self.func_defs.get(&(fn_name, self.scope_trace.clone()));
+    //                 // Compare types.
+    //                 if let (Some(rt), Some(et)) = (fn_return_type, expr_type) {
+    //                     if !types_compatible(rt, &et, &self.struct_defs) {
+    //                         self.violations.push(self.path.clone());
+    //                     }
+    //                 } else {
+    //                     // Either function return type or expression type could not be determined, consider it a violation.
+    //                     self.violations.push(self.path.clone());
+    //                 }
+    //             } else {
+    //                 // Return statement not inside a function, already handled by another visitor.
+    //             }
+    //         } else if let Some(tree) = visited.downcast::<nonterminal_struct_access>() {
+    //             // Get the var name.
+    //             let var_name = tree.nth::<0>().nth::<0>().clone();
+    //             // Look up the variable type.
+    //             let var_type = self.var_defs.get(&(var_name, self.scope_trace.clone()));
+    //             // Get the field name being accessed.
+    //             let field_name = tree.nth::<0>().nth::<2>().clone();
+    //             // Check if the variable type is a struct and if it has the field.
+    //             if let Some(vt) = var_type {
+    //                 if let nonterminal_type_0::variant_1(struct_type) = vt.nth::<0>() {
+    //                     let struct_name = struct_type.nth::<0>().nth::<2>().clone();
+    //                     if let Some(fields) = self.struct_defs.get(&struct_name) {
+    //                         if !fields.iter().any(|(fname, _ftype)| fname == &field_name) {
+    //                             // Field not found in struct definition, violation.
+    //                             self.violations.push(self.path.clone());
+    //                         }
+    //                     }
+    //                 }
+    //             }
+    //         }
+    //     }
+    // }
+>>>>>>> 9152e20 (split lang into lua and c; more visitors; wip type checker)
 
     #[cfg(test)]
     mod test {
@@ -2055,14 +2523,105 @@ mod defs {
         use fandango::generation::Generated;
         use fandango::tuple_list::tuple_list;
         use fandango::typing::{Structured};
+<<<<<<< HEAD
         use fandango::visitor::{Visitor};
+=======
+        use fandango::visitor::{Visitor, VisitorMut};
+        use fandango::visitor::navigation::GoTo;
+>>>>>>> 9152e20 (split lang into lua and c; more visitors; wip type checker)
         use rand::SeedableRng;
         use rand::rngs::StdRng;
         use alloc::string::String;
         use fandango::visitor::write::WriteVisitor;
         use alloc::vec::Vec;
+<<<<<<< HEAD
         use fandango_runtime::measurement::Violations;
         use num_rational::Ratio;
+=======
+
+        #[test]
+        fn check_def_use_constraint_and_fix_c() -> Result<(), Box<dyn Error>> {
+            extern crate std;
+            let mut rng = StdRng::seed_from_u64(0);
+            let mut generators =
+                tuple_list!(DepthLimiter::new(lang::nonterminal_start::ROOT.inner(), 50));
+            let mut diff_count = 0;
+            let mut tree = lang::nonterminal_start::generate(&mut rng, &mut generators, 0);
+            
+            // Run this 100 times and print to see violations and fixes.
+            let i = 0;
+            for i in 0..100 {
+                tree = lang::nonterminal_start::generate(&mut rng, &mut generators, 0);
+
+                std::println!("==============================");
+
+                // First collect declarations.
+                let Ok(ControlFlow::Continue(decl_visitor)) =
+                    lang::DeclarationCollector::default().visit(&tree, 0);
+                // let mut tree = tree;
+                let defined_vars = decl_visitor.defined_vars;
+                std::println!("Found {} defined variables.", defined_vars.len());
+
+                // Now check for violations.   
+                
+                let mut def_use_visitor = lang::ConstraintVisitorDefUse::default();
+                // Set the defined vars.
+                def_use_visitor.defined_vars = defined_vars.clone();
+                let Ok(ControlFlow::Continue(lang::ConstraintVisitorDefUse { violations, .. })) =
+                    def_use_visitor.visit(&tree, 0);
+                std::println!("Program {i} has {} def-before-use violations.", violations.len());
+                
+                let total_violations = violations.len();
+
+                for mut violation in violations {
+                    violation.pop_front();
+
+                    assert!(matches!(
+                        tree.go_to(0, violation.clone())?,
+                        lang::Type::nonterminal_var_access(_)
+                    ));
+
+                    let lang::Type::nonterminal_var_access(records) =
+                        tree.go_to(0, violation.clone())?
+                    else {
+                        unreachable!("We are inspecting the records directly.");
+                    };
+                    let var_name_str = String::from_utf8(
+                        WriteVisitor::new(Vec::new())
+                            .visit(records, 0)
+                            .unwrap()
+                            .continue_value()
+                            .unwrap()
+                            .output(),
+                    ).unwrap();
+
+                    diff_count += 1;
+                }
+
+                std::println!("Found {total_violations} violations in iteration {i}, total so far {diff_count}.");
+                std::println!("Program:\n{}", String::from_utf8(
+                    WriteVisitor::new(Vec::new())
+                        .visit(&tree, 0)
+                        .unwrap()
+                        .continue_value()
+                        .unwrap()
+                        .output(),
+                ).unwrap());
+            }
+
+            // ok at this point we found a program that worked.
+            std::println!("Found {diff_count} violations across {i} programs.");
+            std::println!("Final program:\n{}", String::from_utf8(
+                WriteVisitor::new(Vec::new())
+                    .visit(&tree, 0)
+                    .unwrap()
+                    .continue_value()
+                    .unwrap()
+                    .output(),
+            ).unwrap());
+            Ok(())
+        }
+>>>>>>> 9152e20 (split lang into lua and c; more visitors; wip type checker)
 
         #[test]
         fn check_ret_in_fn_constraint_c() -> Result<(), Box<dyn Error>> {
@@ -2092,6 +2651,36 @@ mod defs {
         }
 
         #[test]
+<<<<<<< HEAD
+=======
+        fn check_fn_call_constraint_c() -> Result<(), Box<dyn Error>> {
+            extern crate std;
+            let mut rng = StdRng::seed_from_u64(0);
+            let mut generators =
+                tuple_list!(DepthLimiter::new(lang::nonterminal_start::ROOT.inner(), 50));
+            // Generate 50 programs and check for violations.
+            for i in 0..200 {
+                let tree = lang::nonterminal_start::generate(&mut rng, &mut generators, 0);
+                let Ok(ControlFlow::Continue(lang::ConstraintVisitorFuncArgCount { 
+                    violations, .. 
+                })) = lang::ConstraintVisitorFuncArgCount::default().visit(&tree, 0);
+                std::println!("==============================");
+                std::println!("Program {i} has {} fn-call-arg-count violations.", violations.len());
+                // Print the program.
+                std::println!("Program:\n{}", String::from_utf8(
+                    WriteVisitor::new(Vec::new())
+                        .visit(&tree, 0)
+                        .unwrap()
+                        .continue_value()
+                        .unwrap()
+                        .output(),
+                ).unwrap());
+            }
+            Ok(())
+        }
+
+        #[test]
+>>>>>>> 9152e20 (split lang into lua and c; more visitors; wip type checker)
         fn check_struct_def_and_access_c() -> Result<(), Box<dyn Error>> {
             extern crate std;
             let mut rng = StdRng::seed_from_u64(0);
@@ -2109,7 +2698,14 @@ mod defs {
 
                 let Ok(ControlFlow::Continue(lang::ConstraintVisitorStructAccess { 
                     violations, .. 
+<<<<<<< HEAD
                 })) = lang::ConstraintVisitorStructAccess ::new(&struct_defs, &Default::default()).visit(&tree, 0);
+=======
+                })) = lang::ConstraintVisitorStructAccess {
+                    struct_defs,
+                    ..Default::default()
+                }.visit(&tree, 0);
+>>>>>>> 9152e20 (split lang into lua and c; more visitors; wip type checker)
 
                 std::println!("Program {i} has {} struct-access violations.", violations.len());
                 // Print the program.
@@ -2124,6 +2720,7 @@ mod defs {
             }
             Ok(())
         }
+<<<<<<< HEAD
 
         // Def-use
         #[test]
@@ -2287,6 +2884,8 @@ mod defs {
             }
             Ok(())
         }
+=======
+>>>>>>> 9152e20 (split lang into lua and c; more visitors; wip type checker)
     }
 }
 
