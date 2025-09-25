@@ -2,8 +2,7 @@
 
 use crate::generation::{Generated, Generator, GeneratorTuple, RawSampler, Sampler};
 use crate::lang::{Operator, Symbol};
-use crate::typing::{AsStaticNode, Structured};
-use alloc::collections::BTreeMap;
+use crate::typing::{AsStaticNode, StaticDiscriminable, Structured};
 use alloc::vec;
 use alloc::vec::Vec;
 use core::error::Error;
@@ -39,11 +38,11 @@ pub struct StaticTarget<N>(PhantomData<N>);
 
 impl<N, O> FlattenerTarget<O> for StaticTarget<N>
 where
-    N: Structured,
-    O: Structured,
+    N: StaticDiscriminable,
+    O: StaticDiscriminable,
 {
     fn flattens(&self, _: &FandangoNode) -> bool {
-        N::STRUCTURE == O::STRUCTURE
+        N::DISCRIMINANT == O::DISCRIMINANT
     }
 }
 
@@ -70,21 +69,15 @@ where
 #[derive(Debug, Default)]
 pub struct Flattener<T> {
     target: T,
-    flattened: HashMap<FandangoNode, Flattened>,
-}
-
-#[derive(Debug, Clone)]
-struct Flattened {
-    children: BTreeMap<usize, FandangoNode>,
-    total: usize,
+    flattened: Vec<usize>,
 }
 
 fn flatten(
     nonterminals: &HashMap<FandangoNode, FandangoNode>,
     node: FandangoNode,
     visited: &mut Vec<FandangoNode>,
-    flattened: &mut HashMap<FandangoNode, Flattened>,
-) -> Result<usize, Unflattenable> {
+    flattened: &mut Vec<usize>,
+) -> Result<(), Unflattenable> {
     if visited.contains(&node) {
         return Err(Unflattenable);
     }
@@ -94,26 +87,21 @@ fn flatten(
             let alt = nonterminals
                 .get(&nonterminal)
                 .expect("Nonterminal is used, so it must be defined");
-            let total = flatten(nonterminals, *alt, visited, flattened)?;
-            flattened.insert(
-                node,
-                flattened
-                    .get(alt)
-                    .expect("We just processed this alternative")
-                    .clone(),
-            );
-            Ok(total)
+            flatten(nonterminals, *alt, visited, flattened)
         }
         FandangoNode::Alternative(alt) => {
-            let mut children = BTreeMap::new();
-            let mut total = 0;
+            let choices = alt.concatenations().len();
+            let mut local = flattened.len();
             for (idx, concat) in alt.concatenations().iter().enumerate() {
                 let child = FandangoNode::from(concat);
-                total += flatten(nonterminals, child, visited, flattened)?;
-                children.insert(idx, child);
+                flatten(nonterminals, child, visited, flattened)?;
+                while local < flattened.len() {
+                    flattened[local] *= choices;
+                    flattened[local] += idx;
+                    local += 1;
+                }
             }
-            flattened.insert(node, Flattened { children, total });
-            Ok(total)
+            Ok(())
         }
         FandangoNode::Operator(Operator::Symbol(s)) => match s.inner() {
             Symbol::Nonterminal(n) => {
@@ -130,7 +118,10 @@ fn flatten(
             visited,
             flattened,
         ),
-        FandangoNode::String(_) => Ok(1),
+        FandangoNode::String(_) => {
+            flattened.push(0);
+            Ok(())
+        }
         _ => Err(Unflattenable),
     };
     let result = inner();
@@ -146,7 +137,7 @@ impl Flattener<()> {
     {
         let mut this = Flattener::<StaticTarget<N>> {
             target: StaticTarget::<N>(PhantomData),
-            flattened: HashMap::new(),
+            flattened: Vec::new(),
         };
         let nonterminals = N::ROOT.inner().nonterminals();
 
@@ -159,20 +150,7 @@ impl Flattener<()> {
 
 struct FlattenedSampler<'a, S> {
     choice: usize,
-    flattened: &'a HashMap<FandangoNode, Flattened>,
     sampler: &'a mut S,
-}
-
-impl<S> FlattenedSampler<'_, S> {
-    fn sample_alternative_from(&mut self, current: &Flattened) -> usize {
-        match current.children.range(..=self.choice).enumerate().last() {
-            None => unreachable!("Invalid choice while flattening"),
-            Some((choice, (&lower, _))) => {
-                self.choice -= lower;
-                choice
-            }
-        }
-    }
 }
 
 impl<S> RawSampler for FlattenedSampler<'_, S>
@@ -190,32 +168,28 @@ where
 
 impl<N, S> Sampler<N> for FlattenedSampler<'_, S>
 where
-    N: AsStaticNode,
-    S: Sampler<N>,
+    S: RawSampler,
 {
     fn sample_kleene(&mut self) -> usize {
-        self.sampler.sample_kleene()
+        unimplemented!("FlattenedSampler is incompatible with repetitions")
     }
 
     fn sample_plus(&mut self) -> usize {
-        self.sampler.sample_plus()
+        unimplemented!("FlattenedSampler is incompatible with repetitions")
     }
 
     fn sample_optional(&mut self) -> bool {
-        self.sampler.sample_optional()
+        unimplemented!("FlattenedSampler is incompatible with repetitions")
     }
 
-    fn sample_repetition(&mut self, lower: usize, upper: usize) -> usize {
-        self.sampler.sample_repetition(lower, upper)
+    fn sample_repetition(&mut self, _lower: usize, _upper: usize) -> usize {
+        unimplemented!("FlattenedSampler is incompatible with repetitions")
     }
 
-    fn sample_alternative(&mut self, _: usize) -> usize {
-        // we blithely ignore count here; this was already computed!
-        let current = self
-            .flattened
-            .get(&N::static_definition())
-            .expect("Attempted to generate something that wasn't in the graph");
-        self.sample_alternative_from(current)
+    fn sample_alternative(&mut self, choices: usize) -> usize {
+        let result = self.choice % choices;
+        self.choice /= choices;
+        result
     }
 }
 
@@ -228,13 +202,8 @@ where
 {
     fn generate(&mut self, sampler: &mut S, with: &mut W, depth: usize) -> Option<N> {
         if self.target.flattens(&N::static_definition()) {
-            let flattened = self.flattened.get(&N::static_definition()).unwrap();
-            let choice = sampler.sample() % flattened.total;
-            let mut sampler = FlattenedSampler {
-                choice,
-                flattened: &self.flattened,
-                sampler,
-            };
+            let choice = self.flattened[sampler.sample_alternative(self.flattened.len())];
+            let mut sampler = FlattenedSampler { choice, sampler };
             Some(N::generate(&mut sampler, with, depth))
         } else {
             None
@@ -253,7 +222,7 @@ mod dynamic_impls {
     use crate::impl_has_dynamic_sampler;
     use crate::typing::AsStaticNode;
     use alloc::vec;
-    use hashbrown::HashMap;
+    use alloc::vec::Vec;
 
     impl<N> FlattenerTarget<DynamicNode> for StaticTarget<N>
     where
@@ -281,7 +250,7 @@ mod dynamic_impls {
         ) -> Result<Flattener<DynamicTarget>, Unflattenable> {
             let mut this = Flattener::<DynamicTarget> {
                 target: DynamicTarget(definition),
-                flattened: HashMap::new(),
+                flattened: Vec::new(),
             };
             let nonterminals = match root {
                 FandangoNode::Program(p) => p.nonterminals(),
@@ -294,36 +263,6 @@ mod dynamic_impls {
         }
     }
 
-    impl<S> Sampler<DynamicNode> for FlattenedSampler<'_, S>
-    where
-        S: Sampler<DynamicNode> + HasDynamicSampler,
-    {
-        fn sample_kleene(&mut self) -> usize {
-            self.sampler.sample_kleene()
-        }
-
-        fn sample_plus(&mut self) -> usize {
-            self.sampler.sample_plus()
-        }
-
-        fn sample_optional(&mut self) -> bool {
-            self.sampler.sample_optional()
-        }
-
-        fn sample_repetition(&mut self, lower: usize, upper: usize) -> usize {
-            self.sampler.sample_repetition(lower, upper)
-        }
-
-        fn sample_alternative(&mut self, _: usize) -> usize {
-            // we blithely ignore count here; this was already computed!
-            let current = self
-                .flattened
-                .get(&self.sampler.definition())
-                .expect("Attempted to generate something that wasn't in the graph");
-            self.sample_alternative_from(current)
-        }
-    }
-
     impl<W, S, T> Generator<DynamicNode, W, S> for Flattener<T>
     where
         W: for<'a> GeneratorTuple<DynamicNode, FlattenedSampler<'a, S>>,
@@ -332,13 +271,8 @@ mod dynamic_impls {
     {
         fn generate(&mut self, sampler: &mut S, with: &mut W, depth: usize) -> Option<DynamicNode> {
             if self.target.flattens(&sampler.definition()) {
-                let flattened = self.flattened.get(&sampler.definition()).unwrap();
-                let choice = sampler.sample() % flattened.total;
-                let mut sampler = FlattenedSampler {
-                    choice,
-                    flattened: &self.flattened,
-                    sampler,
-                };
+                let choice = self.flattened[sampler.sample_alternative(self.flattened.len())];
+                let mut sampler = FlattenedSampler { choice, sampler };
                 Some(DynamicNode::generate(&mut sampler, with, depth))
             } else {
                 None

@@ -184,7 +184,7 @@ mod simple {
         let mut rng = StdRng::seed_from_u64(0);
         let start = nonterminal_start::generate(&mut rng, &mut (), 0);
 
-        let serialized = String::from_utf8(
+        let _ = String::from_utf8(
             WriteVisitor::new(Vec::new())
                 .visit(&start, 0)?
                 .continue_value()
@@ -192,9 +192,6 @@ mod simple {
                 .output(),
         )?;
 
-        extern crate std;
-
-        std::println!("{serialized}");
         Ok(())
     }
 
@@ -217,9 +214,7 @@ mod simple {
             buf.clear();
         }
 
-        extern crate std;
-
-        std::println!("{distribution:?}");
+        assert!(distribution[0].abs_diff(50000) < 500);
 
         Ok(())
     }
@@ -247,9 +242,7 @@ mod simple {
             buf.clear();
         }
 
-        extern crate std;
-
-        std::println!("{distribution:?}");
+        assert!(distribution.into_iter().all(|i| i.abs_diff(10000) < 500));
 
         Ok(())
     }
@@ -287,9 +280,7 @@ mod simple {
             buf.clear();
         }
 
-        extern crate std;
-
-        std::println!("{distribution:?}");
+        assert!(distribution.into_iter().all(|i| i.abs_diff(10000) < 500));
 
         Ok(())
     }
@@ -408,7 +399,7 @@ mod xml {
         let mut rng = StdRng::seed_from_u64(0);
         let start = nonterminal_start::generate_default(&mut rng, &mut (), 0);
 
-        let serialized = String::from_utf8(
+        let _ = String::from_utf8(
             WriteVisitor::new(Vec::new())
                 .visit(&start, 0)?
                 .continue_value()
@@ -416,19 +407,12 @@ mod xml {
                 .output(),
         )?;
 
-        extern crate std;
-
-        std::println!("{serialized}");
         Ok(())
     }
 
     #[test]
-    fn default() -> Result<(), Box<dyn Error>> {
-        let default_tree = nonterminal_start::default();
-
-        extern crate std;
-        std::println!("{default_tree:?}");
-
+    fn default_terminates() -> Result<(), Box<dyn Error>> {
+        let _ = nonterminal_start::default();
         Ok(())
     }
 
