@@ -2,10 +2,12 @@
 
 <statements> ::= <stmt> | <stmt> "\n" <statements> ;
 
-<stmt> ::= <decl> ";" | <assignment> ";" | <fn_def> | <struct_def> | <expr> ";" | <return_stmt> ";" ;
+<stmt> ::= <decl> ";" | <assignment> ";" | <fn_def> | <struct_def> ";" | <expr_stmt> ";" | <return_stmt> ";" ;
+
+<expr_stmt> ::= <expr> ;
 
 <type> ::= <basic_type> | <struct_type> ;
-<basic_type> ::= "int" | "float" | "double" | "bool" | "char" ;
+<basic_type> ::= "int" | "float" | "double" | "bool" | "char" | "void" ;
 
 <struct_type> ::= "struct" <sep> <struct_name> ;
 <struct_name> ::= <letter> <alnums> ;
@@ -16,14 +18,14 @@
 
 <struct_def> ::= "struct" <sep> <struct_name> <sep> "{" "\n" <field_def_list_e> "\n" "}" ;
 <field_def_list_e> ::= <field_def_list> | <e> ;
-<field_def_list> ::= <type> <sep> <field_name> | <type> <sep> <field_name> "," "\n" <field_def_list> ;
+<field_def_list> ::= <type> <sep> <field_name> ";" | <type> <sep> <field_name> ";" "\n" <field_def_list> ;
 <field_name> ::= <letter> <alnums> ;
 
 <assignment> ::= <var_access> <sep> <assign_op> <sep> <expr> ;
 <assign_op> ::= "=" | "+=" | "-=" ;
 
 <fn_def> ::= <type> <sep> <fn_kwd> <sep> <fn_name> "(" <param_list_e> ")" <sep> "{" <sep> <fn_body_e> <sep> "}" ;
-<fn_kwd> ::= "function" ;
+<fn_kwd> ::= "" ;
 <fn_name> ::= <letter> <alnums> ;
 <param_list_e> ::= <param_list> | <e> ;
 <param_list> ::= <param> | <param> "," <sep> <param_list> ;
@@ -41,7 +43,8 @@
 <arg_list> ::= <arg> | <arg> "," <sep> <arg_list> ;
 <arg> ::= <expr> ;
 
-<struct_expr> ::= "{" "\n" <expr_list> "\n" "}" ;
+<struct_expr> ::= "{" "\n" <expr_list_e> "\n" "}" ;
+<expr_list_e> ::= <expr_list> | <e> ;
 <expr_list> ::= <expr> | <expr> "," "\n" <expr_list> ;
 
 <arith_expr> ::= <binop> | <unop> ;
@@ -65,13 +68,10 @@
 <value> ::= <bool_val> | <num_val> | <string_val> ;
 
 <bool_val> ::= "true" | "false" ;
-<num_val> ::= <num_val_inner> | <num_val_inner> <exponent> ;
-<exponent> ::= "e" <int> | "e-" <int> | "E" <int> | "E-" <int> ;
-<num_val_inner> ::= <int> | <float> | <hex> ;
-<hex> ::= "0x" <hex_digit>+ ;
-<hex_digit> ::= "a" | "b" | "c" | "d" | "e" | "f" | <digit> ;
+<num_val> ::= <int> | <float> | <double> ;
 <int> ::= <digit> | <digit> <int> ;
-<float> ::= <int> "." <int> ;
+<float> ::= <int> "." <int> "f" ;
+<double> ::= <int> "." <int> ;
 <string_val> ::= "\"\"" | "\"" <alnums> "\"" ;
 <sep> ::= " " ;
 <e> ::= " " ;
