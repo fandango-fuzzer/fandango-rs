@@ -4,21 +4,9 @@ version = "0.0.0"
 edition = "2024"
 publish = false
 
-[features]
-default = ["static_defs"]
-static_defs = [
-    "common/static_defs",
-    "csv/static_defs",
-    "rest/static_defs",
-    "scriptsizec/static_defs",
-    "xml/static_defs",
-    "fandango-targets/static_defs"
-]
-
 [dependencies]
 fandango = { path = ".." }
 fandango-runtime = { path = "../runtime" }
-fandango-targets = { path = "../targets" }
 
 common = { path = "common" }
 
@@ -27,10 +15,10 @@ hashbrown.workspace = true
 rand.workspace = true
 
 [dev-dependencies]
-csv = { path = "csv" }
-rest = { path = "rest" }
-scriptsizec = { path = "scriptsizec" }
-xml = { path = "xml" }
+csv = { path = "csv", features = ["static_defs"] }
+rest = { path = "rest", features = ["static_defs"] }
+scriptsizec = { path = "scriptsizec", features = ["static_defs"] }
+xml = { path = "xml", features = ["static_defs"] }
 
 [[bench]]
 name = "baselines"
