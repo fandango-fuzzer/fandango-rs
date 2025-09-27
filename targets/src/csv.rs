@@ -202,8 +202,7 @@ mod defs {
                                     );
 
                                 mem::swap(inplace, new.nth_mut::<0>());
-                                *tmp.nth_mut::<0>() =
-                                    nonterminal_csv_string_list_0::variant_1(new.into());
+                                *tmp.nth_mut::<0>() = nonterminal_csv_string_list_0::from_1th(new);
                             }
                             tmp = tmp
                                 .child_mut()
