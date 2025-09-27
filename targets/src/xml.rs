@@ -116,7 +116,7 @@ mod defs {
                 let (base, _, mut rest) = seq.children();
                 loop {
                     let (cmp, maybe_rest) = match rest.child() {
-                        nonterminal_xml_attributes_0::variant_0(cmp) => (cmp, None),
+                        nonterminal_xml_attributes_0::variant_0(cmp) => (maybe_deref!(cmp), None),
                         nonterminal_xml_attributes_0::variant_1(seq) => {
                             let (cmp, _, rest) = seq.children();
                             (cmp, Some(rest))
@@ -199,13 +199,15 @@ mod defs {
                 };
                 id.clone_into(close.child_mut().nth_mut::<1>());
             } else if let Some(tree) = visited.downcast_mut::<nonterminal_xml_attributes>() {
-                if let nonterminal_xml_attributes_0::variant_1(seq) = tree.child_mut() {
+                if let Some(seq) = tree.child_mut().nth_mut::<1>() {
                     let (base, _, mut rest) = seq.children_mut();
                     let mut ids = BTreeSet::new();
                     ids.insert(base.child_mut().nth_mut::<0>());
                     loop {
                         let (cmp, maybe_rest) = match rest.child_mut() {
-                            nonterminal_xml_attributes_0::variant_0(cmp) => (cmp, None),
+                            nonterminal_xml_attributes_0::variant_0(cmp) => {
+                                (maybe_deref_mut!(cmp), None)
+                            }
                             nonterminal_xml_attributes_0::variant_1(seq) => {
                                 let (cmp, _, rest) = seq.children_mut();
                                 (cmp, Some(rest))

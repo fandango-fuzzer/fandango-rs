@@ -7,14 +7,36 @@
 
 extern crate alloc;
 
-use alloc::collections::VecDeque;
-use alloc::vec::Vec;
+macro_rules! maybe_deref {
+    ($value: ident) => {
+        loop {
+            #[cfg(no_opt_indirect)]
+            {
+                break &**$value;
+            }
+            #[cfg(not(no_opt_indirect))]
+            {
+                break $value;
+            }
+        }
+    };
+}
 
-/// Target for the programming language grammar and constraints.
-#[cfg(feature = "clang")]
-pub mod clang;
-#[cfg(feature = "lualang")]
-pub mod lualang;
+macro_rules! maybe_deref_mut {
+    ($value: ident) => {
+        loop {
+            #[cfg(no_opt_indirect)]
+            {
+                break &mut **$value;
+            }
+            #[cfg(not(no_opt_indirect))]
+            {
+                break $value;
+            }
+        }
+    };
+}
+
 #[cfg(feature = "csv")]
 pub mod csv;
 #[cfg(feature = "rest")]
