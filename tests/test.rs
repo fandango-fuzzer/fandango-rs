@@ -46,7 +46,7 @@ mod simple {
         let start = Simple::extract(SAMPLE).unwrap();
         {
             let expr = start.nth::<0>();
-            if let nonterminal_expr_0::variant_0(expr) = expr.nth::<0>() {
+            if let Some(expr) = expr.nth::<0>().nth::<0>() {
                 let (_number, plus, expr) = expr.children();
                 dfs = Some(FindVisitor::dfs(plus));
                 bfs = Some(FindVisitor::bfs(plus));
@@ -60,7 +60,7 @@ mod simple {
                         .output()
                 );
 
-                if let nonterminal_expr_0::variant_1(number) = expr.nth::<0>() {
+                if let Some(number) = expr.nth::<0>().nth::<1>() {
                     assert_eq!(
                         "2".as_bytes(),
                         WriteVisitor::new(Vec::new())

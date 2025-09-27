@@ -197,7 +197,7 @@ mod defs {
                             if let Some(inplace) = tmp.child_mut().nth_mut::<0>() {
                                 let mut new = nonterminal_csv_string_list_0_1::default();
                                 *new.nth_mut::<2>().nth_mut::<0>() =
-                                    nonterminal_csv_string_list_0::variant_0(
+                                    nonterminal_csv_string_list_0::from_0th(
                                         nonterminal_raw_field::generate(
                                             self.sampler,
                                             self.generator,
@@ -218,7 +218,7 @@ mod defs {
                         }
 
                         if let Some(seq) = tmp.child_mut().nth_mut::<1>() {
-                            *tmp.child_mut() = nonterminal_csv_string_list_0::variant_0(mem::take(
+                            *tmp.child_mut() = nonterminal_csv_string_list_0::from_0th(mem::take(
                                 seq.nth_mut::<0>(),
                             ));
                         }

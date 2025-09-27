@@ -7,6 +7,36 @@
 
 extern crate alloc;
 
+macro_rules! maybe_deref {
+    ($value: ident) => {
+        loop {
+            #[cfg(no_opt_indirect)]
+            {
+                break &**$value;
+            }
+            #[cfg(not(no_opt_indirect))]
+            {
+                break $value;
+            }
+        }
+    };
+}
+
+macro_rules! maybe_deref_mut {
+    ($value: ident) => {
+        loop {
+            #[cfg(no_opt_indirect)]
+            {
+                break &mut **$value;
+            }
+            #[cfg(not(no_opt_indirect))]
+            {
+                break $value;
+            }
+        }
+    };
+}
+
 #[cfg(feature = "csv")]
 pub mod csv;
 #[cfg(feature = "rest")]
