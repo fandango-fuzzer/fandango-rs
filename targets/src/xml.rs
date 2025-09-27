@@ -111,7 +111,7 @@ mod defs {
                     self.violations.push(violation);
                 }
             } else if let Some(tree) = visited.downcast::<nonterminal_xml_attributes>()
-                && let nonterminal_xml_attributes_0::variant_1(seq) = tree.child()
+                && let Some(seq) = tree.child().nth::<1>()
             {
                 let (base, _, mut rest) = seq.children();
                 loop {
