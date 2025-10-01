@@ -180,9 +180,9 @@ mod defs {
                 })) = scriptsizec::ConstraintVisitor::evaluated().visit(&tree, 0);
 
                 for mut violation in violations {
-                    violation.pop_front();
+                    let (&idx, violation) = violation.make_contiguous().split_first().unwrap();
                     assert!(matches!(
-                        tree.go_to(0, violation.clone())?,
+                        tree.go_to(idx, violation)?,
                         scriptsizec::Type::nonterminal_id(_)
                     ));
                     diff_count += 1;

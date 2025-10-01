@@ -274,16 +274,16 @@ mod defs {
                     csv::ConstraintVisitor::corrected().visit(&tree, 0);
 
                 for mut violation in violations {
-                    violation.pop_front();
+                    let (&idx, violation) = violation.make_contiguous().split_first().unwrap();
                     assert!(matches!(
-                        tree.go_to(0, violation.clone())?,
+                        tree.go_to(idx, violation)?,
                         csv::Type::nonterminal_csv_string_list(_)
                     ));
                     let len = violation.len();
 
-                    violation.truncate(len - 8);
+                    let (_, violation) = violation.split_at(len - 8);
 
-                    let csv::Type::nonterminal_csv_records(records) = tree.go_to(0, violation)?
+                    let csv::Type::nonterminal_csv_records(records) = tree.go_to(idx, violation)?
                     else {
                         unreachable!("We are inspecting the records directly.");
                     };
