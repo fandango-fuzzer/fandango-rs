@@ -7,6 +7,7 @@
 
 extern crate alloc;
 
+#[allow(unused)]
 macro_rules! maybe_deref {
     ($value: ident) => {
         loop {
@@ -22,6 +23,7 @@ macro_rules! maybe_deref {
     };
 }
 
+#[allow(unused)]
 macro_rules! maybe_deref_mut {
     ($value: ident) => {
         loop {

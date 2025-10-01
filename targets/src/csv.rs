@@ -277,7 +277,7 @@ mod defs {
                     ));
                     let len = violation.len();
 
-                    let (_, violation) = violation.split_at(len - 8);
+                    let violation = &violation[..(len - 8)];
 
                     let csv::Type::nonterminal_csv_records(records) = tree.go_to(idx, violation)?
                     else {
