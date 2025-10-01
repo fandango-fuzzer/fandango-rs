@@ -258,15 +258,14 @@ mod defs {
                     rest::ConstraintVisitor::evaluated().visit(&tree, 0);
 
                 for mut violation in violations {
-                    let backup = violation.clone();
-                    violation.pop_front();
-                    let goto = tree.go_to(0, violation.clone())?;
+                    let (&idx, target) = violation.make_contiguous().split_first().unwrap();
+                    let goto = tree.go_to(idx, target)?;
                     assert!(
                         matches!(
                             goto,
                             rest::Type::nonterminal_id(_) | rest::Type::nonterminal_underline(_)
                         ),
-                        "at {backup:?}, found: {goto:?}"
+                        "at {violation:?}, found: {goto:?}"
                     );
                     diff_count += 1;
                 }
