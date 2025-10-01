@@ -311,7 +311,7 @@ impl<C> Error for ChainError<C> where C: Debug {}
 ///    - The `Break` type represents the full path taken to the intended target node, *including the
 ///      index of the first node*.
 ///    - The first node's index *MUST* be exactly the index provided originally.
-///  - All visitors but the first must implement [`navigation::StartingFrom`].
+///  - All visitors but the first must implement [`navigation::VisitFrom`].
 ///    - The visitor accepts the path *not including the index of the first node* (this is instead
 ///      provided as an argument to [`Visitor::visit`]).
 #[macro_export]

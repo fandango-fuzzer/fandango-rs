@@ -11,25 +11,10 @@ use alloc::vec::Vec;
 use core::convert::Infallible;
 use core::ops::ControlFlow;
 
-/// Trait which enables chaining of visitors by returning paths between them (e.g. with
-/// [`crate::visitor_chain`]). One would choose this over simply traversing a given node if the
-/// intended visitor needs to be able to traverse the full subtree, not just the provided node.
-/// The path here is expected to be provided without the first node index.
-///
-/// If you're intending to just visit a specific node's subtree, use [`GoTo::go_to`] instead.
-pub trait StartingFrom {
-    /// The visitor, but with the provided path (in case of a builder pattern).
-    type WithPath;
-
-    /// Provide the intended starting path.
-    fn starting_from(self, from: VecDeque<usize>) -> Self::WithPath;
-}
-
 /// Find a given node, by DFS or BFS.
 #[derive(Clone, Debug)]
 pub struct FindVisitor<T, const DFS: bool> {
     reference: T,
-    from: VecDeque<usize>,
 }
 
 impl<T, const DFS: bool> FindVisitor<T, DFS> {
@@ -38,17 +23,8 @@ impl<T, const DFS: bool> FindVisitor<T, DFS> {
         N: Node<Type<'a> = T>,
         T: From<&'a N>,
     {
-        Self::new_from(target, VecDeque::new())
-    }
-
-    fn new_from<'a, N>(target: &'a N, from: VecDeque<usize>) -> Self
-    where
-        N: Node<Type<'a> = T>,
-        T: From<&'a N>,
-    {
         Self {
             reference: target.opaque(),
-            from,
         }
     }
 }
@@ -62,30 +38,10 @@ impl<T> FindVisitor<T, true> {
     {
         Self::new(target)
     }
-
-    /// Search for a node by DFS, starting from a given position.
-    pub fn dfs_from<'a, N>(target: &'a N, from: VecDeque<usize>) -> Self
-    where
-        N: Node<Type<'a> = T>,
-        T: From<&'a N>,
-    {
-        Self::new_from(target, from)
-    }
-}
-
-impl<T> StartingFrom for FindVisitor<T, true> {
-    type WithPath = Self;
-
-    fn starting_from(self, from: VecDeque<usize>) -> Self::WithPath {
-        Self::WithPath {
-            reference: self.reference,
-            from,
-        }
-    }
 }
 
 impl<T> FindVisitor<T, false> {
-    /// Search for a node by BFS. A `_from` variant is not provided at this time.
+    /// Search for a node by BFS.
     pub fn bfs<'a, N>(target: &'a N) -> Self
     where
         N: Node<Type<'a> = T>,
@@ -103,7 +59,7 @@ where
     type Break = VecDeque<usize>;
     type Error = Infallible;
 
-    fn visit<'program, N>(mut self, node: &'program N, idx: usize) -> VisitResult<Self, T>
+    fn visit<'program, N>(self, node: &'program N, idx: usize) -> VisitResult<Self, T>
     where
         N: Node<Type<'program> = T>,
         T: From<&'program N> + AsNodeRef<N>,
@@ -114,10 +70,7 @@ where
             path.push_front(idx);
             Ok(ControlFlow::Break(path))
         } else {
-            match {
-                let from = self.from.pop_front().unwrap_or(0);
-                opaque.visit_each_from(self, from)
-            }? {
+            match opaque.visit_each(self)? {
                 ControlFlow::Break(mut path) => {
                     path.push_front(idx);
                     Ok(ControlFlow::Break(path))
@@ -212,25 +165,11 @@ where
 pub struct Advance<const FORWARD: bool, const REF: bool> {
     count: usize,
     target: usize,
-    from: VecDeque<usize>,
 }
 
 impl<const FORWARD: bool, const REF: bool> Advance<FORWARD, REF> {
     fn new(target: usize) -> Self {
-        Self {
-            count: 0,
-            target,
-            from: VecDeque::new(),
-        }
-    }
-}
-
-impl<const FORWARD: bool, const REF: bool> StartingFrom for Advance<FORWARD, REF> {
-    type WithPath = Self;
-
-    fn starting_from(mut self, from: VecDeque<usize>) -> Self::WithPath {
-        self.from = from;
-        self
+        Self { count: 0, target }
     }
 }
 
@@ -275,13 +214,7 @@ where
         N: Node<Type<'program> = T>,
         T: From<&'program N> + AsNodeRef<N>,
     {
-        let mut traversal = if let Some(starting_at) = self.from.pop_front() {
-            if FORWARD {
-                node.opaque().visit_each_from(self, starting_at)
-            } else {
-                node.opaque().visit_each_reverse_from(self, starting_at)
-            }
-        } else if self.count == self.target {
+        let mut traversal = if self.count == self.target {
             Ok(ControlFlow::Break(VecDeque::new()))
         } else {
             self.count += 1;
@@ -311,13 +244,7 @@ where
         N: Node<Type<'program> = T>,
         T: From<&'program N> + AsNodeRef<N>,
     {
-        if let Some(starting_at) = self.from.pop_front() {
-            if FORWARD {
-                node.opaque().visit_each_from(self, starting_at)
-            } else {
-                node.opaque().visit_each_reverse_from(self, starting_at)
-            }
-        } else if self.count == self.target {
+        if self.count == self.target {
             Ok(ControlFlow::Break(node.opaque()))
         } else {
             self.count += 1;
@@ -347,14 +274,7 @@ where
         N: Node<TypeMut<'program> = T>,
         T: From<&'program mut N> + AsNodeMut<N>,
     {
-        if let Some(starting_at) = self.from.pop_front() {
-            if FORWARD {
-                node.opaque_mut().visit_each_mut_from(self, starting_at)
-            } else {
-                node.opaque_mut()
-                    .visit_each_reverse_mut_from(self, starting_at)
-            }
-        } else if self.count == self.target {
+        if self.count == self.target {
             Ok(ControlFlow::Break(node.opaque_mut()))
         } else {
             self.count += 1;
@@ -369,19 +289,19 @@ where
 
 /// A visitor which goes to a provided path and fetches the node.
 #[derive(Debug, Default)]
-pub struct GoToVisitor {
-    to: VecDeque<usize>,
+pub struct GoToVisitor<'a> {
+    to: &'a [usize],
 }
 
-impl GoToVisitor {
+impl<'a> GoToVisitor<'a> {
     /// Create the visitor with the intended destination (not including the start node; see
-    /// [`StartingFrom`] and [`crate::visitor_chain`] for details.
-    pub fn new(to: VecDeque<usize>) -> Self {
+    /// [`VisitFrom`] and [`crate::visitor_chain`] for details.
+    pub fn new(to: &'a [usize]) -> Self {
         Self { to }
     }
 }
 
-impl<T> Visitor<T> for GoToVisitor
+impl<'a, T> Visitor<T> for GoToVisitor<'a>
 where
     T: VisitableChildren<T>,
 {
@@ -389,14 +309,14 @@ where
     type Break = T;
     type Error = InvalidPath;
 
-    fn visit<'program, N>(mut self, node: &'program N, _: usize) -> VisitResult<Self, T>
+    fn visit<'program, N>(self, node: &'program N, _: usize) -> VisitResult<Self, T>
     where
         N: Node<Type<'program> = T>,
         T: From<&'program N> + AsNodeRef<N>,
     {
-        if let Some(next) = self.to.pop_front() {
+        if let Some((&next, to)) = self.to.split_first() {
             node.opaque()
-                .visit_nth(self, next)
+                .visit_nth(Self { to }, next)
                 .map_err(|_| InvalidPath)?
         } else {
             Ok(ControlFlow::Break(node.opaque()))
@@ -404,7 +324,7 @@ where
     }
 }
 
-impl<T> VisitorMut<T> for GoToVisitor
+impl<T> VisitorMut<T> for GoToVisitor<'_>
 where
     T: VisitableChildrenMut<T>,
 {
@@ -412,14 +332,14 @@ where
     type Break = T;
     type Error = InvalidPath;
 
-    fn visit_mut<'program, N>(mut self, node: &'program mut N, _: usize) -> VisitMutResult<Self, T>
+    fn visit_mut<'program, N>(self, node: &'program mut N, _: usize) -> VisitMutResult<Self, T>
     where
         N: Node<TypeMut<'program> = T>,
         T: From<&'program mut N> + AsNodeMut<N>,
     {
-        if let Some(next) = self.to.pop_front() {
+        if let Some((&next, to)) = self.to.split_first() {
             node.opaque_mut()
-                .visit_nth_mut(self, next)
+                .visit_nth_mut(Self { to }, next)
                 .map_err(|_| InvalidPath)?
         } else {
             Ok(ControlFlow::Break(node.opaque_mut()))
@@ -428,22 +348,22 @@ where
 }
 
 /// Helper trait to use [`GoToVisitor`] as a method on the derivation tree from the provided node.
-pub trait GoTo {
+pub trait GoTo<'b> {
     /// The type which is returned (see [`VisitWith`] for why this is necessary).
     type Value;
 
     /// Perform the traversal!
-    fn go_to(self, idx: usize, path: VecDeque<usize>) -> Result<Self::Value, InvalidPath>;
+    fn go_to(self, idx: usize, path: &'b [usize]) -> Result<Self::Value, InvalidPath>;
 }
 
-impl<'a, N> GoTo for &'a N
+impl<'a, 'b, N> GoTo<'b> for &'a N
 where
     N: Node + 'a,
-    GoToVisitor: Visitor<N::Type<'a>, Break = N::Type<'a>, Error = InvalidPath>,
+    GoToVisitor<'b>: Visitor<N::Type<'a>, Break = N::Type<'a>, Error = InvalidPath>,
 {
     type Value = N::Type<'a>;
 
-    fn go_to(self, idx: usize, path: VecDeque<usize>) -> Result<N::Type<'a>, InvalidPath> {
+    fn go_to(self, idx: usize, path: &'b [usize]) -> Result<N::Type<'a>, InvalidPath> {
         Ok(GoToVisitor::new(path)
             .visit(self, idx)?
             .break_value()
@@ -453,23 +373,23 @@ where
 
 /// Helper trait to use [`GoToVisitor`] as a method on the derivation tree from the provided node
 /// while accessing the resulting node mutably.
-pub trait GoToMut {
+pub trait GoToMut<'b> {
     /// The type which is returned (see [`super::VisitWithMut`] for why this is necessary).
     type Value;
 
     /// Perform the traversal!
-    fn go_to_mut(self, idx: usize, path: VecDeque<usize>) -> Result<Self::Value, InvalidPath>;
+    fn go_to_mut(self, idx: usize, path: &'b [usize]) -> Result<Self::Value, InvalidPath>;
 }
 
-impl<'a, N> GoToMut for &'a mut N
+impl<'a, 'b, N> GoToMut<'b> for &'a mut N
 where
     N: Node + 'a,
-    GoToVisitor: VisitorMut<N::TypeMut<'a>, Break = N::TypeMut<'a>, Error = InvalidPath>,
+    GoToVisitor<'b>: VisitorMut<N::TypeMut<'a>, Break = N::TypeMut<'a>, Error = InvalidPath>,
     N::TypeMut<'a>: From<&'a mut N> + AsNodeMut<N>,
 {
     type Value = N::TypeMut<'a>;
 
-    fn go_to_mut(self, idx: usize, path: VecDeque<usize>) -> Result<N::TypeMut<'a>, InvalidPath> {
+    fn go_to_mut(self, idx: usize, path: &'b [usize]) -> Result<N::TypeMut<'a>, InvalidPath> {
         Ok(GoToVisitor::new(path)
             .visit_mut(self, idx)?
             .break_value()
@@ -481,30 +401,17 @@ where
 #[derive(Debug, Default)]
 pub struct NodeCountVisitor {
     count: usize,
-    from: VecDeque<usize>,
 }
 
 impl NodeCountVisitor {
     /// Create a new counter.
     pub fn new() -> Self {
-        Self {
-            count: 0,
-            from: VecDeque::new(),
-        }
+        Self { count: 0 }
     }
 
     /// Consume the visitor and acquire the final count.
     pub fn count(self) -> usize {
         self.count
-    }
-}
-
-impl StartingFrom for NodeCountVisitor {
-    type WithPath = Self;
-
-    fn starting_from(mut self, from: VecDeque<usize>) -> Self::WithPath {
-        self.from = from;
-        self
     }
 }
 
@@ -516,17 +423,13 @@ where
     type Break = Infallible;
     type Error = InvalidPath;
 
-    fn visit<'program, N>(mut self, node: &'program N, idx: usize) -> VisitResult<Self, T>
+    fn visit<'program, N>(mut self, node: &'program N, _: usize) -> VisitResult<Self, T>
     where
         N: Node<Type<'program> = T>,
         T: From<&'program N> + AsNodeRef<N>,
     {
         self.count += 1;
-        GoToVisitor::new(core::mem::take(&mut self.from))
-            .visit(node, idx)?
-            .break_value()
-            .unwrap()
-            .visit_each(self)
+        node.opaque().visit_each(self)
     }
 }
 
@@ -577,30 +480,17 @@ where
 #[derive(Debug, Default)]
 pub struct ByteCountVisitor {
     count: usize,
-    from: VecDeque<usize>,
 }
 
 impl ByteCountVisitor {
     /// Create a new counter.
     pub fn new() -> Self {
-        Self {
-            count: 0,
-            from: VecDeque::new(),
-        }
+        Self { count: 0 }
     }
 
     /// Consume the visitor and acquire the final count.
     pub fn count(self) -> usize {
         self.count
-    }
-}
-
-impl StartingFrom for ByteCountVisitor {
-    type WithPath = Self;
-
-    fn starting_from(mut self, from: VecDeque<usize>) -> Self::WithPath {
-        self.from = from;
-        self
     }
 }
 
@@ -612,17 +502,13 @@ where
     type Break = Infallible;
     type Error = InvalidPath;
 
-    fn visit<'program, N>(mut self, node: &'program N, idx: usize) -> VisitResult<Self, T>
+    fn visit<'program, N>(mut self, node: &'program N, _: usize) -> VisitResult<Self, T>
     where
         N: Node<Type<'program> = T>,
         T: From<&'program N> + AsNodeRef<N>,
     {
         self.count += 1;
-        GoToVisitor::new(core::mem::take(&mut self.from))
-            .visit(node, idx)?
-            .break_value()
-            .unwrap()
-            .visit_each(self)
+        node.opaque().visit_each(self)
     }
 }
 
@@ -667,5 +553,83 @@ where
             .continue_value()
             .unwrap()
             .count()
+    }
+}
+
+/// Helper trait to start a visitor at a given traversal prefix (i.e. from a given path onward by
+/// pre-order traversal)
+pub trait StartingFrom: Sized {
+    /// Start this visitor at a given path
+    fn starting_from(self, path: &[usize]) -> VisitFrom<'_, Self>;
+}
+
+impl<V> StartingFrom for V {
+    fn starting_from(self, from: &[usize]) -> VisitFrom<'_, Self> {
+        VisitFrom {
+            from,
+            visitor: self,
+        }
+    }
+}
+
+/// Visitor which uses another visitor only starting from a given path by pre-order traversal
+///
+/// Use with [`StartingFrom`].
+pub struct VisitFrom<'a, V> {
+    from: &'a [usize],
+    visitor: V,
+}
+
+impl<'a, V> VisitFrom<'a, V> {
+    /// Retrieve the contained visitor
+    pub fn inner(self) -> V {
+        self.visitor
+    }
+}
+
+impl<T, V> Visitor<T> for VisitFrom<'_, V>
+where
+    V: Visitor<T, Continue = V>,
+    T: VisitableChildren<T>,
+{
+    type Continue = Self;
+    type Break = V::Break;
+    type Error = V::Error;
+
+    fn visit<'program, N>(self, node: &'program N, idx: usize) -> VisitResult<Self, T>
+    where
+        N: Node<Type<'program> = T>,
+        T: From<&'program N> + AsNodeRef<N>,
+    {
+        let result = if let Some((&current, from)) = self.from.split_first() {
+            if current == idx {
+                if from.is_empty() {
+                    self.visitor.visit(node, idx)
+                } else {
+                    return node.opaque().visit_each_from(
+                        Self {
+                            from,
+                            visitor: self.visitor,
+                        },
+                        from[0],
+                    );
+                }
+            } else if current < idx {
+                self.visitor.visit(node, idx)
+            } else {
+                return Ok(ControlFlow::Continue(self)); // nothing to do
+            }
+        } else {
+            // very rare corner case: no path provided, ever
+            self.visitor.visit(node, idx)
+        };
+        match result {
+            Ok(ControlFlow::Continue(visitor)) => Ok(ControlFlow::Continue(Self {
+                from: self.from,
+                visitor,
+            })),
+            Ok(ControlFlow::Break(b)) => Ok(ControlFlow::Break(b)),
+            Err(e) => Err(e),
+        }
     }
 }

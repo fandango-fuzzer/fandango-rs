@@ -199,8 +199,11 @@ where
             } else {
                 let mut path =
                     parent_violations[sampler.sample() % parent_violations.len()].clone();
-                let front = path.pop_front().unwrap();
-                child.go_to_mut(front, path)?
+                let (&idx, path) = path
+                    .make_contiguous()
+                    .split_first()
+                    .expect("Must be non-empty");
+                child.go_to_mut(idx, path)?
             };
             if sampler.sample() % *self.crossover_rate.denom() < *self.crossover_rate.numer() {
                 let mate = &population[sampler.sample() % population.len()];

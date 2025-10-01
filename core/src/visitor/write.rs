@@ -2,39 +2,20 @@
 
 use crate::lang::FandangoNode;
 use crate::typing::{AsNodeRef, Node, Opaque};
-use crate::visitor::navigation::StartingFrom;
 use crate::visitor::{VisitResult, VisitableChildren, Visitor};
-use alloc::collections::VecDeque;
 use core::convert::Infallible;
 use core::ops::ControlFlow;
 use embedded_io as io;
 
 /// A visitor which emits the string representation of the tree.
 pub struct WriteVisitor<W> {
-    from: VecDeque<usize>,
     output: W,
 }
 
 impl<W> WriteVisitor<W> {
     /// Create a [`WriteVisitor`].
     pub fn new(output: W) -> Self {
-        Self::new_from(output, VecDeque::new())
-    }
-
-    /// Create a [`WriteVisitor`] starting at a specific point in the tree.
-    pub fn new_from(output: W, from: VecDeque<usize>) -> Self {
-        Self { output, from }
-    }
-}
-
-impl<W> StartingFrom for WriteVisitor<W> {
-    type WithPath = Self;
-
-    fn starting_from(self, from: VecDeque<usize>) -> Self::WithPath {
-        Self::WithPath {
-            from,
-            output: self.output,
-        }
+        Self { output }
     }
 }
 
@@ -64,10 +45,7 @@ where
                 self.output.write_all(s.inner())?;
                 Ok(ControlFlow::Continue(self))
             }
-            _ => {
-                let from = self.from.pop_front().unwrap_or(0);
-                node.opaque().visit_each_from(self, from)
-            }
+            _ => node.opaque().visit_each(self),
         }
     }
 }
