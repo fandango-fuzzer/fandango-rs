@@ -277,7 +277,7 @@ where
 {
     let discriminant = node.discriminant();
 
-    let mut base_choices = NodeScan::new(discriminant)
+    let base_choices = NodeScan::new(discriminant)
         .visit(base, 0)
         .unwrap()
         .continue_value()
@@ -287,8 +287,7 @@ where
         return Ok(false);
     }
 
-    let base = base_choices.swap_remove(sampler.sample() % base_choices.len());
-    let success = node.assign_from(base);
+    let success = node.assign_from(base_choices[sampler.sample() % base_choices.len()]);
     debug_assert!(success);
 
     Ok(true)

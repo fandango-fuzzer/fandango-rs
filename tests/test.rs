@@ -22,7 +22,7 @@ mod simple {
     use fandango_core::visitor::Visitor;
     use fandango_core::visitor::kpath::{KPathUpdate, KPaths};
     use fandango_core::visitor::navigation::{
-        Advance, CountNodes, CountNodesWith, FindVisitor, GoToMut,
+        Advance, CountNodes, CountNodesWith, FindVisitor, GoToMut, StartingFrom,
     };
     use fandango_core::visitor::write::WriteVisitor;
     use rand::Rng;
@@ -86,16 +86,16 @@ mod simple {
             bfs.visit(&start, 0).unwrap().break_value().unwrap()
         );
 
-        plus_path.pop_front();
-
         assert_eq!(
             "+2",
             String::from_utf8(
-                WriteVisitor::new_from(Vec::new(), plus_path.clone())
+                WriteVisitor::new(Vec::new())
+                    .starting_from(plus_path.make_contiguous())
                     .visit(&start, 0)
                     .unwrap()
                     .continue_value()
                     .unwrap()
+                    .inner()
                     .output()
             )
             .unwrap()
@@ -121,7 +121,7 @@ mod simple {
                 .visit(&start, 0)?
                 .break_value()
                 .unwrap();
-            let idx = target.pop_front().unwrap();
+            let (&idx, target) = target.make_contiguous().split_first().unwrap();
             let mut target = start.go_to_mut(idx, target)?;
             let old_count = target.count_nodes();
             target.generate_in_place(&mut rng, &mut generators, 0);
@@ -161,7 +161,7 @@ mod simple {
                 .visit(&start, 0)?
                 .break_value()
                 .unwrap();
-            let idx = target.pop_front().unwrap();
+            let (&idx, target) = target.make_contiguous().split_first().unwrap();
             let target = start.go_to_mut(idx, target)?;
             let old_count = target.count_nodes();
             let definition = target.definition();
