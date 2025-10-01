@@ -195,7 +195,7 @@ where
                     (sample, choice, global.clone())
                 },
                 |(mut value, mut choice, mut local)| {
-                    let idx = choice.pop_front().unwrap();
+                    let (&idx, choice) = choice.make_contiguous().split_first().unwrap();
                     let depth = choice.len();
                     let mut mutated = value.go_to_mut(idx, choice).unwrap();
                     mutated.generate_in_place(black_box(&mut local), &mut generator, depth);
@@ -232,7 +232,7 @@ where
                     (sample, choice, global.clone())
                 },
                 |(mut value, mut choice, mut local)| {
-                    let idx = choice.pop_front().unwrap();
+                    let (&idx, choice) = choice.make_contiguous().split_first().unwrap();
                     let depth = choice.len();
                     let mutated = value.go_to_mut(idx, choice).unwrap();
                     let mut sampler = DynamicSampler::new(
@@ -269,7 +269,8 @@ where
                     (sample, other, choice, global.clone())
                 },
                 |(mut value, base, mut choice, mut local)| {
-                    assert_eq!(choice.pop_front(), Some(0));
+                    let (&idx, choice) = choice.make_contiguous().split_first().unwrap();
+                    assert_eq!(idx, 0);
                     let mut value = value.go_to_mut(0, choice).expect("Must be a valid path");
 
                     crossover(
@@ -320,7 +321,8 @@ where
                     (sample, other, choice, global.clone())
                 },
                 |(mut value, base, mut choice, mut local)| {
-                    assert_eq!(choice.pop_front(), Some(0));
+                    let (&idx, choice) = choice.make_contiguous().split_first().unwrap();
+                    assert_eq!(idx, 0);
                     let mut value = value.go_to_mut(0, choice).expect("Must be a valid path");
 
                     crossover(&mut value, &base, &mut local)
