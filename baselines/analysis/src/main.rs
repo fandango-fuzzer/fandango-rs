@@ -134,7 +134,7 @@ const REPETITIONS: usize = 1 << 10;
 const DISTR_ATTEMPTS: u64 = 1 << 20;
 const DISTR_SEGMENTS: usize = 1 << 8;
 const CROSSOVERS: usize = 1 << 4;
-const MUTATIONS: usize = 1 << 5;
+const MUTATIONS: usize = 1 << 3;
 
 fn measure<I, F, O>(input: I, f: F) -> (Duration, O)
 where
@@ -235,7 +235,7 @@ where
     }
     let (generate, data) = regress(samples, ["size"]);
     println!(
-        "  generate: {:.2} nanosecond/node (MAE = {:.2}, {} samples)",
+        "  generate: {:.2} nanoseconds/node (MAE = {:.2}, {} samples)",
         generate.params()[0] * 1_000_000_000f64,
         (generate.predict(&data.records) - data.targets)
             .mapv(|f| f.abs())
