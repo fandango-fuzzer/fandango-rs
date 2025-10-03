@@ -1,0 +1,4 @@
+[submodule "baselines/fandango-prof"]
+	path = baselines/fandango-prof
+	url = https://github.com/fandango-fuzzer/fandango.git
+	branch = other/benchmarks-on-v1.0.0

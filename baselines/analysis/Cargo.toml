@@ -4,11 +4,21 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
+fandango = { path = "../.." }
+fandango-runtime = { path = "../../runtime" }
+
+common = { path = "../common", features = ["static_defs"] }
+csv = { path = "../csv", features = ["static_defs"] }
+rest = { path = "../rest", features = ["static_defs"] }
+scriptsizec = { path = "../scriptsizec", features = ["static_defs"] }
+xml = { path = "../xml", features = ["static_defs"] }
+
+hashbrown.workspace = true
 linfa.workspace = true
 linfa-linear.workspace = true
 ndarray.workspace = true
+rand.workspace = true
 serde = { workspace = true, features = ["derive"] }
-serde_csv.workspace = true
 serde_json.workspace = true
 
 [lints]

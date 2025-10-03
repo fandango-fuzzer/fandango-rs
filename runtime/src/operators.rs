@@ -185,12 +185,12 @@ where
 }
 
 /// Scans a set of nodes for all instances of a given discriminant.
-pub struct NodeScan<T> {
+pub struct NodeScan<T, const PATHS: bool> {
     discriminant: usize,
     matches: Vec<T>,
 }
 
-impl<T> NodeScan<T> {
+impl<T> NodeScan<T, false> {
     /// Create a new scanner for the given node.
     pub fn new(discriminant: usize) -> Self {
         Self {
@@ -205,7 +205,23 @@ impl<T> NodeScan<T> {
     }
 }
 
-impl<T> Visitor<T> for NodeScan<T>
+impl NodeScan<Vec<usize>, true> {
+    /// Create a new scanner for the given node.
+    pub fn new_paths(discriminant: usize) -> Self {
+        Self {
+            discriminant,
+            matches: Vec::new(),
+        }
+    }
+
+    /// Acquire the paths resulting from the search.
+    pub fn matches(mut self) -> Vec<Vec<usize>> {
+        self.matches.truncate(self.matches.len().saturating_sub(1));
+        self.matches
+    }
+}
+
+impl<T> Visitor<T> for NodeScan<T, false>
 where
     T: VisitableChildren<T>,
 {
@@ -222,6 +238,41 @@ where
             self.matches.push(node.opaque());
         }
         node.opaque().visit_each(self)
+    }
+}
+
+impl<T> Visitor<T> for NodeScan<Vec<usize>, true>
+where
+    T: VisitableChildren<T>,
+{
+    type Continue = Self;
+    type Break = Infallible;
+    type Error = Infallible;
+
+    fn visit<'program, N>(mut self, node: &'program N, idx: usize) -> VisitResult<Self, T>
+    where
+        N: Node<Type<'program> = T>,
+        T: From<&'program N> + AsNodeRef<N>,
+    {
+        let current = if let Some(last) = self.matches.last_mut() {
+            last
+        } else {
+            self.matches.push(Vec::new());
+            &mut self.matches[0]
+        };
+        current.push(idx);
+        if node.discriminant() == self.discriminant {
+            let matching = current.clone();
+            self.matches.push(matching);
+        }
+        self = node
+            .opaque()
+            .visit_each(self)
+            .unwrap()
+            .continue_value()
+            .unwrap();
+        self.matches.last_mut().unwrap().pop();
+        Ok(ControlFlow::Continue(self))
     }
 }
 
