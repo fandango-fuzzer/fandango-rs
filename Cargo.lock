@@ -21,12 +21,20 @@ checksum = "683d7910e743518b0e34f1186f92494becacb047c7b6bf616c96772180fef923"
 name = "analysis"
 version = "0.1.0"
 dependencies = [
- "csv 1.3.1",
+ "common",
+ "csv",
+ "fandango",
+ "fandango-runtime",
+ "hashbrown 0.16.0",
  "linfa",
  "linfa-linear",
  "ndarray",
+ "rand 0.9.2",
+ "rest",
+ "scriptsizec",
  "serde",
  "serde_json",
+ "xml",
 ]
 
 [[package]]
@@ -101,7 +109,7 @@ dependencies = [
  "clang",
  "common",
  "criterion",
- "csv 0.0.0",
+ "csv",
  "fandango",
  "fandango-runtime",
  "hashbrown 0.16.0",
@@ -303,27 +311,6 @@ dependencies = [
  "fandango",
  "fandango-runtime",
  "fandango-targets",
-]
-
-[[package]]
-name = "csv"
-version = "1.3.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "acdc4883a9c96732e4733212c01447ebd805833b7275a73ca3ee080fd77afdaf"
-dependencies = [
- "csv-core",
- "itoa",
- "ryu",
- "serde",
-]
-
-[[package]]
-name = "csv-core"
-version = "0.1.12"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7d02f3b0da4c6504f86e9cd789d8dbafab48c2321be74e9987593de5a894d93d"
-dependencies = [
- "memchr",
 ]
 
 [[package]]
