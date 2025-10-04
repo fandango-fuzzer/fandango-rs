@@ -1,6 +1,7 @@
 #!/bin/bash
 
 set -e
+set -m
 
 mkdir profiling-results
 RESULTS=$(realpath profiling-results)
@@ -19,13 +20,12 @@ else
   . .venv/bin/activate
 fi
 
-# begin profiling
 for trial in $(seq 1 5); do
   for target in {csv,rest,scriptsizec,xml}; do
     echo "Beginning trial ${trial} for subject ${target}"
     rm -f profile.json
     mkdir -p "${RESULTS}/${target}/${trial}"
-    env PYTHONPATH=. python "evaluation/vs_isla/${target}_evaluation/${target}_evaluation.py" |& tee "${RESULTS}/${target}/${trial}/experiment_output.txt"
+    (time taskset -c 0 env PYTHONPATH=. python "evaluation/vs_isla/${target}_evaluation/${target}_evaluation.py") |& tee "${RESULTS}/${target}/${trial}/experiment_output.txt"
     mv profile.json "${RESULTS}/${target}/${trial}/profile.json"
   done
 done
