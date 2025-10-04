@@ -18,6 +18,7 @@ linfa.workspace = true
 linfa-linear.workspace = true
 ndarray.workspace = true
 rand.workspace = true
+regex.workspace = true
 serde = { workspace = true, features = ["derive"] }
 serde_json.workspace = true
 
