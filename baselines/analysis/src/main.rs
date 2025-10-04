@@ -16,6 +16,7 @@ use linfa_linear::FittedLinearRegression;
 use ndarray::{Array, Array2, ArrayBase, FixedInitializer, Ix1, Ix2, OwnedRepr};
 use rand::rngs::StdRng;
 use rand::{RngCore, SeedableRng};
+use regex::Regex;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use std::convert::Infallible;
@@ -23,9 +24,10 @@ use std::error::Error;
 use std::fs::File;
 use std::hint::black_box;
 use std::io::{BufRead, BufReader};
-use std::iter;
 use std::ops::Div;
+use std::str::FromStr;
 use std::time::{Duration, Instant};
+use std::{fs, iter};
 
 #[derive(Serialize, Deserialize, Copy, Clone)]
 #[serde(tag = "kind")]
@@ -74,6 +76,16 @@ struct OperationModel {
     mutate: FittedLinearRegression<f64>,
 }
 
+type DataRepr = DatasetBase<ArrayBase<OwnedRepr<f64>, Ix2>, ArrayBase<OwnedRepr<f64>, Ix1>>;
+
+struct OperationData {
+    crossover: DataRepr,
+    evaluate: DataRepr,
+    fix: DataRepr,
+    generate: DataRepr,
+    mutate: DataRepr,
+}
+
 const SUBJECTS: &'static [&'static str] = &["csv", "rest", "scriptsizec", "xml"];
 
 #[derive(Default)]
@@ -104,13 +116,12 @@ where
     }
 }
 
+type ModelWithDataset = (FittedLinearRegression<f64>, DataRepr);
+
 fn regress<const DIM: usize>(
     measurements: Vec<(f64, [f64; DIM])>,
     features: [&'static str; DIM],
-) -> (
-    FittedLinearRegression<f64>,
-    DatasetBase<ArrayBase<OwnedRepr<f64>, Ix2>, ArrayBase<OwnedRepr<f64>, Ix1>>,
-)
+) -> ModelWithDataset
 where
     [f64; DIM]: FixedInitializer<Elem = f64>, // give the compiler a little help
 {
@@ -217,7 +228,7 @@ where
     println!("RS models for {subject}:");
 
     // generation
-    let mut samples = Vec::with_capacity(DISTR_SEGMENTS);
+    let mut samples = Vec::new();
     for &(size, seed) in &distributed {
         let (time, generated) = measure(StdRng::seed_from_u64(seed), |sampler| {
             B::generate(sampler, &mut generator)
@@ -246,7 +257,7 @@ where
     );
 
     // fixing
-    let mut samples = Vec::with_capacity(DISTR_SEGMENTS);
+    let mut samples = Vec::new();
     for &(size, seed) in &distributed {
         let generated = B::generate(&mut StdRng::seed_from_u64(seed), &mut generator);
         let mut local_sampler = StdSampler::seed_from_u64(0xdeadbeef);
@@ -269,7 +280,7 @@ where
     );
 
     // evaluate
-    let mut samples = Vec::with_capacity(DISTR_SEGMENTS);
+    let mut samples = Vec::new();
     for &(size, seed) in &distributed {
         let generated = B::generate(&mut StdRng::seed_from_u64(seed), &mut generator);
         let (time, _) = measure(generated, |fixed| {
@@ -290,7 +301,7 @@ where
     );
 
     // mutation
-    let mut samples = Vec::with_capacity(DISTR_SEGMENTS);
+    let mut samples = Vec::new();
     for &(size, seed) in &distributed {
         let generated = B::generate(&mut StdRng::seed_from_u64(seed), &mut generator);
         let count = generated.count_nodes();
@@ -341,7 +352,7 @@ where
     );
 
     // crossover
-    let mut samples = Vec::with_capacity(DISTR_SEGMENTS);
+    let mut samples = Vec::new();
     for &(size1, seed1) in distributed
         .chunks(distributed.len() / CROSSOVERS)
         .map(|a| a.first().unwrap())
@@ -465,8 +476,20 @@ where
 }
 
 fn main() -> Result<(), Box<dyn Error>> {
+    // regexes for extracting execution data later
+    let time_re = Regex::new(r"^user\t([0-9]+)m([0-9]+\.[0-9]+)s$").unwrap();
+    // reported isla multipliers
+    let mut isla = HashMap::new();
+    isla.extend([
+        ("csv", 1335.0),
+        ("rest", 146.0),
+        ("scriptsizec", 29.0),
+        ("xml", 183.0),
+    ]);
+
     let mut fandango_models = HashMap::new();
-    for subject in SUBJECTS {
+    let mut fandango_data = HashMap::new();
+    for &subject in SUBJECTS {
         let mut crossovers = Vec::new();
         let mut evaluates = Vec::new();
         let mut fixes = Vec::new();
@@ -525,64 +548,65 @@ fn main() -> Result<(), Box<dyn Error>> {
         }
 
         println!("Fandango models for {subject}:");
-        let (generate, data) = regress(generates, ["size"]);
+        let (generate, generate_data) = regress(generates, ["size"]);
         println!(
             "  generate: {:.2} microseconds/node (MAE = {:.2}, {} samples)",
             generate.params()[0] * 1_000_000f64,
-            (generate.predict(&data.records) - data.targets)
+            (generate.predict(&generate_data.records) - generate_data.targets.view())
                 .mapv(|f| f.abs())
                 .mean()
                 .unwrap_or(0.0)
                 * 1_000_000f64,
-            data.records.len(),
+            generate_data.records.len(),
         );
-        let (fix, data) = regress(fixes, ["size"]);
+        let (fix, fix_data) = regress(fixes, ["size"]);
         println!(
             "  fix: {:.2} microseconds/node (MAE = {:.2}, {} samples)",
             fix.params()[0] * 1_000_000f64,
-            (fix.predict(&data.records) - data.targets)
+            (fix.predict(&fix_data.records) - fix_data.targets.view())
                 .mapv(|f| f.abs())
                 .mean()
                 .unwrap_or(0.0)
                 * 1_000_000f64,
-            data.records.len(),
+            fix_data.records.len(),
         );
-        let (evaluate, data) = regress(evaluates, ["size"]);
+        let (evaluate, evaluate_data) = regress(evaluates, ["size"]);
         println!(
             "  evaluate: {:.2} microseconds/node (MAE = {:.2}, {} samples)",
             evaluate.params()[0] * 1_000_000f64,
-            (evaluate.predict(&data.records) - data.targets)
+            (evaluate.predict(&evaluate_data.records) - evaluate_data.targets.view())
                 .mapv(|f| f.abs())
                 .mean()
                 .unwrap_or(0.0)
                 * 1_000_000f64,
-            data.records.len(),
+            evaluate_data.records.len(),
         );
-        let (mutate, data) = regress(mutates, ["size", "mutated"]);
+        let (mutate, mutate_data) = regress(mutates, ["size", "mutated"]);
         println!(
             "  mutate: {:.2} microseconds/node + {:.2} microseconds/node generated (MAE = {:.2}, {} samples)",
             mutate.params()[0] * 1_000_000f64,
             mutate.params()[1] * 1_000_000f64,
-            (mutate.predict(&data.records) - data.targets)
+            (mutate.predict(&mutate_data.records) - mutate_data.targets.view())
                 .mapv(|f| f.abs())
                 .mean()
                 .unwrap_or(0.0)
                 * 1_000_000f64,
-            data.records.len(),
+            mutate_data.records.len(),
         );
-        let (crossover, data) = regress(crossovers, ["parent1", "parent2", "child1", "child2"]);
+        let (crossover, crossover_data) =
+            regress(crossovers, ["parent1", "parent2", "child1", "child2"]);
         println!(
             "  crossover: {:.2} microseconds/node of parent 1 + {:.2} microseconds/node of parent 2 + {:.2} microseconds/node of child 1 + {:.2} microseconds/node of child 2 (MAE = {:.2}, {} samples)",
             crossover.params()[0] * 1_000_000f64,
             crossover.params()[1] * 1_000_000f64,
             crossover.params()[2] * 1_000_000f64,
             crossover.params()[3] * 1_000_000f64,
-            (crossover.predict(&data.records) - data.targets)
+            (crossover.predict(&crossover_data.records) - crossover_data.targets.view())
                 .mapv(|f| f.abs())
                 .mean()
                 .unwrap_or(0.0)
                 * 1_000_000f64,
-            data.records.len(),
+            crossover_data.records.len(),
         );
         fandango_models.insert(
             subject,
@@ -592,6 +616,16 @@ fn main() -> Result<(), Box<dyn Error>> {
                 fix,
                 generate,
                 mutate,
+            },
+        );
+        fandango_data.insert(
+            subject,
+            OperationData {
+                crossover: crossover_data,
+                evaluate: evaluate_data,
+                fix: fix_data,
+                generate: generate_data,
+                mutate: mutate_data,
             },
         );
     }
@@ -604,6 +638,45 @@ fn main() -> Result<(), Box<dyn Error>> {
         perform_benchmark::<scriptsizec::Benchmark>("scriptsizec"),
     );
     rs_models.insert("xml", perform_benchmark::<xml::Benchmark>("xml"));
+
+    for subject in ["csv", "rest", "scriptsizec", "xml"] {
+        let mut time_elapsed = 0f64;
+        for trial in 1..=5 {
+            let experiment_output = fs::read_to_string(format!(
+                "baselines/profiling-results/{subject}/{trial}/experiment_output.txt"
+            ))?;
+
+            let time_captures = time_re.captures(&experiment_output).unwrap();
+            time_elapsed += (usize::from_str(time_captures.get(1).unwrap().as_str()).unwrap() * 60)
+                as f64
+                + f64::from_str(time_captures.get(2).unwrap().as_str()).unwrap();
+        }
+
+        let original_time = time_elapsed;
+        let data = fandango_data.get(subject).unwrap();
+        let modeled = rs_models.get(subject).unwrap();
+
+        let mut apply_model = |data: &DataRepr, model: &FittedLinearRegression<f64>| {
+            let original_expended = data.targets.sum();
+            let predicted_expended = model.predict(&data.records).sum();
+            time_elapsed = time_elapsed + predicted_expended - original_expended;
+        };
+
+        apply_model(&data.generate, &modeled.generate);
+        apply_model(&data.fix, &modeled.fix);
+        apply_model(&data.evaluate, &modeled.evaluate);
+        apply_model(&data.mutate, &modeled.mutate);
+        apply_model(&data.crossover, &modeled.crossover);
+
+        let duration_multiplier = (60 * 60) as f64 / original_time; // scale to one hour
+        let scaled_time = time_elapsed * duration_multiplier;
+        let computed_isla = (60 * 60) as f64 * *isla.get(subject).unwrap();
+
+        println!(
+            "{scaled_time} seconds => 1 hour => {} days",
+            computed_isla / (60 * 60 * 24) as f64
+        );
+    }
 
     Ok(())
 }
