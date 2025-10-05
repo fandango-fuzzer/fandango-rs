@@ -15,9 +15,9 @@ pub struct OperationModel {
     /// The crossover operation model
     pub crossover: FittedLinearRegression<f64>,
     /// The evaluation (check) operation model
-    pub evaluate: FittedLinearRegression<f64>,
+    pub evaluate: Option<FittedLinearRegression<f64>>,
     /// The fix operation model
-    pub fix: FittedLinearRegression<f64>,
+    pub fix: Option<FittedLinearRegression<f64>>,
     /// The generate operation model
     pub generate: FittedLinearRegression<f64>,
     /// The mutate operation model
