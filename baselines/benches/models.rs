@@ -397,7 +397,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     );
     rs_models.insert("xml", perform_benchmark::<xml::Benchmark>("xml"));
 
-    let output = File::open("profiling-results/rs-models.json")?;
+    let output = File::create("profiling-results/rs-models.json")?;
     serde_json::to_writer_pretty(output, &rs_models)?;
 
     Ok(())
