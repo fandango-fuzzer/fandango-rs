@@ -10,9 +10,12 @@ fandango-runtime = { path = "../runtime" }
 
 common = { path = "common" }
 
-criterion.workspace = true
-hashbrown.workspace = true
+hashbrown = { workspace = true, features = ["serde"] }
+linfa.workspace = true
+linfa-linear = { workspace = true, features = ["serde"] }
+ndarray.workspace = true
 rand.workspace = true
+serde = { workspace = true, features = ["derive"] }
 
 [dev-dependencies]
 csv = { path = "csv", features = ["static_defs"] }
@@ -20,9 +23,17 @@ rest = { path = "rest", features = ["static_defs"] }
 scriptsizec = { path = "scriptsizec", features = ["static_defs"] }
 xml = { path = "xml", features = ["static_defs"] }
 
+criterion.workspace = true
+serde_json.workspace = true
+
 [[bench]]
-name = "baselines"
-path = "benches/baselines.rs"
+name = "criterion"
+path = "benches/criterion.rs"
+harness = false
+
+[[bench]]
+name = "models"
+path = "benches/models.rs"
 harness = false
 
 [lints]
