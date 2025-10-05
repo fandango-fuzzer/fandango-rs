@@ -29,3 +29,17 @@ for trial in $(seq 1 5); do
     mv profile.json "${RESULTS}/${target}/${trial}/profile.json"
   done
 done
+
+cd ..
+
+cargo build -p baselines --profile bench --bench models
+taskset -c 0 cargo bench -p baselines --profile bench --bench models
+
+RUSTFLAGS=--cfg=no_opt_indirect cargo build -p baselines --profile bench --bench models
+RUSTFLAGS=--cfg=no_opt_indirect taskset -c 0 cargo bench -p baselines --profile bench --bench models -- noopt-indirect
+
+cargo build -p baselines --profile bench-noopt --bench models
+taskset -c 0 cargo bench -p baselines --profile bench-noopt --bench models -- noopt
+
+cd ..
+cargo run -p analysis --release

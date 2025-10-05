@@ -22,11 +22,8 @@ name = "analysis"
 version = "0.1.0"
 dependencies = [
  "baselines",
- "fandango",
  "hashbrown 0.16.0",
  "linfa",
- "linfa-linear",
- "regex",
  "serde",
  "serde_json",
 ]
