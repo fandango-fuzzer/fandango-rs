@@ -3,11 +3,8 @@
 use baselines::{DataRepr, OperationModel, regress};
 use hashbrown::HashMap;
 use linfa::traits::Predict;
-use linfa_linear::FittedLinearRegression;
-use regex::Regex;
 use serde::{Deserialize, Serialize};
 use std::error::Error;
-use std::fs;
 use std::fs::File;
 use std::io::{BufRead, BufReader};
 use std::str::FromStr;
@@ -60,19 +57,9 @@ struct Mutation {
 }
 
 const SUBJECTS: &[&str] = &["csv", "rest", "scriptsizec", "xml"];
+const PROPER_NAMES: &[&str] = &["CSV", "REST", "ScriptSizeC", "XML"];
 
 fn main() -> Result<(), Box<dyn Error>> {
-    // regexes for extracting execution data later
-    let time_re = Regex::new(r"^user\s+([0-9]+)m([0-9]+\.[0-9]+)s$").unwrap();
-    // reported isla multipliers
-    let mut isla = HashMap::new();
-    isla.extend([
-        ("csv", 1335.0),
-        ("rest", 146.0),
-        ("scriptsizec", 29.0),
-        ("xml", 183.0),
-    ]);
-
     let mut fandango_models = HashMap::new();
     let mut fandango_data = HashMap::new();
     for &subject in SUBJECTS {
@@ -218,45 +205,72 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     let rs_models: HashMap<String, OperationModel> =
         serde_json::from_reader(File::open("baselines/profiling-results/rs-models.json")?)?;
+    // let rs_models_noopt: HashMap<String, OperationModel> = serde_json::from_reader(File::open(
+    //     "baselines/profiling-results/rs-models-noopt.json",
+    // )?)?;
+    // let rs_models_noopt_indirect: HashMap<String, OperationModel> = serde_json::from_reader(
+    //     File::open("baselines/profiling-results/rs-models-noopt-indirect.json")?,
+    // )?;
 
-    for subject in ["csv", "rest", "scriptsizec", "xml"] {
-        let mut time_elapsed = 0f64;
-        for trial in 1..=5 {
-            let experiment_output = fs::read_to_string(format!(
-                "baselines/profiling-results/{subject}/{trial}/experiment_output.txt"
-            ))?;
-
-            let time_captures = time_re.captures(&experiment_output).unwrap();
-            time_elapsed += (usize::from_str(time_captures.get(1).unwrap().as_str()).unwrap() * 60)
-                as f64
-                + f64::from_str(time_captures.get(2).unwrap().as_str()).unwrap();
-        }
-
-        let original_time = time_elapsed;
-        let data = fandango_data.get(subject).unwrap();
-        let modeled = rs_models.get(subject).unwrap();
-
-        let mut apply_model = |data: &DataRepr, model: &FittedLinearRegression<f64>| {
-            let original_expended = data.targets.sum();
-            let predicted_expended = model.predict(&data.records).sum();
-            time_elapsed = time_elapsed + predicted_expended - original_expended;
-        };
-
-        apply_model(&data.generate, &modeled.generate);
-        apply_model(&data.fix, &modeled.fix);
-        apply_model(&data.evaluate, &modeled.evaluate);
-        apply_model(&data.mutate, &modeled.mutate);
-        apply_model(&data.crossover, &modeled.crossover);
-
-        let duration_multiplier = (60 * 60) as f64 / original_time; // scale to one hour
-        let scaled_time = time_elapsed * duration_multiplier;
-        let computed_isla = (60 * 60) as f64 * *isla.get(subject).unwrap();
-
+    println!("Table 1: Wall time taken to complete various operations:");
+    println!(
+        "{}",
+        r#"
+    \begin{tabularx}{\textwidth}{l*{4}{>{\raggedleft\arraybackslash}X}}
+    \toprule
+     & \multicolumn{4}{c}{\tool{} (nanoseconds)} \\
+     \cmidrule(l{0.25em}r{0.25em}){2-5}
+     & \textit{Generate} & \textit{Check} & \textit{Mutate} & \textit{Crossover} \\"#
+            .trim_matches('\n')
+    );
+    for (&subject, &name) in SUBJECTS.into_iter().zip(PROPER_NAMES) {
+        let model = rs_models.get(subject).unwrap();
         println!(
-            "{scaled_time} seconds => 1 hour => {} days",
-            computed_isla / (60 * 60 * 24) as f64
-        );
+            r"    {name} & {}$n$ & {}$n$ & {}$p$ + {}$m$ & {}$p_1$ + {}$p_2$ + {}$m_1$ + {}$m_2$ \\",
+            model.generate.params()[0] * 1_000_000_000f64,
+            model.evaluate.as_ref().unwrap().params()[0] * 1_000_000_000f64,
+            model.mutate.params()[0] * 1_000_000_000f64,
+            model.mutate.params()[1] * 1_000_000_000f64,
+            model.crossover.params()[0] * 1_000_000_000f64,
+            model.crossover.params()[1] * 1_000_000_000f64,
+            model.crossover.params()[2] * 1_000_000_000f64,
+            model.crossover.params()[3] * 1_000_000_000f64,
+        )
     }
+    println!(
+        "{}",
+        r#"
+    \midrule
+     & \multicolumn{4}{c}{\fandango{} (microseconds)} \\
+     \cmidrule(l{0.25em}r{0.25em}){2-5}
+     & \textit{Generate} & \textit{Check} & \textit{Mutate} & \textit{Crossover} \\"#
+            .trim_matches('\n')
+    );
+    for (&subject, &name) in SUBJECTS.into_iter().zip(PROPER_NAMES) {
+        let model = rs_models.get(subject).unwrap();
+        println!(
+            r"    {name} & {}$n$ & {}$n$ & {}$p$ + {}$m$ & {}$p_1$ + {}$p_2$ + {}$m_1$ + {}$m_2$ \\",
+            model.generate.params()[0] * 1_000_000_000f64,
+            model.evaluate.as_ref().unwrap().params()[0] * 1_000_000_000f64,
+            model.mutate.params()[0] * 1_000_000_000f64,
+            model.mutate.params()[1] * 1_000_000_000f64,
+            model.crossover.params()[0] * 1_000_000_000f64,
+            model.crossover.params()[1] * 1_000_000_000f64,
+            model.crossover.params()[2] * 1_000_000_000f64,
+            model.crossover.params()[3] * 1_000_000_000f64,
+        )
+    }
+    println!(
+        "{}",
+        r#"
+    \bottomrule
+    \end{tabularx}
+    \begin{tablenotes}
+        \item[1] Optimized out by compiler (\tool{}) or insufficient samples observed (\fandango{}).
+    \end{tablenotes}
+    \end{threeparttable}"#
+            .trim_matches('\n')
+    );
 
     Ok(())
 }
