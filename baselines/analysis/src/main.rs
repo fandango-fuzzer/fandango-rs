@@ -2,8 +2,11 @@
 
 use baselines::{DataRepr, OperationModel, regress};
 use hashbrown::HashMap;
+use linfa::dataset::Records;
 use linfa::traits::Predict;
+use linfa_linear::FittedLinearRegression;
 use serde::{Deserialize, Serialize};
+use std::borrow::Cow;
 use std::error::Error;
 use std::fs::File;
 use std::io::{BufRead, BufReader};
@@ -225,16 +228,23 @@ fn main() -> Result<(), Box<dyn Error>> {
     );
     for (&subject, &name) in SUBJECTS.into_iter().zip(PROPER_NAMES) {
         let model = rs_models.get(subject).unwrap();
+        let maybe_print = |model: &FittedLinearRegression<f64>, idx: usize| {
+            if model.params().iter().all(|&p| p < 0.05) {
+                Cow::Borrowed(r"\emph{n.d.}\tnote{1}")
+            } else {
+                Cow::Owned(format!("{}", model.params()[idx] * 1_000_000_000f64))
+            }
+        };
         println!(
             r"    {name} & {}$n$ & {}$n$ & {}$p$ + {}$m$ & {}$p_1$ + {}$p_2$ + {}$m_1$ + {}$m_2$ \\",
-            model.generate.params()[0] * 1_000_000_000f64,
-            model.evaluate.as_ref().unwrap().params()[0] * 1_000_000_000f64,
-            model.mutate.params()[0] * 1_000_000_000f64,
-            model.mutate.params()[1] * 1_000_000_000f64,
-            model.crossover.params()[0] * 1_000_000_000f64,
-            model.crossover.params()[1] * 1_000_000_000f64,
-            model.crossover.params()[2] * 1_000_000_000f64,
-            model.crossover.params()[3] * 1_000_000_000f64,
+            maybe_print(&model.generate, 0),
+            maybe_print(model.evaluate.as_ref().unwrap(), 0),
+            maybe_print(&model.mutate, 0),
+            maybe_print(&model.mutate, 1),
+            maybe_print(&model.crossover, 0),
+            maybe_print(&model.crossover, 1),
+            maybe_print(&model.crossover, 2),
+            maybe_print(&model.crossover, 3),
         )
     }
     println!(
@@ -247,17 +257,27 @@ fn main() -> Result<(), Box<dyn Error>> {
             .trim_matches('\n')
     );
     for (&subject, &name) in SUBJECTS.into_iter().zip(PROPER_NAMES) {
-        let model = rs_models.get(subject).unwrap();
+        let model = fandango_models.get(subject).unwrap();
+        let data = fandango_data.get(subject).unwrap();
+
+        let maybe_print = |data: &DataRepr, model: &FittedLinearRegression<f64>, idx: usize| {
+            if data.nsamples() < 25 {
+                Cow::Borrowed(r"\emph{n.d.}\tnote{1}")
+            } else {
+                Cow::Owned(format!("{}", model.params()[idx] * 1_000_000f64))
+            }
+        };
+
         println!(
             r"    {name} & {}$n$ & {}$n$ & {}$p$ + {}$m$ & {}$p_1$ + {}$p_2$ + {}$m_1$ + {}$m_2$ \\",
-            model.generate.params()[0] * 1_000_000_000f64,
-            model.evaluate.as_ref().unwrap().params()[0] * 1_000_000_000f64,
-            model.mutate.params()[0] * 1_000_000_000f64,
-            model.mutate.params()[1] * 1_000_000_000f64,
-            model.crossover.params()[0] * 1_000_000_000f64,
-            model.crossover.params()[1] * 1_000_000_000f64,
-            model.crossover.params()[2] * 1_000_000_000f64,
-            model.crossover.params()[3] * 1_000_000_000f64,
+            maybe_print(&data.generate, &model.generate, 0),
+            maybe_print(&data.evaluate, model.evaluate.as_ref().unwrap(), 0),
+            maybe_print(&data.mutate, &model.mutate, 0),
+            maybe_print(&data.mutate, &model.mutate, 1),
+            maybe_print(&data.crossover, &model.crossover, 0),
+            maybe_print(&data.crossover, &model.crossover, 1),
+            maybe_print(&data.crossover, &model.crossover, 2),
+            maybe_print(&data.crossover, &model.crossover, 3),
         )
     }
     println!(
@@ -266,7 +286,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     \bottomrule
     \end{tabularx}
     \begin{tablenotes}
-        \item[1] Optimized out by compiler (\tool{}) or insufficient samples observed (\fandango{}).
+        \item[1] Optimized out (\tool{}) or insufficient samples observed (\fandango{}).
     \end{tablenotes}
     \end{threeparttable}"#
             .trim_matches('\n')
