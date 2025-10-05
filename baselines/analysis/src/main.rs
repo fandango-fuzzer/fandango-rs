@@ -198,8 +198,8 @@ fn main() -> Result<(), Box<dyn Error>> {
             subject,
             OperationModel {
                 crossover,
-                evaluate,
-                fix,
+                evaluate: Some(evaluate),
+                fix: Some(fix),
                 generate,
                 mutate,
             },

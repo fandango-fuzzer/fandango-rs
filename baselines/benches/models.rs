@@ -1,8 +1,11 @@
 //! Benchmarking which produces models of FANDANGO operations
 
+#![expect(deprecated)]
+
 use baselines::{OperationModel, regress};
 use common::{BenchmarkSuite, StdGenerator, StdSampler};
-use fandango::generation::InPlaceGenerated;
+use fandango::dynamic::{DynamicNode, DynamicSampler};
+use fandango::generation::{Generated, InPlaceGenerated};
 use fandango::lang::FandangoNode;
 use fandango::tuple_list::{tuple_list, tuple_list_type};
 use fandango::typing::{AsNodeRef, AsStaticNode, Discriminable, Node, Opaque};
@@ -89,7 +92,7 @@ where
     )
 }
 
-fn perform_benchmark<B>(subject: &str) -> OperationModel
+fn perform_benchmark<B>(subject: &str) -> (OperationModel, OperationModel)
 where
     B: BenchmarkSuite<StdSampler, StdGenerator>,
     // boilerplate since we're doing this generically
@@ -139,6 +142,8 @@ where
 
     distributed.dedup();
 
+    let nonterminals = B::program().nonterminals();
+
     println!("RS models for {subject}:");
 
     // generation
@@ -163,6 +168,44 @@ where
         "  generate: {:.2} nanoseconds/node (MAE = {:.2}, {} samples)",
         generate.params()[0] * 1_000_000_000f64,
         (generate.predict(&data.records) - data.targets)
+            .mapv(|f| f.abs())
+            .mean()
+            .unwrap_or(0.0)
+            * 1_000_000_000f64,
+        data.records.len(),
+    );
+
+    // dynamic generation
+    let mut samples = Vec::new();
+    for &(size, seed) in &distributed {
+        let (time, generated) = measure(StdRng::seed_from_u64(seed), |sampler| {
+            DynamicNode::generate(
+                &mut DynamicSampler::new(
+                    <B::Start as AsStaticNode>::static_root(),
+                    <B::Start as AsStaticNode>::static_definition(),
+                    &nonterminals,
+                    black_box(sampler),
+                ),
+                &mut generator,
+                0,
+            )
+        });
+        assert_eq!(
+            FandangoNodeCounter::default()
+                .visit(&generated, 0)
+                .unwrap()
+                .continue_value()
+                .unwrap()
+                .count,
+            size
+        );
+        samples.push((time.as_secs_f64(), [size as f64]));
+    }
+    let (generate_dynamic, data) = regress(samples, ["size"]);
+    println!(
+        "  generate (dynamic): {:.2} nanoseconds/node (MAE = {:.2}, {} samples)",
+        generate_dynamic.params()[0] * 1_000_000_000f64,
+        (generate_dynamic.predict(&data.records) - data.targets)
             .mapv(|f| f.abs())
             .mean()
             .unwrap_or(0.0)
@@ -257,6 +300,83 @@ where
         mutate.params()[0] * 1_000_000_000f64,
         mutate.params()[1] * 1_000_000_000f64,
         (mutate.predict(&data.records) - data.targets)
+            .mapv(|f| f.abs())
+            .mean()
+            .unwrap_or(0.0)
+            * 1_000_000_000f64,
+        data.records.len(),
+    );
+
+    // dynamic mutation
+    let mut samples = Vec::new();
+    for &(size, seed) in &distributed {
+        let generated = DynamicNode::generate(
+            &mut DynamicSampler::new(
+                <B::Start as AsStaticNode>::static_root(),
+                <B::Start as AsStaticNode>::static_definition(),
+                &nonterminals,
+                &mut StdRng::seed_from_u64(seed),
+            ),
+            &mut generator,
+            0,
+        );
+        let count = generated.count_nodes();
+        let mut local_sampler = StdRng::seed_from_u64(0xdeadbeef + seed);
+        for _ in 0..MUTATIONS {
+            let choice = local_sampler.next_u64() as usize % count;
+            let mut path = Advance::forward(choice)
+                .visit(&generated, 0)
+                .unwrap()
+                .break_value()
+                .unwrap();
+            let (&idx, path) = path.make_contiguous().split_first().unwrap();
+            let (time, _) = measure(
+                (generated.clone(), local_sampler.clone()),
+                |(mutated, sampler)| {
+                    black_box(mutated)
+                        .go_to_mut(idx, black_box(path))
+                        .unwrap()
+                        .generate_in_place(
+                            &mut DynamicSampler::new(
+                                <B::Start as AsStaticNode>::static_root(),
+                                <B::Start as AsStaticNode>::static_definition(),
+                                &nonterminals,
+                                black_box(sampler),
+                            ),
+                            &mut generator,
+                            path.len(),
+                        );
+                },
+            );
+            let mut cloned = generated.clone();
+            let mutated = cloned.go_to_mut(idx, path).unwrap();
+            mutated.generate_in_place(
+                &mut DynamicSampler::new(
+                    <B::Start as AsStaticNode>::static_root(),
+                    <B::Start as AsStaticNode>::static_definition(),
+                    &nonterminals,
+                    &mut local_sampler,
+                ),
+                &mut generator,
+                path.len(),
+            );
+            let mutated_size = cloned
+                .go_to(idx, path)
+                .unwrap()
+                .visit_with(FandangoNodeCounter::default(), 0)
+                .unwrap()
+                .continue_value()
+                .unwrap()
+                .count;
+            samples.push((time.as_secs_f64(), [size as f64, mutated_size as f64]));
+        }
+    }
+    let (mutate_dynamic, data) = regress(samples, ["size", "mutated"]);
+    println!(
+        "  mutate (dynamic): {:.2} nanoseconds/node + {:.2} nanoseconds/node generated (MAE = {:.2}, {} samples)",
+        mutate_dynamic.params()[0] * 1_000_000_000f64,
+        mutate_dynamic.params()[1] * 1_000_000_000f64,
+        (mutate_dynamic.predict(&data.records) - data.targets)
             .mapv(|f| f.abs())
             .mean()
             .unwrap_or(0.0)
@@ -379,24 +499,171 @@ where
         data.records.len(),
     );
 
-    OperationModel {
-        crossover,
-        evaluate,
-        fix,
-        generate,
-        mutate,
+    // dynamic crossover
+    let mut samples = Vec::new();
+    for &(size1, seed1) in distributed
+        .chunks(distributed.len() / CROSSOVERS)
+        .map(|a| a.first().unwrap())
+    {
+        let generated1 = DynamicNode::generate(
+            &mut DynamicSampler::new(
+                <B::Start as AsStaticNode>::static_root(),
+                <B::Start as AsStaticNode>::static_definition(),
+                &nonterminals,
+                &mut StdRng::seed_from_u64(seed1),
+            ),
+            &mut generator,
+            0,
+        );
+        let count1 = generated1.count_nodes();
+        for &(size2, seed2) in distributed
+            .chunks(distributed.len() / CROSSOVERS)
+            .map(|a| a.last().unwrap())
+        {
+            let generated2 = DynamicNode::generate(
+                &mut DynamicSampler::new(
+                    <B::Start as AsStaticNode>::static_root(),
+                    <B::Start as AsStaticNode>::static_definition(),
+                    &nonterminals,
+                    &mut StdRng::seed_from_u64(seed2),
+                ),
+                &mut generator,
+                0,
+            );
+            let mut local_sampler = StdRng::seed_from_u64(0xdeadbeef + seed1);
+            for _ in 0..MUTATIONS {
+                let choice = local_sampler.next_u64() as usize % count1;
+                let mut path = Advance::forward(choice)
+                    .visit(&generated1, 0)
+                    .unwrap()
+                    .break_value()
+                    .unwrap();
+                let (&idx, path) = path.make_contiguous().split_first().unwrap();
+                let (time, completed) = measure(
+                    (
+                        generated1.clone(),
+                        generated2.clone(),
+                        local_sampler.clone(),
+                    ),
+                    |(parent1, parent2, sampler)| {
+                        let crossed1 = black_box(parent1).go_to_mut(idx, black_box(path)).unwrap();
+                        let discriminant = crossed1.discriminant();
+                        let scan = NodeScan::new_paths(discriminant)
+                            .visit(parent2, 0)
+                            .unwrap()
+                            .continue_value()
+                            .unwrap()
+                            .matches();
+                        if scan.is_empty() {
+                            return false;
+                        }
+                        let choice = scan[sampler.next_u64() as usize % scan.len()].as_slice();
+                        let (&idx, path) = choice.split_first().unwrap();
+                        let crossed2 = parent2.go_to_mut(idx, path).unwrap();
+                        let _ = crossed2
+                            .visit_with_mut(
+                                SwapVisitor::new(crossed1),
+                                path.last().copied().unwrap_or(idx),
+                            )
+                            .unwrap()
+                            .break_value()
+                            .unwrap();
+                        true
+                    },
+                );
+                if completed {
+                    let crossed1 = generated1.go_to(idx, path).unwrap();
+                    let discriminant = crossed1.discriminant();
+                    let scan = NodeScan::new_paths(discriminant)
+                        .visit(&generated2, 0)
+                        .unwrap()
+                        .continue_value()
+                        .unwrap()
+                        .matches();
+                    let choice = scan[local_sampler.next_u64() as usize % scan.len()].as_slice();
+                    let (&second_idx, second_path) = choice.split_first().unwrap();
+                    let crossed2 = generated2.go_to(second_idx, second_path).unwrap();
+
+                    let child1_size = crossed1
+                        .visit_with(
+                            FandangoNodeCounter::default(),
+                            path.last().copied().unwrap_or(second_idx),
+                        )
+                        .unwrap()
+                        .continue_value()
+                        .unwrap()
+                        .count;
+                    let child2_size = crossed2
+                        .visit_with(
+                            FandangoNodeCounter::default(),
+                            path.last().copied().unwrap_or(second_idx),
+                        )
+                        .unwrap()
+                        .continue_value()
+                        .unwrap()
+                        .count;
+
+                    samples.push((
+                        time.as_secs_f64(),
+                        [
+                            size1 as f64,
+                            size2 as f64,
+                            // these get swapped in the mutation
+                            child2_size as f64,
+                            child1_size as f64,
+                        ],
+                    ));
+                }
+            }
+        }
     }
+    let (crossover_dynamic, data) = regress(samples, ["parent1", "parent2", "child1", "child2"]);
+    println!(
+        "  crossover (dynamic): {:.2} nanoseconds/node of parent 1 + {:.2} nanoseconds/node of parent 2 + {:.2} nanoseconds/node of child 1 + {:.2} nanoseconds/node of child 2 (MAE = {:.2}, {} samples)",
+        crossover_dynamic.params()[0] * 1_000_000_000f64,
+        crossover_dynamic.params()[1] * 1_000_000_000f64,
+        crossover_dynamic.params()[2] * 1_000_000_000f64,
+        crossover_dynamic.params()[3] * 1_000_000_000f64,
+        (crossover_dynamic.predict(&data.records) - data.targets)
+            .mapv(|f| f.abs())
+            .mean()
+            .unwrap_or(0.0)
+            * 1_000_000_000f64,
+        data.records.len(),
+    );
+
+    (
+        OperationModel {
+            crossover,
+            evaluate: Some(evaluate),
+            fix: Some(fix),
+            generate,
+            mutate,
+        },
+        OperationModel {
+            crossover: crossover_dynamic,
+            generate: generate_dynamic,
+            mutate: mutate_dynamic,
+            evaluate: None,
+            fix: None,
+        },
+    )
 }
 
 fn main() -> Result<(), Box<dyn Error>> {
     let mut rs_models = HashMap::new();
-    rs_models.insert("csv", perform_benchmark::<csv::Benchmark>("csv"));
-    rs_models.insert("rest", perform_benchmark::<rest::Benchmark>("rest"));
-    rs_models.insert(
-        "scriptsizec",
-        perform_benchmark::<scriptsizec::Benchmark>("scriptsizec"),
-    );
-    rs_models.insert("xml", perform_benchmark::<xml::Benchmark>("xml"));
+    let (csv, csv_dyn) = perform_benchmark::<csv::Benchmark>("csv");
+    rs_models.insert("csv", csv);
+    rs_models.insert("csv_dyn", csv_dyn);
+    let (rest, rest_dyn) = perform_benchmark::<rest::Benchmark>("rest");
+    rs_models.insert("rest", rest);
+    rs_models.insert("rest_dyn", rest_dyn);
+    let (scriptsizec, scriptsizec_dyn) = perform_benchmark::<scriptsizec::Benchmark>("scriptsizec");
+    rs_models.insert("scriptsizec", scriptsizec);
+    rs_models.insert("scriptsizec_dyn", scriptsizec_dyn);
+    let (xml, xml_dyn) = perform_benchmark::<xml::Benchmark>("xml");
+    rs_models.insert("xml", xml);
+    rs_models.insert("xml_dyn", xml_dyn);
 
     let extension = if let Some(variant) = std::env::args().nth(1) {
         Cow::Owned(format!("-{variant}"))
