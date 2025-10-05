@@ -228,23 +228,26 @@ fn main() -> Result<(), Box<dyn Error>> {
     );
     for (&subject, &name) in SUBJECTS.into_iter().zip(PROPER_NAMES) {
         let model = rs_models.get(subject).unwrap();
-        let maybe_print = |model: &FittedLinearRegression<f64>, idx: usize| {
+        let maybe_print = |model: &FittedLinearRegression<f64>, idx: usize, suffix: &str| {
             if model.params().iter().all(|&p| p * 1_000_000_000f64 < 0.05) {
                 Cow::Borrowed(r"\emph{n.d.}\tnote{1}")
             } else {
-                Cow::Owned(format!("{:.2}", model.params()[idx] * 1_000_000_000f64))
+                Cow::Owned(format!(
+                    "{:.2}{suffix}",
+                    model.params()[idx] * 1_000_000_000f64
+                ))
             }
         };
         println!(
-            r"    {name} & {}$n$ & {}$n$ & {}$p$ + {}$m$ & {}$p_1$ + {}$p_2$ + {}$m_1$ + {}$m_2$ \\",
-            maybe_print(&model.generate, 0),
-            maybe_print(model.evaluate.as_ref().unwrap(), 0),
-            maybe_print(&model.mutate, 0),
-            maybe_print(&model.mutate, 1),
-            maybe_print(&model.crossover, 0),
-            maybe_print(&model.crossover, 1),
-            maybe_print(&model.crossover, 2),
-            maybe_print(&model.crossover, 3),
+            r"    {name} & {} & {} & {} + {} & {} + {} + {} + {} \\",
+            maybe_print(&model.generate, 0, "$n$"),
+            maybe_print(model.evaluate.as_ref().unwrap(), 0, "$n$"),
+            maybe_print(&model.mutate, 0, "$p$"),
+            maybe_print(&model.mutate, 1, "$m$"),
+            maybe_print(&model.crossover, 0, "$p_1$"),
+            maybe_print(&model.crossover, 1, "$p_2$"),
+            maybe_print(&model.crossover, 2, "$m_1$"),
+            maybe_print(&model.crossover, 3, "$m_2$"),
         )
     }
     println!(
@@ -260,24 +263,25 @@ fn main() -> Result<(), Box<dyn Error>> {
         let model = fandango_models.get(subject).unwrap();
         let data = fandango_data.get(subject).unwrap();
 
-        let maybe_print = |data: &DataRepr, model: &FittedLinearRegression<f64>, idx: usize| {
-            if data.nsamples() < 25 {
-                Cow::Borrowed(r"\emph{n.d.}\tnote{1}")
-            } else {
-                Cow::Owned(format!("{:.2}", model.params()[idx] * 1_000_000f64))
-            }
-        };
+        let maybe_print =
+            |data: &DataRepr, model: &FittedLinearRegression<f64>, idx: usize, suffix: &str| {
+                if data.nsamples() < 25 {
+                    Cow::Borrowed(r"\emph{n.d.}\tnote{1}")
+                } else {
+                    Cow::Owned(format!("{:.2}{suffix}", model.params()[idx] * 1_000_000f64))
+                }
+            };
 
         println!(
-            r"    {name} & {}$n$ & {}$n$ & {}$p$ + {}$m$ & {}$p_1$ + {}$p_2$ + {}$m_1$ + {}$m_2$ \\",
-            maybe_print(&data.generate, &model.generate, 0),
-            maybe_print(&data.evaluate, model.evaluate.as_ref().unwrap(), 0),
-            maybe_print(&data.mutate, &model.mutate, 0),
-            maybe_print(&data.mutate, &model.mutate, 1),
-            maybe_print(&data.crossover, &model.crossover, 0),
-            maybe_print(&data.crossover, &model.crossover, 1),
-            maybe_print(&data.crossover, &model.crossover, 2),
-            maybe_print(&data.crossover, &model.crossover, 3),
+            r"    {name} & {} & {} & {} + {} & {} + {} + {} + {} \\",
+            maybe_print(&data.generate, &model.generate, 0, "$n$"),
+            maybe_print(&data.evaluate, model.evaluate.as_ref().unwrap(), 0, "$n$"),
+            maybe_print(&data.mutate, &model.mutate, 0, "$p$"),
+            maybe_print(&data.mutate, &model.mutate, 1, "$m$"),
+            maybe_print(&data.crossover, &model.crossover, 0, "$p_1$"),
+            maybe_print(&data.crossover, &model.crossover, 1, "$p_2$"),
+            maybe_print(&data.crossover, &model.crossover, 2, "$m_1$"),
+            maybe_print(&data.crossover, &model.crossover, 3, "$m_2$"),
         )
     }
     println!(
@@ -287,8 +291,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     \end{tabularx}
     \begin{tablenotes}
         \item[1] Optimized out (\tool{}) or insufficient samples observed (\fandango{}).
-    \end{tablenotes}
-    \end{threeparttable}"#
+    \end{tablenotes}"#
             .trim_matches('\n')
     );
 
