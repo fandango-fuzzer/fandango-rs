@@ -14,6 +14,7 @@ use hashbrown::HashMap;
 use linfa::traits::Predict;
 use rand::prelude::StdRng;
 use rand::{RngCore, SeedableRng};
+use std::borrow::Cow;
 use std::collections::BTreeMap;
 use std::convert::Infallible;
 use std::error::Error;
@@ -397,7 +398,12 @@ fn main() -> Result<(), Box<dyn Error>> {
     );
     rs_models.insert("xml", perform_benchmark::<xml::Benchmark>("xml"));
 
-    let output = File::create("profiling-results/rs-models.json")?;
+    let extension = if let Some(variant) = std::env::args().nth(1) {
+        Cow::Owned(format!("-{variant}"))
+    } else {
+        Cow::Borrowed("")
+    };
+    let output = File::create(format!("profiling-results/rs-models{extension}.json"))?;
     serde_json::to_writer_pretty(output, &rs_models)?;
 
     Ok(())
