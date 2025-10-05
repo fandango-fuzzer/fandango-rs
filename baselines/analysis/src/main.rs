@@ -229,7 +229,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     for (&subject, &name) in SUBJECTS.into_iter().zip(PROPER_NAMES) {
         let model = rs_models.get(subject).unwrap();
         let maybe_print = |model: &FittedLinearRegression<f64>, idx: usize| {
-            if model.params().iter().all(|&p| p < 0.05) {
+            if model.params().iter().all(|&p| p * 1_000_000_000f64 < 0.05) {
                 Cow::Borrowed(r"\emph{n.d.}\tnote{1}")
             } else {
                 Cow::Owned(format!("{:.2}", model.params()[idx] * 1_000_000_000f64))
