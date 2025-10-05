@@ -236,7 +236,7 @@ fn main() -> Result<(), Box<dyn Error>> {
             }
         };
         println!(
-            r"    {name} & {}$n$ & {}$n$ & {}$p$ + {}$m$ & {}$p_1$ + {}$p_2$ + {}$m_1$ + {}$m_2$ \\",
+            r"    {name} & {:.2}$n$ & {:.2}$n$ & {:.2}$p$ + {:.2}$m$ & {:.2}$p_1$ + {:.2}$p_2$ + {:.2}$m_1$ + {:.2}$m_2$ \\",
             maybe_print(&model.generate, 0),
             maybe_print(model.evaluate.as_ref().unwrap(), 0),
             maybe_print(&model.mutate, 0),
@@ -269,7 +269,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         };
 
         println!(
-            r"    {name} & {}$n$ & {}$n$ & {}$p$ + {}$m$ & {}$p_1$ + {}$p_2$ + {}$m_1$ + {}$m_2$ \\",
+            r"    {name} & {:.2}$n$ & {:.2}$n$ & {:.2}$p$ + {:.2}$m$ & {:.2}$p_1$ + {:.2}$p_2$ + {:.2}$m_1$ + {:.2}$m_2$ \\",
             maybe_print(&data.generate, &model.generate, 0),
             maybe_print(&data.evaluate, model.evaluate.as_ref().unwrap(), 0),
             maybe_print(&data.mutate, &model.mutate, 0),
