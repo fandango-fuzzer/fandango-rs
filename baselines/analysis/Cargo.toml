@@ -8,6 +8,7 @@ baselines = { path = ".." }
 
 hashbrown = { workspace = true, features = ["serde"] }
 linfa.workspace = true
+linfa-linear.workspace = true
 serde = { workspace = true, features = ["derive"] }
 serde_json.workspace = true
 

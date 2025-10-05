@@ -24,6 +24,7 @@ dependencies = [
  "baselines",
  "hashbrown 0.16.0",
  "linfa",
+ "linfa-linear",
  "serde",
  "serde_json",
 ]
