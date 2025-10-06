@@ -287,7 +287,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         "{}",
         r#"
     \bottomrule
-    \end{tabularx}
+    \end{tabular}
     \begin{tablenotes}
         \item[1] Optimized out (\tool{}) or insufficient samples observed (\fandango{}).
     \end{tablenotes}"#
@@ -318,7 +318,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         "{}",
         r#"
     \bottomrule
-    \end{tabularx}
+    \end{tabular}
     \begin{tablenotes}
         \item[1] Optimized out.
         \item[2] Unimplemented.
@@ -376,7 +376,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         "{}",
         r#"
     \bottomrule
-    \end{tabularx}
+    \end{tabular}
     \begin{tablenotes}
         \item[1] Optimized out.
         \item[2] Unimplemented.
@@ -414,7 +414,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         "{}",
         r#"
     \bottomrule
-    \end{tabularx}
+    \end{tabular}
     \begin{tablenotes}
         \item[1] Optimized out.
     \end{tablenotes}"#
