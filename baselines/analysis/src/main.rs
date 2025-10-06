@@ -239,7 +239,7 @@ fn main() -> Result<(), Box<dyn Error>> {
                         model.params()[idx] * 1_000_000_000f64
                     ));
                 }
-                Cow::Owned(format!("${}$", collected.join(" + ")))
+                Cow::Owned(format!("${}$", collected.join(" + ").replace("+ -", "- ")))
             }
         };
         println!(
@@ -273,7 +273,7 @@ fn main() -> Result<(), Box<dyn Error>> {
                 for (idx, suffix) in suffixes.iter().enumerate() {
                     collected.push(format!("{:.2}{suffix}", model.params()[idx] * 1_000_000f64));
                 }
-                Cow::Owned(format!("${}$", collected.join(" + ")))
+                Cow::Owned(format!("${}$", collected.join(" + ").replace("+ -", "- ")))
             }
         };
         println!(
