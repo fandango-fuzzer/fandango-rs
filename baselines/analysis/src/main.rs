@@ -205,8 +205,9 @@ fn main() -> Result<(), Box<dyn Error>> {
         );
     }
 
-    let rs_models: HashMap<String, OperationModel> =
-        serde_json::from_reader(File::open("baselines/profiling-results/rs-models.json")?)?;
+    let rs_models: HashMap<String, OperationModel> = serde_json::from_reader(File::open(
+        "baselines/profiling-results/rs-models-default.json",
+    )?)?;
 
     let maybe_print_rs = |model: &FittedLinearRegression<f64>, suffixes: &[&str]| {
         if model.params().iter().all(|&p| p * 1_000_000_000f64 < 0.05) {
@@ -253,8 +254,8 @@ fn main() -> Result<(), Box<dyn Error>> {
             r"    {name} & {} & {} & {} & {} \\",
             maybe_print_rs(&model.generate, &["n"]),
             maybe_print_rs(model.evaluate.as_ref().unwrap(), &["n"]),
-            maybe_print_rs(&model.mutate, &["p", "m"]),
-            maybe_print_rs(&model.crossover, &["p_1", "p_2", "m_1", "m_2"]),
+            maybe_print_rs(&model.mutate, &["n", "m"]),
+            maybe_print_rs(&model.crossover, &["n_1", "n_2", "m_1", "m_2"]),
         )
     }
     println!(
@@ -274,11 +275,11 @@ fn main() -> Result<(), Box<dyn Error>> {
             r"    {name} & {} & {} & {} & {} \\",
             maybe_print_py(&data.generate, &model.generate, &["n"]),
             maybe_print_py(&data.evaluate, model.evaluate.as_ref().unwrap(), &["n"]),
-            maybe_print_py(&data.mutate, &model.mutate, &["p", "m"]),
+            maybe_print_py(&data.mutate, &model.mutate, &["n", "m"]),
             maybe_print_py(
                 &data.crossover,
                 &model.crossover,
-                &["p_1", "p_2", "m_1", "m_2"]
+                &["n_1", "n_2", "m_1", "m_2"]
             ),
         )
     }
@@ -309,8 +310,8 @@ fn main() -> Result<(), Box<dyn Error>> {
         println!(
             r"    {name} & {} & \emph{{n.d.}}\tnote{{2}} & {} & {} \\",
             maybe_print_rs(&model.generate, &["n"]),
-            maybe_print_rs(&model.mutate, &["p", "m"]),
-            maybe_print_rs(&model.crossover, &["p_1", "p_2", "m_1", "m_2"]),
+            maybe_print_rs(&model.mutate, &["n", "m"]),
+            maybe_print_rs(&model.crossover, &["n_1", "n_2", "m_1", "m_2"]),
         )
     }
     println!(
@@ -349,8 +350,8 @@ fn main() -> Result<(), Box<dyn Error>> {
             r"    {name} & {} & {} & {} & {} \\",
             maybe_print_rs(&model.generate, &["n"]),
             maybe_print_rs(model.evaluate.as_ref().unwrap(), &["n"]),
-            maybe_print_rs(&model.mutate, &["p", "m"]),
-            maybe_print_rs(&model.crossover, &["p_1", "p_2", "m_1", "m_2"]),
+            maybe_print_rs(&model.mutate, &["n", "m"]),
+            maybe_print_rs(&model.crossover, &["n_1", "n_2", "m_1", "m_2"]),
         )
     }
     println!(
@@ -367,8 +368,8 @@ fn main() -> Result<(), Box<dyn Error>> {
         println!(
             r"    {name} & {} & \emph{{n.d.}}\tnote{{2}} & {} & {} \\",
             maybe_print_rs(&model.generate, &["n"]),
-            maybe_print_rs(&model.mutate, &["p", "m"]),
-            maybe_print_rs(&model.crossover, &["p_1", "p_2", "m_1", "m_2"]),
+            maybe_print_rs(&model.mutate, &["n", "m"]),
+            maybe_print_rs(&model.crossover, &["n_1", "n_2", "m_1", "m_2"]),
         )
     }
     println!(
@@ -405,8 +406,8 @@ fn main() -> Result<(), Box<dyn Error>> {
             r"    {name} & {} & {} & {} & {} \\",
             maybe_print_rs(&model.generate, &["n"]),
             maybe_print_rs(model.evaluate.as_ref().unwrap(), &["n"]),
-            maybe_print_rs(&model.mutate, &["p", "m"]),
-            maybe_print_rs(&model.crossover, &["p_1", "p_2", "m_1", "m_2"]),
+            maybe_print_rs(&model.mutate, &["n", "m"]),
+            maybe_print_rs(&model.crossover, &["n_1", "n_2", "m_1", "m_2"]),
         )
     }
     println!(

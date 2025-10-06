@@ -33,7 +33,7 @@ done
 cd ..
 
 cargo build -p baselines --profile bench --bench models
-taskset -c 0 cargo bench -p baselines --profile bench --bench models
+taskset -c 0 cargo bench -p baselines --profile bench --bench models -- default
 
 RUSTFLAGS=--cfg=no_opt_indirect cargo build -p baselines --profile bench --bench models
 RUSTFLAGS=--cfg=no_opt_indirect taskset -c 0 cargo bench -p baselines --profile bench --bench models -- noopt-indirect

@@ -57,8 +57,9 @@ where
     }
 }
 
+const MAX_NODES: usize = 1 << 10;
 const WARM_UP: usize = 1 << 5;
-const REPETITIONS: usize = 1 << 10;
+const REPETITIONS: usize = 1 << 8;
 const DISTR_ATTEMPTS: u64 = 1 << 20;
 const DISTR_SEGMENTS: usize = 1 << 8;
 const CROSSOVERS: usize = 1 << 4;
@@ -88,7 +89,7 @@ where
 
     (
         elapsed.div(REPETITIONS as u32),
-        output.into_iter().next().unwrap(),
+        output.into_iter().last().unwrap(),
     )
 }
 
@@ -115,16 +116,16 @@ where
     for seed in 0..DISTR_ATTEMPTS {
         let mut rng = StdRng::seed_from_u64(seed);
         let generated = B::generate(&mut rng, &mut generator);
+        let size = FandangoNodeCounter::default()
+            .visit(&generated, 0)
+            .unwrap()
+            .continue_value()
+            .unwrap()
+            .count;
 
-        distribution.insert(
-            FandangoNodeCounter::default()
-                .visit(&generated, 0)
-                .unwrap()
-                .continue_value()
-                .unwrap()
-                .count,
-            seed,
-        );
+        if size < MAX_NODES {
+            distribution.insert(size, seed);
+        }
     }
 
     let start = *distribution.first_key_value().unwrap().0;
