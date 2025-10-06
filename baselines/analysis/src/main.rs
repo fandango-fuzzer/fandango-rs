@@ -239,7 +239,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     println!(
         "{}",
         r#"
-    \begin{tabularx}{\textwidth}{lrrrr}
+    \begin{tabular}{lrrrr}
     \toprule
      & \multicolumn{4}{c}{\tool{} (nanoseconds)} \\
      \cmidrule(l{0.25em}r{0.25em}){2-5}
@@ -299,7 +299,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     println!(
         "{}",
         r#"
-    \begin{tabularx}{\textwidth}{lrrrr}
+    \begin{tabular}{lrrrr}
     \toprule
      & \textit{Generate} & \textit{Check} & \textit{Mutate} & \textit{Crossover} \\"#
             .trim_matches('\n')
@@ -336,7 +336,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     println!(
         "{}",
         r#"
-    \begin{tabularx}{\textwidth}{lrrrr}
+    \begin{tabular}{lrrrr}
     \toprule
      & \multicolumn{4}{c}{\tool{} (static, unoptimized; nanoseconds)} \\
      \cmidrule(l{0.25em}r{0.25em}){2-5}
@@ -394,7 +394,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     println!(
         "{}",
         r#"
-    \begin{tabularx}{\textwidth}{lrrrr}
+    \begin{tabular}{lrrrr}
     \toprule
      & \textit{Generate} & \textit{Check} & \textit{Mutate} & \textit{Crossover} \\"#
             .trim_matches('\n')
