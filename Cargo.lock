@@ -366,10 +366,9 @@ version = "0.1.0"
 dependencies = [
  "either",
  "embedded-io",
+ "foldhash 0.2.0",
  "hashbrown 0.16.0",
  "mappable-rc",
- "num-integer",
- "num-traits",
  "pest",
  "pest_derive",
  "petgraph",

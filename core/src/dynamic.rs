@@ -20,7 +20,8 @@ use alloc::vec;
 use alloc::vec::Vec;
 use core::hash::BuildHasher;
 use core::ops::ControlFlow;
-use hashbrown::{DefaultHashBuilder, HashMap};
+use foldhash::fast::SeedableRandomState;
+use hashbrown::HashMap;
 
 type FandangoNode = crate::lang::FandangoNode<'static, 'static>;
 
@@ -433,13 +434,13 @@ impl AssignFrom<&'_ DynamicNode> for &'_ mut DynamicNode {
 
 impl DiscriminantLookup for &'_ DynamicNode {
     fn lookup_discriminant(node: &crate::lang::FandangoNode) -> usize {
-        DefaultHashBuilder::default().hash_one(node) as usize
+        SeedableRandomState::fixed().hash_one(node) as usize
     }
 }
 
 impl DiscriminantLookup for &'_ mut DynamicNode {
     fn lookup_discriminant(node: &crate::lang::FandangoNode) -> usize {
-        DefaultHashBuilder::default().hash_one(node) as usize
+        SeedableRandomState::fixed().hash_one(node) as usize
     }
 }
 

@@ -64,6 +64,7 @@ anyhow = { version = "1.0", default-features = false }
 criterion = { version = "0.7.0", features = ["html_reports"] }
 either = { version = "1.13", default-features = false }
 embedded-io = { version = "0.6.1", features = ["alloc"] }
+foldhash = { version = "0.2.0", default-features = false }
 hashbrown = "0.16.0"
 linfa = "0.7.1"
 linfa-linear = "0.7.1"
