@@ -10,12 +10,11 @@ use std::borrow::Cow;
 use std::error::Error;
 use std::fs::File;
 use std::io::{BufRead, BufReader};
-use std::str::FromStr;
 
 struct OperationData {
     crossover: DataRepr,
     evaluate: DataRepr,
-    fix: DataRepr,
+    // fix: DataRepr,
     generate: DataRepr,
     mutate: DataRepr,
 }
@@ -199,7 +198,7 @@ fn main() -> Result<(), Box<dyn Error>> {
             OperationData {
                 crossover: crossover_data,
                 evaluate: evaluate_data,
-                fix: fix_data,
+                // fix: fix_data,
                 generate: generate_data,
                 mutate: mutate_data,
             },
@@ -208,12 +207,33 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     let rs_models: HashMap<String, OperationModel> =
         serde_json::from_reader(File::open("baselines/profiling-results/rs-models.json")?)?;
-    // let rs_models_noopt: HashMap<String, OperationModel> = serde_json::from_reader(File::open(
-    //     "baselines/profiling-results/rs-models-noopt.json",
-    // )?)?;
-    // let rs_models_noopt_indirect: HashMap<String, OperationModel> = serde_json::from_reader(
-    //     File::open("baselines/profiling-results/rs-models-noopt-indirect.json")?,
-    // )?;
+
+    let maybe_print_rs = |model: &FittedLinearRegression<f64>, suffixes: &[&str]| {
+        if model.params().iter().all(|&p| p * 1_000_000_000f64 < 0.05) {
+            Cow::Borrowed(r"\emph{n.d.}\tnote{1}")
+        } else {
+            let mut collected = Vec::with_capacity(suffixes.len());
+            for (idx, suffix) in suffixes.iter().enumerate() {
+                collected.push(format!(
+                    "{:.2}{suffix}",
+                    model.params()[idx] * 1_000_000_000f64
+                ));
+            }
+            Cow::Owned(format!("${}$", collected.join(" + ").replace("+ -", "- ")))
+        }
+    };
+    let maybe_print_py =
+        |data: &DataRepr, model: &FittedLinearRegression<f64>, suffixes: &[&str]| {
+            if data.nsamples() < 25 {
+                Cow::Borrowed(r"\emph{n.d.}\tnote{1}")
+            } else {
+                let mut collected = Vec::with_capacity(suffixes.len());
+                for (idx, suffix) in suffixes.iter().enumerate() {
+                    collected.push(format!("{:.2}{suffix}", model.params()[idx] * 1_000_000f64));
+                }
+                Cow::Owned(format!("${}$", collected.join(" + ").replace("+ -", "- ")))
+            }
+        };
 
     println!("Table 1: Wall time taken to complete various operations:");
     println!(
@@ -228,26 +248,13 @@ fn main() -> Result<(), Box<dyn Error>> {
     );
     for (&subject, &name) in SUBJECTS.into_iter().zip(PROPER_NAMES) {
         let model = rs_models.get(subject).unwrap();
-        let maybe_print = |model: &FittedLinearRegression<f64>, suffixes: &[&str]| {
-            if model.params().iter().all(|&p| p * 1_000_000_000f64 < 0.05) {
-                Cow::Borrowed(r"\emph{n.d.}\tnote{1}")
-            } else {
-                let mut collected = Vec::with_capacity(suffixes.len());
-                for (idx, suffix) in suffixes.iter().enumerate() {
-                    collected.push(format!(
-                        "{:.2}{suffix}",
-                        model.params()[idx] * 1_000_000_000f64
-                    ));
-                }
-                Cow::Owned(format!("${}$", collected.join(" + ").replace("+ -", "- ")))
-            }
-        };
+
         println!(
             r"    {name} & {} & {} & {} & {} \\",
-            maybe_print(&model.generate, &["n"]),
-            maybe_print(model.evaluate.as_ref().unwrap(), &["n"]),
-            maybe_print(&model.mutate, &["p", "m"]),
-            maybe_print(&model.crossover, &["p_1", "p_2", "m_1", "m_2"]),
+            maybe_print_rs(&model.generate, &["n"]),
+            maybe_print_rs(model.evaluate.as_ref().unwrap(), &["n"]),
+            maybe_print_rs(&model.mutate, &["p", "m"]),
+            maybe_print_rs(&model.crossover, &["p_1", "p_2", "m_1", "m_2"]),
         )
     }
     println!(
@@ -263,25 +270,12 @@ fn main() -> Result<(), Box<dyn Error>> {
         let model = fandango_models.get(subject).unwrap();
         let data = fandango_data.get(subject).unwrap();
 
-        let maybe_print = |data: &DataRepr,
-                           model: &FittedLinearRegression<f64>,
-                           suffixes: &[&str]| {
-            if data.nsamples() < 25 {
-                Cow::Borrowed(r"\emph{n.d.}\tnote{1}")
-            } else {
-                let mut collected = Vec::with_capacity(suffixes.len());
-                for (idx, suffix) in suffixes.iter().enumerate() {
-                    collected.push(format!("{:.2}{suffix}", model.params()[idx] * 1_000_000f64));
-                }
-                Cow::Owned(format!("${}$", collected.join(" + ").replace("+ -", "- ")))
-            }
-        };
         println!(
             r"    {name} & {} & {} & {} & {} \\",
-            maybe_print(&data.generate, &model.generate, &["n"]),
-            maybe_print(&data.evaluate, model.evaluate.as_ref().unwrap(), &["n"]),
-            maybe_print(&data.mutate, &model.mutate, &["p", "m"]),
-            maybe_print(
+            maybe_print_py(&data.generate, &model.generate, &["n"]),
+            maybe_print_py(&data.evaluate, model.evaluate.as_ref().unwrap(), &["n"]),
+            maybe_print_py(&data.mutate, &model.mutate, &["p", "m"]),
+            maybe_print_py(
                 &data.crossover,
                 &model.crossover,
                 &["p_1", "p_2", "m_1", "m_2"]
@@ -295,6 +289,133 @@ fn main() -> Result<(), Box<dyn Error>> {
     \end{tabularx}
     \begin{tablenotes}
         \item[1] Optimized out (\tool{}) or insufficient samples observed (\fandango{}).
+    \end{tablenotes}"#
+            .trim_matches('\n')
+    );
+
+    // -------------
+
+    println!("Table 2: Wall time of dynamic operations:");
+    println!(
+        "{}",
+        r#"
+    \begin{tabularx}{\textwidth}{lrrrr}
+    \toprule
+     & \textit{Generate} & \textit{Check} & \textit{Mutate} & \textit{Crossover} \\"#
+            .trim_matches('\n')
+    );
+    for (&subject, &name) in SUBJECTS.into_iter().zip(PROPER_NAMES) {
+        let model = rs_models.get(&format!("{}_dyn", subject)).unwrap();
+        println!(
+            r"    {name} & {} & \emph{{n.d.}}\tnote{{2}} & {} & {} \\",
+            maybe_print_rs(&model.generate, &["n"]),
+            maybe_print_rs(&model.mutate, &["p", "m"]),
+            maybe_print_rs(&model.crossover, &["p_1", "p_2", "m_1", "m_2"]),
+        )
+    }
+    println!(
+        "{}",
+        r#"
+    \bottomrule
+    \end{tabularx}
+    \begin{tablenotes}
+        \item[1] Optimized out.
+        \item[2] Unimplemented.
+    \end{tablenotes}"#
+            .trim_matches('\n')
+    );
+    drop(rs_models);
+
+    // -------------
+
+    let rs_models_noopt: HashMap<String, OperationModel> = serde_json::from_reader(File::open(
+        "baselines/profiling-results/rs-models-noopt.json",
+    )?)?;
+
+    println!("Table 3: Wall time taken for unoptimized operations:");
+    println!(
+        "{}",
+        r#"
+    \begin{tabularx}{\textwidth}{lrrrr}
+    \toprule
+     & \multicolumn{4}{c}{\tool{} (static, unoptimized; nanoseconds)} \\
+     \cmidrule(l{0.25em}r{0.25em}){2-5}
+     & \textit{Generate} & \textit{Check} & \textit{Mutate} & \textit{Crossover} \\"#
+            .trim_matches('\n')
+    );
+    for (&subject, &name) in SUBJECTS.into_iter().zip(PROPER_NAMES) {
+        let model = rs_models_noopt.get(subject).unwrap();
+        println!(
+            r"    {name} & {} & {} & {} & {} \\",
+            maybe_print_rs(&model.generate, &["n"]),
+            maybe_print_rs(model.evaluate.as_ref().unwrap(), &["n"]),
+            maybe_print_rs(&model.mutate, &["p", "m"]),
+            maybe_print_rs(&model.crossover, &["p_1", "p_2", "m_1", "m_2"]),
+        )
+    }
+    println!(
+        "{}",
+        r#"
+    \midrule
+     & \multicolumn{4}{c}{\tool{} (dynamic, unoptimized; nanoseconds)} \\
+     \cmidrule(l{0.25em}r{0.25em}){2-5}
+     & \textit{Generate} & \textit{Check} & \textit{Mutate} & \textit{Crossover} \\"#
+            .trim_matches('\n')
+    );
+    for (&subject, &name) in SUBJECTS.into_iter().zip(PROPER_NAMES) {
+        let model = rs_models_noopt.get(&format!("{}_dyn", subject)).unwrap();
+        println!(
+            r"    {name} & {} & \emph{{n.d.}}\tnote{{2}} & {} & {} \\",
+            maybe_print_rs(&model.generate, &["n"]),
+            maybe_print_rs(&model.mutate, &["p", "m"]),
+            maybe_print_rs(&model.crossover, &["p_1", "p_2", "m_1", "m_2"]),
+        )
+    }
+    println!(
+        "{}",
+        r#"
+    \bottomrule
+    \end{tabularx}
+    \begin{tablenotes}
+        \item[1] Optimized out.
+        \item[2] Unimplemented.
+    \end{tablenotes}"#
+            .trim_matches('\n')
+    );
+    drop(rs_models_noopt);
+
+    // -------------
+
+    let rs_models_noopt_indirect: HashMap<String, OperationModel> = serde_json::from_reader(
+        File::open("baselines/profiling-results/rs-models-noopt-indirect.json")?,
+    )?;
+
+    println!("Table 4: Wall time of operations without indirection optimization:");
+    println!(
+        "{}",
+        r#"
+    \begin{tabularx}{\textwidth}{lrrrr}
+    \toprule
+     & \textit{Generate} & \textit{Check} & \textit{Mutate} & \textit{Crossover} \\"#
+            .trim_matches('\n')
+    );
+    for (&subject, &name) in SUBJECTS.into_iter().zip(PROPER_NAMES) {
+        let model = rs_models_noopt_indirect.get(subject).unwrap();
+        println!(
+            r"    {name} & {} & {} & {} & {} \\",
+            maybe_print_rs(&model.generate, &["n"]),
+            maybe_print_rs(model.evaluate.as_ref().unwrap(), &["n"]),
+            maybe_print_rs(&model.mutate, &["p", "m"]),
+            maybe_print_rs(&model.crossover, &["p_1", "p_2", "m_1", "m_2"]),
+        )
+    }
+    println!(
+        "{}",
+        r#"
+    \bottomrule
+    \end{tabularx}
+    \begin{tablenotes}
+        \item[1] Optimized out.
     \end{tablenotes}"#
             .trim_matches('\n')
     );
