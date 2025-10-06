@@ -8,7 +8,7 @@ use fandango::dynamic::{DynamicNode, DynamicSampler};
 use fandango::generation::{Generated, InPlaceGenerated};
 use fandango::lang::FandangoNode;
 use fandango::tuple_list::{tuple_list, tuple_list_type};
-use fandango::typing::{AsNodeRef, AsStaticNode, Discriminable, Node, Opaque};
+use fandango::typing::{AsNode, AsNodeRef, AsStaticNode, Discriminable, Node, Opaque};
 use fandango::visitor::assignment::SwapVisitor;
 use fandango::visitor::navigation::{Advance, CountNodes, GoTo, GoToMut};
 use fandango::visitor::{VisitResult, VisitWith, VisitWithMut, VisitableChildren, Visitor};
@@ -333,19 +333,17 @@ where
             let (time, _) = measure(
                 (generated.clone(), local_sampler.clone()),
                 |(mutated, sampler)| {
-                    black_box(mutated)
-                        .go_to_mut(idx, black_box(path))
-                        .unwrap()
-                        .generate_in_place(
-                            &mut DynamicSampler::new(
-                                <B::Start as AsStaticNode>::static_root(),
-                                <B::Start as AsStaticNode>::static_definition(),
-                                &nonterminals,
-                                black_box(sampler),
-                            ),
-                            &mut generator,
-                            path.len(),
-                        );
+                    let selected = black_box(mutated).go_to_mut(idx, black_box(path)).unwrap();
+                    selected.generate_in_place(
+                        &mut DynamicSampler::new(
+                            <B::Start as AsStaticNode>::static_root(),
+                            selected.definition(),
+                            &nonterminals,
+                            black_box(sampler),
+                        ),
+                        &mut generator,
+                        path.len(),
+                    );
                 },
             );
             let mut cloned = generated.clone();
@@ -353,7 +351,7 @@ where
             mutated.generate_in_place(
                 &mut DynamicSampler::new(
                     <B::Start as AsStaticNode>::static_root(),
-                    <B::Start as AsStaticNode>::static_definition(),
+                    mutated.definition(),
                     &nonterminals,
                     &mut local_sampler,
                 ),
