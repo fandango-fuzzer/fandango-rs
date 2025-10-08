@@ -349,6 +349,8 @@ pub fn derive_fandango_or_emit_error(
 
         Ok(quote! {
             mod #module {
+                #![allow(double_parens)]
+
                 #tokenized
 
                 #dyn_content
