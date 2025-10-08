@@ -330,7 +330,6 @@ where
     }
 }
 
-#[expect(missing_docs)]
 criterion_group!(
     benches,
     perform_benchmark::<csv::Benchmark>,

@@ -153,6 +153,7 @@ mod defs {
     }
 
     // Constraint (testing) for only one struct, at most 5 fields.
+    #[derive(Default)]
     pub struct KeepReasonableStructVisitor {
         pub structs_seen: usize,
         pub fields_seen: usize,
@@ -180,17 +181,7 @@ mod defs {
         }
     }
 
-    impl Default for KeepReasonableStructVisitor {
-        fn default() -> Self {
-            Self {
-                structs_seen: 0,
-                fields_seen: 0,
-                path: VecDeque::new(),
-                violations: Vec::new(),
-                paths_to_passed_checks: Vec::new(),
-            }
-        }
-    }
+    
 
     impl<T> Visitor<T> for KeepReasonableStructVisitor
     where
@@ -246,8 +237,8 @@ mod defs {
                 }
             }
             self.path.pop_back();
-            let mut result = visited.visit_each(self);
-            result
+            
+            visited.visit_each(self)
         }
     }
 
@@ -470,7 +461,7 @@ mod defs {
                             nonterminal_field_def_list_0::variant_1(seq) => {
                                 let (field_type, _, field_name, _, _, rest) = seq.children();
                                 // Is it already defined?
-                                if field_names.contains(&field_name) {
+                                if field_names.contains(field_name) {
                                     self.violations.push(self.path.clone());
                                 } else {
                                     field_names.push(field_name.clone());
@@ -692,7 +683,7 @@ mod defs {
                 //     self.paths_to_passed_checks.push(self.path.clone());
                 // }
                 // For simplicity, actually just see if this is a re-declaration at all.
-                if get_var_definition(&self.var_defs, &var_decl_name, &self.scope_trace).is_some() {
+                if get_var_definition(&self.var_defs, var_decl_name, &self.scope_trace).is_some() {
                     // [Fixer] If so, generate new var name.
                     let mut new_var_name: nonterminal_var_name = loop {
                         let candidate: nonterminal_var_name =
@@ -1009,7 +1000,7 @@ mod defs {
                 }
             } else if let Some(tree) = visited.downcast::<nonterminal_var_access>() {
                 let var_name_accessed = tree.nth::<0>().clone();
-                if get_var_definition(&self.defined_vars, &var_name_accessed, &self.scope_trace)
+                if get_var_definition(self.defined_vars, &var_name_accessed, &self.scope_trace)
                     .is_none()
                 {
                     self.violations.push(self.path.clone());
@@ -1047,7 +1038,7 @@ mod defs {
             } else if let Some(fn_call) = visited.downcast::<nonterminal_fn_call>() {
                 // Get name and check if function is defined.
                 let fn_name = fn_call.nth::<0>().nth::<0>().clone();
-                if get_func_definition(&self.defined_fns, &fn_name, &self.scope_trace).is_none() {
+                if get_func_definition(self.defined_fns, &fn_name, &self.scope_trace).is_none() {
                     self.violations.push(self.path.clone());
                 } else {
                     // It is defined, so this is a passed check.
@@ -1209,7 +1200,7 @@ mod defs {
                 let var_name = tree.nth::<0>().nth::<0>().clone();
                 // Look up the var name in the var_defs to get its type.
                 let pot_var_type =
-                    get_var_definition(&self.var_defs, &var_name, &vec![self.scope_depth]);
+                    get_var_definition(self.var_defs, &var_name, &vec![self.scope_depth]);
                 match pot_var_type {
                     Some(var_type) => {
                         // We have a variable type, check if it's a struct type.
@@ -1275,17 +1266,17 @@ mod defs {
     }
 
     // Allows for easy conversion into and out of nonterminal_type.
-    impl Into<nonterminal_type> for NonterminalTypeExtended {
-        fn into(self) -> nonterminal_type {
-            self.base
+    impl From<NonterminalTypeExtended> for nonterminal_type {
+        fn from(val: NonterminalTypeExtended) -> Self {
+            val.base
         }
     }
 
     // See above.
-    impl Into<NonterminalTypeExtended> for nonterminal_type {
-        fn into(self) -> NonterminalTypeExtended {
+    impl From<nonterminal_type> for NonterminalTypeExtended {
+        fn from(val: nonterminal_type) -> Self {
             NonterminalTypeExtended {
-                base: self,
+                base: val,
                 struct_fields: None,
                 struct_fields_positional: None,
             }
@@ -1315,7 +1306,7 @@ mod defs {
         if let (nonterminal_type_0::variant_0(bt1), nonterminal_type_0::variant_0(bt2)) =
             (t1.nth::<0>(), t2.nth::<0>())
         {
-            return numeric_types.contains(&bt1) && numeric_types.contains(&bt2);
+            return numeric_types.contains(bt1) && numeric_types.contains(bt2);
         }
         false
     }
@@ -1332,7 +1323,7 @@ mod defs {
         if let (Some(fields1), Some(fields2)) = (&t1.struct_fields, &t2.struct_fields) {
             // If both types are structs, check if their fields are compatible.
             return fields1.iter().all(|(name, typ1)| {
-                fields2.get(name).map_or(false, |typ2| {
+                fields2.get(name).is_some_and(|typ2| {
                     types_compatible(&typ1.clone().into(), &typ2.clone().into())
                 })
             });
@@ -1352,26 +1343,22 @@ mod defs {
         // Check if positional struct fields match named struct fields.
         if let (Some(pos_fields), Some(named_fields)) =
             (&t1.struct_fields_positional, &t2.struct_fields)
-        {
-            if pos_fields.len() == named_fields.len() {
+            && pos_fields.len() == named_fields.len() {
                 return pos_fields
                     .iter()
                     .zip(named_fields.values())
                     .all(|(typ1, typ2)| types_compatible(typ1, &typ2.clone().into()));
             }
-        }
 
         // Also other way around.
         if let (Some(pos_fields), Some(named_fields)) =
             (&t2.struct_fields_positional, &t1.struct_fields)
-        {
-            if pos_fields.len() == named_fields.len() {
+            && pos_fields.len() == named_fields.len() {
                 return pos_fields
                     .iter()
                     .zip(named_fields.values())
                     .all(|(typ1, typ2)| types_compatible(typ1, &typ2.clone().into()));
             }
-        }
 
         false
     }
@@ -1387,23 +1374,15 @@ mod defs {
         // <binop_op> ::= "+" | "-" | "/" | "*" | "%" | "^" | "==" | "!=" | "<=" | ">=" | "<" | ">" | "&&" | "||" ;
         if let nonterminal_binop_op_0::variant_5(_) = binop.nth::<0>() {
             // Bitwise XOR is only valid for integer types.
-            match t1.base.nth::<0>() {
-                nonterminal_type_0::variant_0(bt1) => {
-                    if let nonterminal_basic_type_0::variant_0(_) = bt1.nth::<0>() {
-                        // t1 is int, check t2.
-                        match t2.base.nth::<0>() {
-                            nonterminal_type_0::variant_0(bt2) => {
-                                if let nonterminal_basic_type_0::variant_0(_) = bt2.nth::<0>() {
-                                    // t2 is also int, valid.
-                                    return Some(t1.clone());
-                                }
-                            }
-                            _ => {}
+            if let nonterminal_type_0::variant_0(bt1) = t1.base.nth::<0>()
+                && let nonterminal_basic_type_0::variant_0(_) = bt1.nth::<0>() {
+                    // t1 is int, check t2.
+                    if let nonterminal_type_0::variant_0(bt2) = t2.base.nth::<0>()
+                        && let nonterminal_basic_type_0::variant_0(_) = bt2.nth::<0>() {
+                            // t2 is also int, valid.
+                            return Some(t1.clone());
                         }
-                    }
                 }
-                _ => {}
-            }
             return None; // Invalid types for bitwise XOR.
         }
 
@@ -1496,10 +1475,7 @@ mod defs {
                 // <var_access> ::= <var_name> ;
                 let var_name = var_access.nth::<0>().clone();
                 let var_def = get_var_definition(var_defs, &var_name, scope_trace).cloned();
-                match var_def {
-                    Some(var_type) => Some(var_type.into()),
-                    None => None, // Variable not found.
-                }
+                var_def.map(|var_type| var_type.into())
             }
             nonterminal_expr_unit_0::variant_1(value) => {
                 // <value> ::= <bool_val> | <num_val> | <string_val> ;
@@ -1577,11 +1553,7 @@ mod defs {
                 let fn_name = fn_call.nth::<0>().nth::<0>().clone();
                 if let Some(param_types) = get_func_definition(func_defs, &fn_name, scope_trace) {
                     // The return type is the last type in the param_types list.
-                    if let Some(return_type) = param_types.last() {
-                        Some(return_type.clone().into())
-                    } else {
-                        None // Function has no return type defined.
-                    }
+                    param_types.last().map(|return_type| return_type.clone().into())
                 } else {
                     None // Function not found.
                 }
@@ -1621,7 +1593,7 @@ mod defs {
                         // Variant 0, single expr.
                         nonterminal_expr_list_0::variant_0(expr) => {
                             if let Some(t) = infer_expr_type(
-                                &expr,
+                                expr,
                                 var_defs,
                                 func_defs,
                                 struct_defs,
@@ -1637,7 +1609,7 @@ mod defs {
                         nonterminal_expr_list_0::variant_1(seq) => {
                             let (expr, _, _, rest) = seq.children();
                             if let Some(t) = infer_expr_type(
-                                &expr,
+                                expr,
                                 var_defs,
                                 func_defs,
                                 struct_defs,
@@ -1736,7 +1708,7 @@ mod defs {
                             scope_trace,
                         );
                         let right_type = infer_expr_type(
-                            &right_expr,
+                            right_expr,
                             var_defs,
                             func_defs,
                             struct_defs,
@@ -1745,11 +1717,7 @@ mod defs {
                         let binop_op = binop.nth::<0>().nth::<2>();
                         // Are types compatible for the binary operator?
                         if let (Some(lt), Some(rt)) = (left_type, right_type) {
-                            if let Some(bop_type) = type_resulting_from_binop(&lt, &rt, &binop_op) {
-                                Some(bop_type)
-                            } else {
-                                None // Types are not compatible.
-                            }
+                            type_resulting_from_binop(&lt, &rt, binop_op)
                         } else {
                             None // Could not infer types.
                         }
@@ -1758,7 +1726,7 @@ mod defs {
                         // <unop> ::= <unop_op> <expr> ;
                         let right_expr = unop.nth::<0>().nth::<1>();
                         let expr_type_nte = infer_expr_type(
-                            &right_expr,
+                            right_expr,
                             var_defs,
                             func_defs,
                             struct_defs,
@@ -1805,7 +1773,7 @@ mod defs {
                                 _ => None, // Should not happen
                             }
                         } else {
-                            return None; // Could not infer type
+                            None// Could not infer type
                         }
                     }
                 }
@@ -2010,7 +1978,7 @@ mod defs {
                                     // We have inferred a type for the expr.
                                     // Update the decl_type to match expr_type.
                                     let new_type: nonterminal_type = expr_type_nte.into();
-                                    mem::swap(decl_type, &mut new_type.clone());
+                                    *decl_type = new_type.clone();
                                 } else {
                                     // Could not infer type, replace with a random generated type.
                                     let mut new_type =
@@ -2617,9 +2585,9 @@ mod defs {
                                         let expr = seq.nth::<2>();
                                         let expr_type = infer_expr_type(
                                             expr,
-                                            &self.var_defs,
-                                            &self.func_defs,
-                                            &self.struct_defs,
+                                            self.var_defs,
+                                            self.func_defs,
+                                            self.struct_defs,
                                             &self.scope_trace,
                                         );
                                         if let Some(et) = expr_type {
@@ -2692,9 +2660,9 @@ mod defs {
                     let rhs_expr = decl_rhs.nth::<0>().nth::<2>();
                     let expr_type = infer_expr_type(
                         rhs_expr,
-                        &self.var_defs,
-                        &self.func_defs,
-                        &self.struct_defs,
+                        self.var_defs,
+                        self.func_defs,
+                        self.struct_defs,
                         &self.scope_trace,
                     );
                     if let Some(et) = expr_type {
@@ -2721,13 +2689,13 @@ mod defs {
                 let var_name = var_access.nth::<0>().clone();
                 // Look up the variable type.
                 let var_type =
-                    get_var_definition(&self.var_defs, &var_name, &self.scope_trace).cloned();
+                    get_var_definition(self.var_defs, &var_name, &self.scope_trace).cloned();
                 // Get the expression type.
                 let expr_type = infer_expr_type(
                     expr,
-                    &self.var_defs,
-                    &self.func_defs,
-                    &self.struct_defs,
+                    self.var_defs,
+                    self.func_defs,
+                    self.struct_defs,
                     &self.scope_trace,
                 );
                 // Compare types.
@@ -2755,7 +2723,7 @@ mod defs {
                 }
                 // Get the function name and type from the scope trace.
                 if let Some((fn_name, fn_type)) =
-                    get_current_function(&self.func_defs, &self.scope_trace)
+                    get_current_function(self.func_defs, &self.scope_trace)
                 {
                     // We have a function name and type.
                     // <return_stmt> ::= <return_kwd> | <return_kwd> <sep> <expr> ;
@@ -2809,9 +2777,9 @@ mod defs {
                             let ret_expr = ret_seq.nth::<2>();
                             let expr_type = infer_expr_type(
                                 ret_expr,
-                                &self.var_defs,
-                                &self.func_defs,
-                                &self.struct_defs,
+                                self.var_defs,
+                                self.func_defs,
+                                self.struct_defs,
                                 &self.scope_trace,
                             );
                             let some_last = fn_type.last();
@@ -2854,12 +2822,12 @@ mod defs {
                 // Get the var name.
                 let var_name = tree.nth::<0>().nth::<0>().clone();
                 // Look up the variable type.
-                let var_type = get_var_definition(&self.var_defs, &var_name, &self.scope_trace);
+                let var_type = get_var_definition(self.var_defs, &var_name, &self.scope_trace);
                 // Get the field name being accessed.
                 let field_name = tree.nth::<0>().nth::<2>().clone();
                 // Check if the variable type is a struct and if it has the field.
-                if let Some(vt) = var_type {
-                    if let nonterminal_type_0::variant_1(struct_type) = vt.nth::<0>() {
+                if let Some(vt) = var_type
+                    && let nonterminal_type_0::variant_1(struct_type) = vt.nth::<0>() {
                         let struct_name = struct_type.nth::<0>().nth::<2>().clone();
                         if let Some(fields) = self.struct_defs.get(&struct_name) {
                             if !fields.iter().any(|(fname, _ftype)| fname == &field_name) {
@@ -2871,7 +2839,6 @@ mod defs {
                             }
                         }
                     }
-                }
             } else if let Some(tree) = visited.downcast::<nonterminal_fn_call>() {
                 // <fn_call> ::= <fn_name> "(" <arg_list_e> ")" ;
                 // <arg_list_e> ::= <arg_list> | <e> ;
@@ -2879,7 +2846,7 @@ mod defs {
                 let fn_name = tree.nth::<0>().nth::<0>().clone();
                 // Look up the function definition.
                 if let Some(param_types) =
-                    get_func_definition(&self.func_defs, &fn_name, &self.scope_trace)
+                    get_func_definition(self.func_defs, &fn_name, &self.scope_trace)
                 {
                     // We have the function definition.
                     // Now check the argument types.
@@ -2905,10 +2872,10 @@ mod defs {
                                     // Single expression.
                                     let expr = arg.nth::<0>();
                                     if let Some(at) = infer_expr_type(
-                                        &expr,
-                                        &self.var_defs,
-                                        &self.func_defs,
-                                        &self.struct_defs,
+                                        expr,
+                                        self.var_defs,
+                                        self.func_defs,
+                                        self.struct_defs,
                                         &self.scope_trace,
                                     ) {
                                         arg_types.push(at);
@@ -2925,10 +2892,10 @@ mod defs {
                                     let arg = seq.nth::<0>();
                                     let expr = arg.nth::<0>();
                                     if let Some(at) = infer_expr_type(
-                                        &expr,
-                                        &self.var_defs,
-                                        &self.func_defs,
-                                        &self.struct_defs,
+                                        expr,
+                                        self.var_defs,
+                                        self.func_defs,
+                                        self.struct_defs,
                                         &self.scope_trace,
                                     ) {
                                         arg_types.push(at);
@@ -2990,9 +2957,9 @@ mod defs {
                 // Just infer the type to see if it can be inferred.
                 if infer_expr_type(
                     expr,
-                    &self.var_defs,
-                    &self.func_defs,
-                    &self.struct_defs,
+                    self.var_defs,
+                    self.func_defs,
+                    self.struct_defs,
                     &self.scope_trace,
                 )
                 .is_some()
@@ -3007,9 +2974,9 @@ mod defs {
                 // Collect all issues in the expr.
                 let all_issues = collect_all_issues_in_struct(
                     struct_expr,
-                    &self.struct_defs,
-                    &self.var_defs,
-                    &self.func_defs,
+                    self.struct_defs,
+                    self.var_defs,
+                    self.func_defs,
                     &self.scope_trace,
                 );
                 // It's bool, so true or false
@@ -3029,7 +2996,7 @@ mod defs {
             if let Ok(ControlFlow::Continue(visitor)) = &mut result {
                 visitor.path.pop_back();
             }
-            return result;
+            result
         }
     }
 
@@ -3054,7 +3021,7 @@ mod defs {
         type Error = Infallible;
 
         fn visit_mut<'program, N>(
-            mut self,
+            self,
             node: &'program mut N,
             idx: usize,
         ) -> VisitMutResult<Self, T>
@@ -3295,7 +3262,7 @@ mod defs {
         type Error = Infallible;
 
         fn visit_mut<'program, N>(
-            mut self,
+            self,
             node: &'program mut N,
             idx: usize,
         ) -> VisitMutResult<Self, T>
@@ -3354,6 +3321,12 @@ mod defs {
     /// A [`BasicHook`] which performs automatic fixes over the [`Xml`] grammar
     pub struct CCombinedFixHook;
 
+    impl Default for CCombinedFixHook {
+        fn default() -> Self {
+            Self::new()
+        }
+    }
+
     impl CCombinedFixHook {
         /// The fix hook with maximum possible fixes
         pub fn new() -> Self {
@@ -3378,6 +3351,8 @@ mod defs {
         }
     }
 }
+
+pub use defs::*;
 
 #[cfg(test)]
 mod test {
@@ -4028,5 +4003,3 @@ mod test {
         Ok(())
     }
 }
-
-pub use defs::*;

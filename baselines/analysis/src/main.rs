@@ -248,7 +248,7 @@ fn main() -> Result<(), Box<dyn Error>> {
      \midrule"#
             .trim_matches('\n')
     );
-    for (&subject, &name) in SUBJECTS.into_iter().zip(PROPER_NAMES) {
+    for (&subject, &name) in SUBJECTS.iter().zip(PROPER_NAMES) {
         let model = rs_models.get(subject).unwrap();
 
         println!(
@@ -269,7 +269,7 @@ fn main() -> Result<(), Box<dyn Error>> {
      \midrule"#
             .trim_matches('\n')
     );
-    for (&subject, &name) in SUBJECTS.into_iter().zip(PROPER_NAMES) {
+    for (&subject, &name) in SUBJECTS.iter().zip(PROPER_NAMES) {
         let model = fandango_models.get(subject).unwrap();
         let data = fandango_data.get(subject).unwrap();
 
@@ -308,7 +308,7 @@ fn main() -> Result<(), Box<dyn Error>> {
      \midrule"#
             .trim_matches('\n')
     );
-    for (&subject, &name) in SUBJECTS.into_iter().zip(PROPER_NAMES) {
+    for (&subject, &name) in SUBJECTS.iter().zip(PROPER_NAMES) {
         let model = rs_models.get(&format!("{}_dyn", subject)).unwrap();
         println!(
             r"    {name} & {} & \emph{{n.d.}}\tnote{{2}} & {} & {} \\",
@@ -348,7 +348,7 @@ fn main() -> Result<(), Box<dyn Error>> {
      \midrule"#
             .trim_matches('\n')
     );
-    for (&subject, &name) in SUBJECTS.into_iter().zip(PROPER_NAMES) {
+    for (&subject, &name) in SUBJECTS.iter().zip(PROPER_NAMES) {
         let model = rs_models_noopt.get(subject).unwrap();
         println!(
             r"    {name} & {} & {} & {} & {} \\",
@@ -368,7 +368,7 @@ fn main() -> Result<(), Box<dyn Error>> {
      \midrule"#
             .trim_matches('\n')
     );
-    for (&subject, &name) in SUBJECTS.into_iter().zip(PROPER_NAMES) {
+    for (&subject, &name) in SUBJECTS.iter().zip(PROPER_NAMES) {
         let model = rs_models_noopt.get(&format!("{}_dyn", subject)).unwrap();
         println!(
             r"    {name} & {} & \emph{{n.d.}}\tnote{{2}} & {} & {} \\",
@@ -406,7 +406,7 @@ fn main() -> Result<(), Box<dyn Error>> {
      \midrule"#
             .trim_matches('\n')
     );
-    for (&subject, &name) in SUBJECTS.into_iter().zip(PROPER_NAMES) {
+    for (&subject, &name) in SUBJECTS.iter().zip(PROPER_NAMES) {
         let model = rs_models_noopt_indirect.get(subject).unwrap();
         println!(
             r"    {name} & {} & {} & {} & {} \\",

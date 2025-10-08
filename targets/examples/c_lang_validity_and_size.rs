@@ -50,7 +50,7 @@ where
 
     fn evaluate(&mut self, node: &'a N) -> Result<Self::Measurement, Self::Error> {
         Ok(Reverse(
-            NodeScan::new(clang::nonterminal_struct_def::DISCRIMINANT as usize)
+            NodeScan::new(clang::nonterminal_struct_def::DISCRIMINANT)
                 .visit(node, 0)
                 .unwrap()
                 .continue_value()
@@ -76,7 +76,7 @@ where
 
     fn evaluate(&mut self, node: &'a N) -> Result<Self::Measurement, Self::Error> {
         Ok(Reverse(
-            NodeScan::new(clang::nonterminal_field_name::DISCRIMINANT as usize)
+            NodeScan::new(clang::nonterminal_field_name::DISCRIMINANT)
                 .visit(node, 0)
                 .unwrap()
                 .continue_value()
@@ -102,7 +102,7 @@ where
 
     fn evaluate(&mut self, node: &'a N) -> Result<Self::Measurement, Self::Error> {
         Ok(Reverse(
-            NodeScan::new(clang::nonterminal_fn_def::DISCRIMINANT as usize)
+            NodeScan::new(clang::nonterminal_fn_def::DISCRIMINANT)
                 .visit(node, 0)
                 .unwrap()
                 .continue_value()
@@ -129,7 +129,7 @@ where
     fn evaluate(&mut self, node: &'a N) -> Result<Self::Measurement, Self::Error> {
         Ok(Reverse(
             self.n.saturating_sub(
-                NodeScan::new(clang::nonterminal_expr::DISCRIMINANT as usize)
+                NodeScan::new(clang::nonterminal_expr::DISCRIMINANT)
                     .visit(node, 0)
                     .unwrap()
                     .continue_value()
@@ -155,7 +155,7 @@ where
     fn evaluate(&mut self, node: &'a N) -> Result<Self::Measurement, Self::Error> {
         Ok(Reverse(
             self.n.saturating_sub(
-                NodeScan::new(clang::nonterminal_stmt::DISCRIMINANT as usize)
+                NodeScan::new(clang::nonterminal_stmt::DISCRIMINANT)
                     .visit(node, 0)
                     .unwrap()
                     .continue_value()
@@ -181,7 +181,7 @@ where
     fn evaluate(&mut self, node: &'a N) -> Result<Self::Measurement, Self::Error> {
         Ok(Reverse(
             self.n.saturating_sub(
-                NodeScan::new(clang::nonterminal_var_access::DISCRIMINANT as usize)
+                NodeScan::new(clang::nonterminal_var_access::DISCRIMINANT)
                     .visit(node, 0)
                     .unwrap()
                     .continue_value()
@@ -196,7 +196,7 @@ where
 fn run_once(
     fine_print: bool,
     print_successful_compile: bool,
-) -> Result<((i32, i32, i32, f32, f32)), Error> {
+) -> Result<(i32, i32, i32, f32, f32), Error> {
     let fitness = ViolationFitness::<clang::CombinedConstraintVisitor>::new();
 
     // let nodes = NodeGoal { n: 1000 };

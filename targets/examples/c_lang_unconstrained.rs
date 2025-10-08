@@ -46,7 +46,7 @@ where
 
     fn evaluate(&mut self, node: &'a N) -> Result<Self::Measurement, Self::Error> {
         Ok(Reverse(
-            NodeScan::new(clang::nonterminal_struct_def::DISCRIMINANT as usize)
+            NodeScan::new(clang::nonterminal_struct_def::DISCRIMINANT)
                 .visit(node, 0)
                 .unwrap()
                 .continue_value()
@@ -72,7 +72,7 @@ where
 
     fn evaluate(&mut self, node: &'a N) -> Result<Self::Measurement, Self::Error> {
         Ok(Reverse(
-            NodeScan::new(clang::nonterminal_field_name::DISCRIMINANT as usize)
+            NodeScan::new(clang::nonterminal_field_name::DISCRIMINANT)
                 .visit(node, 0)
                 .unwrap()
                 .continue_value()
@@ -98,7 +98,7 @@ where
 
     fn evaluate(&mut self, node: &'a N) -> Result<Self::Measurement, Self::Error> {
         Ok(Reverse(
-            NodeScan::new(clang::nonterminal_fn_def::DISCRIMINANT as usize)
+            NodeScan::new(clang::nonterminal_fn_def::DISCRIMINANT)
                 .visit(node, 0)
                 .unwrap()
                 .continue_value()
@@ -125,7 +125,7 @@ where
     fn evaluate(&mut self, node: &'a N) -> Result<Self::Measurement, Self::Error> {
         Ok(Reverse(
             self.n.saturating_sub(
-                NodeScan::new(clang::nonterminal_expr::DISCRIMINANT as usize)
+                NodeScan::new(clang::nonterminal_expr::DISCRIMINANT)
                     .visit(node, 0)
                     .unwrap()
                     .continue_value()
@@ -140,10 +140,10 @@ where
 fn run_once(
     fine_print: bool,
     print_successful_compile: bool,
-) -> Result<((i32, i32, i32, f32, f32)), Error> {
+) -> Result<(i32, i32, i32, f32, f32), Error> {
     // For returning
     let mut number_of_generated_programs = 0;
-    let mut number_of_programs_with_fitness_1 = 0;
+    let number_of_programs_with_fitness_1 = 0;
     let mut number_of_programs_accepted_by_gcc = 0;
 
     let generator = DepthLimiter::new(clang::STRUCTURE.inner(), 100);
@@ -235,11 +235,9 @@ fn run_once(
                 );
             }
             number_of_programs_accepted_by_gcc += 1;
-        } else {
-            if fine_print {
-                println!("GCC rejected the program.");
-                println!("GCC stderr: {}", String::from_utf8_lossy(&output.stderr));
-            }
+        } else if fine_print {
+            println!("GCC rejected the program.");
+            println!("GCC stderr: {}", String::from_utf8_lossy(&output.stderr));
         }
         if fine_print {
             println!("GCC exit code: {}", output.status);
