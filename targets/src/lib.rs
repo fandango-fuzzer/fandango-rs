@@ -39,6 +39,8 @@ macro_rules! maybe_deref_mut {
     };
 }
 
+#[cfg(feature = "clang")]
+pub mod clang;
 #[cfg(feature = "csv")]
 pub mod csv;
 #[cfg(feature = "rest")]
