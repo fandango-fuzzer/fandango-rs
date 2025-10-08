@@ -244,7 +244,8 @@ fn main() -> Result<(), Box<dyn Error>> {
     \toprule
      & \multicolumn{4}{c}{\tool{} (nanoseconds)} \\
      \cmidrule(l{0.25em}r{0.25em}){2-5}
-     & \textit{Generate} & \textit{Check} & \textit{Mutate} & \textit{Crossover} \\"#
+     & \textit{Generate} & \textit{Check} & \textit{Mutate} & \textit{Crossover} \\
+     \midrule"#
             .trim_matches('\n')
     );
     for (&subject, &name) in SUBJECTS.into_iter().zip(PROPER_NAMES) {
@@ -264,7 +265,8 @@ fn main() -> Result<(), Box<dyn Error>> {
     \midrule
      & \multicolumn{4}{c}{\fandango{} (microseconds)} \\
      \cmidrule(l{0.25em}r{0.25em}){2-5}
-     & \textit{Generate} & \textit{Check} & \textit{Mutate} & \textit{Crossover} \\"#
+     & \textit{Generate} & \textit{Check} & \textit{Mutate} & \textit{Crossover} \\
+     \midrule"#
             .trim_matches('\n')
     );
     for (&subject, &name) in SUBJECTS.into_iter().zip(PROPER_NAMES) {
@@ -302,7 +304,8 @@ fn main() -> Result<(), Box<dyn Error>> {
         r#"
     \begin{tabular}{lrrrr}
     \toprule
-     & \textit{Generate} & \textit{Check} & \textit{Mutate} & \textit{Crossover} \\"#
+     & \textit{Generate} & \textit{Check} & \textit{Mutate} & \textit{Crossover} \\
+     \midrule"#
             .trim_matches('\n')
     );
     for (&subject, &name) in SUBJECTS.into_iter().zip(PROPER_NAMES) {
@@ -341,7 +344,8 @@ fn main() -> Result<(), Box<dyn Error>> {
     \toprule
      & \multicolumn{4}{c}{\tool{} (static, unoptimized; nanoseconds)} \\
      \cmidrule(l{0.25em}r{0.25em}){2-5}
-     & \textit{Generate} & \textit{Check} & \textit{Mutate} & \textit{Crossover} \\"#
+     & \textit{Generate} & \textit{Check} & \textit{Mutate} & \textit{Crossover} \\
+     \midrule"#
             .trim_matches('\n')
     );
     for (&subject, &name) in SUBJECTS.into_iter().zip(PROPER_NAMES) {
@@ -360,7 +364,8 @@ fn main() -> Result<(), Box<dyn Error>> {
     \midrule
      & \multicolumn{4}{c}{\tool{} (dynamic, unoptimized; nanoseconds)} \\
      \cmidrule(l{0.25em}r{0.25em}){2-5}
-     & \textit{Generate} & \textit{Check} & \textit{Mutate} & \textit{Crossover} \\"#
+     & \textit{Generate} & \textit{Check} & \textit{Mutate} & \textit{Crossover} \\
+     \midrule"#
             .trim_matches('\n')
     );
     for (&subject, &name) in SUBJECTS.into_iter().zip(PROPER_NAMES) {
@@ -397,7 +402,8 @@ fn main() -> Result<(), Box<dyn Error>> {
         r#"
     \begin{tabular}{lrrrr}
     \toprule
-     & \textit{Generate} & \textit{Check} & \textit{Mutate} & \textit{Crossover} \\"#
+     & \textit{Generate} & \textit{Check} & \textit{Mutate} & \textit{Crossover} \\
+     \midrule"#
             .trim_matches('\n')
     );
     for (&subject, &name) in SUBJECTS.into_iter().zip(PROPER_NAMES) {
