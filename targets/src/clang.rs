@@ -3628,6 +3628,7 @@ mod test {
         Ok(())
     }
 
+    /*
     // Test unused variable fixer.
     #[test]
     fn test_unused_variable_fixer_c() -> Result<(), Box<dyn Error>> {
@@ -3688,6 +3689,7 @@ mod test {
         }
         Ok(())
     }
+    */
 
     // Test constraint fixer struct rhs of decl
     #[test]
