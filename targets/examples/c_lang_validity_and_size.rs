@@ -20,21 +20,6 @@ use std::cmp::Reverse;
 use std::convert::Infallible;
 use std::num::NonZeroUsize;
 use std::process::{Command, Stdio};
-struct NodeGoal {
-    n: usize,
-}
-
-impl<'a, N> FitnessMeasurer<'a, N> for NodeGoal
-where
-    N: Node,
-{
-    type Measurement = Reverse<usize>;
-    type Error = Infallible;
-
-    fn evaluate(&mut self, node: &'a N) -> Result<Self::Measurement, Self::Error> {
-        Ok(Reverse(self.n.abs_diff(node.count_nodes())))
-    }
-}
 
 // Up to n struct definitions
 struct StructGoal {
@@ -51,32 +36,6 @@ where
     fn evaluate(&mut self, node: &'a N) -> Result<Self::Measurement, Self::Error> {
         Ok(Reverse(
             NodeScan::new(clang::nonterminal_struct_def::DISCRIMINANT)
-                .visit(node, 0)
-                .unwrap()
-                .continue_value()
-                .unwrap()
-                .matches()
-                .len()
-                .saturating_sub(self.n),
-        ))
-    }
-}
-
-// Up to n struct fields
-struct StructFieldGoal {
-    n: usize,
-}
-
-impl<'a, N> FitnessMeasurer<'a, N> for StructFieldGoal
-where
-    N: Node,
-{
-    type Measurement = Reverse<usize>;
-    type Error = Infallible;
-
-    fn evaluate(&mut self, node: &'a N) -> Result<Self::Measurement, Self::Error> {
-        Ok(Reverse(
-            NodeScan::new(clang::nonterminal_field_name::DISCRIMINANT)
                 .visit(node, 0)
                 .unwrap()
                 .continue_value()
@@ -113,34 +72,6 @@ where
         ))
     }
 }
-
-// More than n expressions
-struct ExprGoal {
-    n: usize,
-}
-
-impl<'a, N> FitnessMeasurer<'a, N> for ExprGoal
-where
-    N: Node,
-{
-    type Measurement = Reverse<usize>;
-    type Error = Infallible;
-
-    fn evaluate(&mut self, node: &'a N) -> Result<Self::Measurement, Self::Error> {
-        Ok(Reverse(
-            self.n.saturating_sub(
-                NodeScan::new(clang::nonterminal_expr::DISCRIMINANT)
-                    .visit(node, 0)
-                    .unwrap()
-                    .continue_value()
-                    .unwrap()
-                    .matches()
-                    .len(),
-            ),
-        ))
-    }
-}
-
 struct StmtGoal {
     n: usize,
 }
@@ -167,46 +98,15 @@ where
     }
 }
 
-// Make a var access goal?
-struct VarAccessGoal {
-    n: usize,
-}
-
-impl<'a, N> FitnessMeasurer<'a, N> for VarAccessGoal
-where
-    N: Node,
-{
-    type Measurement = Reverse<usize>;
-    type Error = Infallible;
-    fn evaluate(&mut self, node: &'a N) -> Result<Self::Measurement, Self::Error> {
-        Ok(Reverse(
-            self.n.saturating_sub(
-                NodeScan::new(clang::nonterminal_var_access::DISCRIMINANT)
-                    .visit(node, 0)
-                    .unwrap()
-                    .continue_value()
-                    .unwrap()
-                    .matches()
-                    .len(),
-            ),
-        ))
-    }
-}
-
 fn run_once(
     fine_print: bool,
     print_successful_compile: bool,
 ) -> Result<(i32, i32, i32, f32, f32), Error> {
     let fitness = ViolationFitness::<clang::CombinedConstraintVisitor>::new();
 
-    // let nodes = NodeGoal { n: 1000 };
     let structs = StructGoal { n: 1 };
     let fns = FnGoal { n: 1 };
     let stmts = StmtGoal { n: 5 };
-    // let fields = StructFieldGoal { n: 5 };
-    // let exprs = ExprGoal { n: 20 };
-    // let fixer = XmlFixHook::evaluated();
-    // let var_access = VarAccessGoal { n: 5 };
 
     let fixer = ();
     let hook = KPathDiversityHook::new(fixer, NonZeroUsize::new(10).unwrap());
@@ -281,7 +181,8 @@ fn run_once(
             }
             continue;
         }
-        let mut process = Command::new("gcc")
+        
+        let process_or_not = Command::new("gcc")
             .arg("-x")
             .arg("c")
             .arg("-o")
@@ -290,32 +191,39 @@ fn run_once(
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
-            .spawn()
-            .expect("Failed to spawn gcc process");
-        {
-            let stdin = process.stdin.as_mut().expect("Failed to open stdin");
-            use std::io::Write;
-            writeln!(stdin, "#include <stdio.h>").unwrap();
-            // writeln!(stdin, "#include <stdlib.h>").unwrap();
-            writeln!(stdin, "#include <stdbool.h>").unwrap();
-            // writeln!(stdin, "#include <string.h>").unwrap();
-            writeln!(stdin).unwrap();
-            // Wrap this in a main function.
-            // writeln!(stdin, "int main() {{").unwrap();
-            stdin
-                .write_all(
-                    &WriteVisitor::new(Vec::new())
-                        .visit(candidate.node(), 0)?
-                        .continue_value()
-                        .unwrap()
-                        .output(),
-                )
-                .unwrap();
-            // writeln!(stdin, " return 0; }}").unwrap();
-            // Also add a main function that returns 0 to make it a valid C program.
-            writeln!(stdin).unwrap();
-            writeln!(stdin, "int main() {{ return 0; }}").unwrap();
-        }
+            .spawn();
+        
+        let mut process = match process_or_not {Ok(p) => p,
+            Err(e) => {
+                if fine_print {
+                    println!("Failed to spawn gcc process: {}", e);
+                }
+                continue;
+            }
+        };
+
+        let stdin = process.stdin.as_mut().expect("Failed to open stdin");
+        use std::io::Write;
+        writeln!(stdin, "#include <stdio.h>").unwrap();
+        // writeln!(stdin, "#include <stdlib.h>").unwrap();
+        writeln!(stdin, "#include <stdbool.h>").unwrap();
+        // writeln!(stdin, "#include <string.h>").unwrap();
+        writeln!(stdin).unwrap();
+        // Wrap this in a main function.
+        // writeln!(stdin, "int main() {{").unwrap();
+        stdin
+            .write_all(
+                &WriteVisitor::new(Vec::new())
+                    .visit(candidate.node(), 0)?
+                    .continue_value()
+                    .unwrap()
+                    .output(),
+            )
+            .unwrap();
+        // writeln!(stdin, " return 0; }}").unwrap();
+        // Also add a main function that returns 0 to make it a valid C program.
+        writeln!(stdin).unwrap();
+        writeln!(stdin, "int main() {{ return 0; }}").unwrap();
 
         let output = process
             .wait_with_output()

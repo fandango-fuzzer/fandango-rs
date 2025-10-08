@@ -39,6 +39,7 @@ macro_rules! maybe_deref_mut {
     };
 }
 
+/// The module for c language testing.
 #[cfg(feature = "clang")]
 pub mod clang;
 #[cfg(feature = "csv")]

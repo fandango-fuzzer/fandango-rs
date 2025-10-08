@@ -3,139 +3,14 @@
 use anyhow::Error;
 use fandango::generation::Generated;
 use fandango::tuple_list::tuple_list;
-use fandango::typing::{Node, StaticDiscriminable};
 use fandango::visitor::Visitor;
-use fandango::visitor::navigation::CountNodes;
 use fandango::visitor::write::WriteVisitor;
-use fandango_runtime::measurement::FitnessMeasurer;
-use fandango_runtime::operators::{DepthLimiter, NodeScan};
+use fandango_runtime::operators::{DepthLimiter};
 use fandango_targets::clang::{self};
 use rand::SeedableRng;
 use rand::rngs::StdRng;
-use std::cmp::Reverse;
 use std::collections::VecDeque;
-use std::convert::Infallible;
 use std::process::{Command, Stdio};
-struct NodeGoal {
-    n: usize,
-}
-
-impl<'a, N> FitnessMeasurer<'a, N> for NodeGoal
-where
-    N: Node,
-{
-    type Measurement = Reverse<usize>;
-    type Error = Infallible;
-
-    fn evaluate(&mut self, node: &'a N) -> Result<Self::Measurement, Self::Error> {
-        Ok(Reverse(self.n.abs_diff(node.count_nodes())))
-    }
-}
-
-// Up to n struct definitions
-struct StructGoal {
-    n: usize,
-}
-
-impl<'a, N> FitnessMeasurer<'a, N> for StructGoal
-where
-    N: Node,
-{
-    type Measurement = Reverse<usize>;
-    type Error = Infallible;
-
-    fn evaluate(&mut self, node: &'a N) -> Result<Self::Measurement, Self::Error> {
-        Ok(Reverse(
-            NodeScan::new(clang::nonterminal_struct_def::DISCRIMINANT)
-                .visit(node, 0)
-                .unwrap()
-                .continue_value()
-                .unwrap()
-                .matches()
-                .len()
-                .saturating_sub(self.n),
-        ))
-    }
-}
-
-// Up to n struct fields
-struct StructFieldGoal {
-    n: usize,
-}
-
-impl<'a, N> FitnessMeasurer<'a, N> for StructFieldGoal
-where
-    N: Node,
-{
-    type Measurement = Reverse<usize>;
-    type Error = Infallible;
-
-    fn evaluate(&mut self, node: &'a N) -> Result<Self::Measurement, Self::Error> {
-        Ok(Reverse(
-            NodeScan::new(clang::nonterminal_field_name::DISCRIMINANT)
-                .visit(node, 0)
-                .unwrap()
-                .continue_value()
-                .unwrap()
-                .matches()
-                .len()
-                .saturating_sub(self.n),
-        ))
-    }
-}
-
-// Up to n function definitions
-struct FnGoal {
-    n: usize,
-}
-
-impl<'a, N> FitnessMeasurer<'a, N> for FnGoal
-where
-    N: Node,
-{
-    type Measurement = Reverse<usize>;
-    type Error = Infallible;
-
-    fn evaluate(&mut self, node: &'a N) -> Result<Self::Measurement, Self::Error> {
-        Ok(Reverse(
-            NodeScan::new(clang::nonterminal_fn_def::DISCRIMINANT)
-                .visit(node, 0)
-                .unwrap()
-                .continue_value()
-                .unwrap()
-                .matches()
-                .len()
-                .saturating_sub(self.n),
-        ))
-    }
-}
-
-// More than n expressions
-struct ExprGoal {
-    n: usize,
-}
-
-impl<'a, N> FitnessMeasurer<'a, N> for ExprGoal
-where
-    N: Node,
-{
-    type Measurement = Reverse<usize>;
-    type Error = Infallible;
-
-    fn evaluate(&mut self, node: &'a N) -> Result<Self::Measurement, Self::Error> {
-        Ok(Reverse(
-            self.n.saturating_sub(
-                NodeScan::new(clang::nonterminal_expr::DISCRIMINANT)
-                    .visit(node, 0)
-                    .unwrap()
-                    .continue_value()
-                    .unwrap()
-                    .matches()
-                    .len(),
-            ),
-        ))
-    }
-}
 
 fn run_once(
     fine_print: bool,
@@ -154,7 +29,7 @@ fn run_once(
 
     // Time the generation process
     let start_time = std::time::Instant::now();
-    for i in 0..100 {
+    for _i in 0..100 {
         let the_input = clang::nonterminal_start::generate(&mut sampler, &mut generators, 0);
         population.push_back(the_input);
     }
@@ -178,7 +53,7 @@ fn run_once(
         // If gcc returns 0, it means the program is valid.
         // If gcc returns non-zero, it means the program is invalid.
         // First, check fitness ratio to see if it's 1.0
-        let mut process = Command::new("gcc")
+        let process_or_not = Command::new("gcc")
             .arg("-x")
             .arg("c")
             .arg("-o")
@@ -187,32 +62,37 @@ fn run_once(
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
-            .spawn()
-            .expect("Failed to spawn gcc process");
-        {
-            let stdin = process.stdin.as_mut().expect("Failed to open stdin");
-            use std::io::Write;
-            writeln!(stdin, "#include <stdio.h>").unwrap();
-            // writeln!(stdin, "#include <stdlib.h>").unwrap();
-            writeln!(stdin, "#include <stdbool.h>").unwrap();
-            // writeln!(stdin, "#include <string.h>").unwrap();
-            writeln!(stdin).unwrap();
-            // Wrap this in a main function.
-            // writeln!(stdin, "int main() {{").unwrap();
-            stdin
-                .write_all(
-                    &WriteVisitor::new(Vec::new())
-                        .visit(&candidate, 0)?
-                        .continue_value()
-                        .unwrap()
-                        .output(),
-                )
-                .unwrap();
-            // writeln!(stdin, " return 0; }}").unwrap();
-            // Also add a main function that returns 0 to make it a valid C program.
-            writeln!(stdin).unwrap();
-            writeln!(stdin, "int main() {{ return 0; }}").unwrap();
-        }
+            .spawn();
+        
+        let mut process = match process_or_not {Ok(p) => p,
+            Err(e) => {
+                if fine_print {
+                    println!("Failed to spawn gcc process: {}", e);
+                }
+                continue;
+            }
+        };
+        
+        let stdin = process.stdin.as_mut().expect("Failed to open stdin");
+        use std::io::Write;
+        writeln!(stdin, "#include <stdio.h>").unwrap();
+        // writeln!(stdin, "#include <stdlib.h>").unwrap();
+        writeln!(stdin, "#include <stdbool.h>").unwrap();
+        // writeln!(stdin, "#include <string.h>").unwrap();
+        writeln!(stdin).unwrap();
+        // Wrap this in a main function.
+        stdin
+            .write_all(
+                &WriteVisitor::new(Vec::new())
+                    .visit(&candidate, 0)?
+                    .continue_value()
+                    .unwrap()
+                    .output(),
+            )
+            .unwrap();
+        // Also add a main function that returns 0 to make it a valid C program.
+        writeln!(stdin).unwrap();
+        writeln!(stdin, "int main() {{ return 0; }}").unwrap();
 
         let output = process
             .wait_with_output()
