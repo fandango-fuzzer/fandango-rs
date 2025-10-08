@@ -1,9 +1,12 @@
-<start> ::= <statements> ;
+<start> ::= <prog_statements> ;
+
+<prog_statements> ::= <prog_stmt> | <prog_stmt> "\n" <prog_statements> ;
+
+<prog_stmt> ::= <decl> ";" | <fn_def> ;
 
 <statements> ::= <stmt> | <stmt> "\n" <statements> ;
 
-<<<<<<< HEAD
-<stmt> ::= <decl> ";" | <assignment> ";" | <fn_def> | <struct_def> ";" | <expr_stmt> ";" | <return_stmt> ";" ;
+<stmt> ::= <decl> ";" | <assignment> ";" | <struct_def> ";" | <expr_stmt> ";" | <return_stmt> ";" ;
 
 <expr_stmt> ::= <expr> ;
 
@@ -42,7 +45,7 @@
 <field_name> ::= <letter> <alnums> ;
 
 <assignment> ::= <var_access> <sep> <assign_op> <sep> <expr> ;
-<assign_op> ::= "=" | "+=" | "-=" ;
+<assign_op> ::= "=" ;
 
 <fn_def> ::= <type> <sep> <fn_kwd> <sep> <fn_name> "(" <param_list_e> ")" <sep> "{" <sep> <fn_body_e> <sep> "}" ;
 <<<<<<< HEAD
@@ -80,8 +83,8 @@
 <binop> ::= <expr_unit> <sep> <binop_op> <sep> <expr> ;
 <unop> ::= <unop_op> <expr> ;
 
-<binop_op> ::= "+" | "-" | "/" | "*" | "%" | "^" | "==" | "~=" | "<=" | ">=" | "<" | ">" | <sep> "and" <sep> | <sep> "or" <sep> | <sep> "in" <sep> ;
-<unop_op> ::= "-" | <sep> "not" <sep> ;
+<binop_op> ::= "+" | "-" | "/" | "*" | "%" | "^" | "==" | "!=" | "<=" | ">=" | "<" | ">" | "&&" | "||" ;
+<unop_op> ::= "- " | "! " ;
 
 <var_access> ::= <var_name> ;
 <var_name> ::= <letter> | <letter> <alnums> ;
@@ -92,24 +95,23 @@
 <alnum> ::= <letter> | <digit> ;
 <letter> ::= "a" | "b" | "c" | "d" | "e" | "f" | "g" | "h" | "i" | "j" | "k" | "l" | "m" | "n" | "o" | "p" | "q" | "r" | "s" | "t" | "u" | "v" | "w" | "x" | "y" | "z" | "A" | "B" | "C" | "D" | "E" | "F" | "G" | "H" | "I" | "J" | "K" | "L" | "M" | "N" | "O" | "P" | "Q" | "R" | "S" | "T" | "U" | "V" | "W" | "X" | "Y" | "Z" ;
 <digit> ::= "0" | "1" | "2" | "3" | "4" | "5" | "6" | "7" | "8" | "9" ;
+<nonzero_digit> ::= "1" | "2" | "3" | "4" | "5" | "6" | "7" | "8" | "9" ;
 
 <value> ::= <bool_val> | <num_val> | <string_val> ;
 
 <bool_val> ::= "true" | "false" ;
 <<<<<<< HEAD
 <num_val> ::= <int> | <float> | <double> ;
-<int> ::= <digit> | <digit> <int> ;
-<float> ::= <int> "." <int> "f" ;
-<double> ::= <int> "." <int> ;
-=======
-<num_val> ::= <num_val_inner> | <num_val_inner> <exponent> ;
-<exponent> ::= "e" <int> | "e-" <int> | "E" <int> | "E-" <int> ;
-<num_val_inner> ::= <int> | <float> | <hex> ;
-<hex> ::= "0x" <hex_digit>+ ;
-<hex_digit> ::= "a" | "b" | "c" | "d" | "e" | "f" | <digit> ;
-<int> ::= <digit> | <digit> <int> ;
-<float> ::= <int> "." <int> ;
->>>>>>> 9152e20 (split lang into lua and c; more visitors; wip type checker)
-<string_val> ::= "\"\"" | "\"" <alnums> "\"" ;
+<hex> ::= "0x" <hex_digits> ;
+<hex_digits> ::= <hex_digit> | <hex_digit> <hex_digits> ;
+<hex_digit> ::= "0" | "1" | "2" | "3" | "4" | "5" | "6" | "7" | "8" | "9" | "A" | "B" | "C" | "D" | "E" | "F" ;
+<octal> ::= "0" <octal_digits> ;
+<octal_digits> ::= <octal_digit> | <octal_digit> <octal_digits> ;
+<octal_digit> ::= "0" | "1" | "2" | "3" | "4" | "5" | "6" | "7" ;
+<int> ::= <nonzero_digit> <decimal> | <octal> | <hex> ;
+<decimal> ::= <digit> | <digit> <decimal> ;
+<float> ::= <decimal> "." <decimal> "f" ;
+<double> ::= <decimal> "." <decimal> ;
+<string_val> ::= "\' \'" | "\'" <alnum> "\'" ;
 <sep> ::= " " ;
 <e> ::= " " ;

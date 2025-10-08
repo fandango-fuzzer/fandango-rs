@@ -2,7 +2,7 @@
 
 use anyhow::Error;
 use fandango::tuple_list::tuple_list;
-use fandango::typing::{Discriminable, Node, StaticDiscriminable};
+use fandango::typing::{Node, StaticDiscriminable};
 use fandango::visitor::Visitor;
 use fandango::visitor::navigation::{CountNodes};
 use fandango::visitor::write::WriteVisitor;
@@ -12,7 +12,7 @@ use fandango_runtime::measurement::HasMeasurement;
 use fandango_runtime::measurement::{FitnessMeasurer, HasFitness, ViolationFitness};
 use fandango_runtime::operators::{DepthLimiter, NodeScan};
 use fandango_runtime::population::Individual;
-use fandango_targets::clang::{self, nonterminal_struct_def_0};
+use fandango_targets::clang::{self};
 use num_rational::Ratio;
 use rand::SeedableRng;
 use rand::rngs::StdRng;
@@ -36,6 +36,7 @@ where
     }
 }
 
+// Up to n struct definitions
 struct StructGoal {
     n: usize,
 }
@@ -52,6 +53,7 @@ where
     }
 }
 
+// Up to n struct fields
 struct StructFieldGoal {
     n: usize,
 }
@@ -68,17 +70,52 @@ where
     }
 }
 
-#[allow(deprecated)]
-fn main() -> Result<(), Error> {
+// Up to n function definitions
+struct FnGoal {
+    n: usize,
+}
+
+impl<'a, N> FitnessMeasurer<'a, N> for FnGoal
+where
+    N: Node,
+{
+    type Measurement = Reverse<usize>;
+    type Error = Infallible;
+
+    fn evaluate(&mut self, node: &'a N) -> Result<Self::Measurement, Self::Error> {
+        Ok(Reverse(NodeScan::new(clang::nonterminal_fn_def::DISCRIMINANT as usize).visit(node, 0).unwrap().continue_value().unwrap().matches().len().saturating_sub(self.n)))
+    }
+}
+
+// More than n expressions
+struct ExprGoal {
+    n: usize,
+}
+
+impl<'a, N> FitnessMeasurer<'a, N> for ExprGoal
+where
+    N: Node,
+{
+    type Measurement = Reverse<usize>;
+    type Error = Infallible;
+
+    fn evaluate(&mut self, node: &'a N) -> Result<Self::Measurement, Self::Error> {
+        Ok(Reverse(self.n.saturating_sub(NodeScan::new(clang::nonterminal_expr::DISCRIMINANT as usize).visit(node, 0).unwrap().continue_value().unwrap().matches().len())))
+    }
+}
+
+fn run_once() -> Result<(), Error> {
     let fitness = ViolationFitness::<clang::CombinedConstraintVisitor>::new();
     let nodes = NodeGoal { n: 1000 };
     let structs = StructGoal { n: 1 };
+    let fns = FnGoal { n: 1 };
     let fields = StructFieldGoal { n: 5 };
+    let exprs = ExprGoal { n: 20 };
     // let fixer = XmlFixHook::evaluated();
     let fixer = ();
     let hook = KPathDiversityHook::new(fixer, NonZeroUsize::new(10).unwrap());
     let mut runtime = Nsga2Evolver::new::<clang::nonterminal_start>(
-        tuple_list!(fitness, nodes, structs, fields),
+        tuple_list!(fitness, /* nodes, */ structs, fields, fns, exprs),
         hook,
         100,
         1000,
@@ -125,5 +162,17 @@ fn main() -> Result<(), Error> {
         println!("Structs: {}", NodeScan::new(clang::nonterminal_struct_def::DISCRIMINANT as usize).visit(candidate.node(), 0).unwrap().continue_value().unwrap().matches().len());
     }
 
+    Ok(())
+}
+
+#[allow(deprecated)]
+fn main() -> Result<(), Error> {
+    // Run multiple times to see different results.
+    for _ in 0..10 {
+        run_once()?;
+        println!("~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~");
+        println!("~                                                           ~");
+        println!("~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~");
+    }
     Ok(())
 }

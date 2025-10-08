@@ -48,3 +48,23 @@ required-features = ["xml", "static_defs"]
 name = "c_lang_basic"
 path = "examples/c_lang_basic.rs"
 required-features = ["clang", "static_defs"]
+
+[[example]]
+name = "c_lang_unconstrained"
+path = "examples/c_lang_unconstrained.rs"
+required-features = ["clang", "static_defs"]
+
+[[example]]
+name = "c_lang_validity_only"
+path = "examples/c_lang_validity_only.rs"
+required-features = ["clang", "static_defs"]
+
+[[example]]
+name = "c_lang_validity_and_size"
+path = "examples/c_lang_validity_and_size.rs"
+required-features = ["clang", "static_defs"]
+
+[[example]]
+name = "c_lang_validity_and_size_w_fix"
+path = "examples/c_lang_validity_and_size_w_fix.rs"
+required-features = ["clang", "static_defs"]
