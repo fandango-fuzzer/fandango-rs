@@ -1256,16 +1256,26 @@ mod defs {
                     match el.nth::<0>() {
                         // Variant 0, single expr.
                         nonterminal_expr_list_0::variant_0(expr_i) => {
-                            let expr_type =
-                                infer_expr_type(expr_i, var_defs, fun_defs, struct_defs, scope_trace);
+                            let expr_type = infer_expr_type(
+                                expr_i,
+                                var_defs,
+                                fun_defs,
+                                struct_defs,
+                                scope_trace,
+                            );
                             exprs_successfully_type_checked.push(expr_type.is_some());
                             current = None;
                         }
                         // Variant 1, expr followed by more exprs.
                         nonterminal_expr_list_0::variant_1(seq) => {
                             let (expr_i, _, _, rest) = seq.children();
-                            let expr_type =
-                                infer_expr_type(expr_i, var_defs, fun_defs, struct_defs, scope_trace);
+                            let expr_type = infer_expr_type(
+                                expr_i,
+                                var_defs,
+                                fun_defs,
+                                struct_defs,
+                                scope_trace,
+                            );
                             exprs_successfully_type_checked.push(expr_type.is_some());
                             current = Some(rest);
                         }
@@ -1410,14 +1420,18 @@ mod defs {
                     }
                     None => {
                         // Non-empty list. Continue on.
-                        let mut current = expr_list_e.nth::<0>().nth::<0>(); 
+                        let mut current = expr_list_e.nth::<0>().nth::<0>();
                         while let Some(el) = current {
                             match el.nth::<0>() {
                                 // Variant 0, single expr.
                                 nonterminal_expr_list_0::variant_0(expr) => {
-                                    if let Some(t) =
-                                        infer_expr_type(expr, var_defs, func_defs, struct_defs, scope_trace)
-                                    {
+                                    if let Some(t) = infer_expr_type(
+                                        expr,
+                                        var_defs,
+                                        func_defs,
+                                        struct_defs,
+                                        scope_trace,
+                                    ) {
                                         expr_types.push(t);
                                     } else {
                                         return None; // Could not infer type of expression.
@@ -1427,9 +1441,13 @@ mod defs {
                                 // Variant 1, expr followed by more exprs.
                                 nonterminal_expr_list_0::variant_1(seq) => {
                                     let (expr, _, _, rest) = seq.children();
-                                    if let Some(t) =
-                                        infer_expr_type(expr, var_defs, func_defs, struct_defs, scope_trace)
-                                    {
+                                    if let Some(t) = infer_expr_type(
+                                        expr,
+                                        var_defs,
+                                        func_defs,
+                                        struct_defs,
+                                        scope_trace,
+                                    ) {
                                         expr_types.push(t);
                                     } else {
                                         return None; // Could not infer type of expression.
@@ -1983,9 +2001,7 @@ mod defs {
                     // <expr> ::= <arith_expr> | <expr_unit> ;
                     // <expr_unit> ::= <var_access> | <value> | <fn_call> | <struct_expr> | <struct_access> ;
                     if let nonterminal_expr_0::variant_1(expr_unit) = _tree.nth_mut::<0>() {
-                        if let nonterminal_expr_unit_0::variant_3(_) =
-                            expr_unit.nth_mut::<0>()
-                        {
+                        if let nonterminal_expr_unit_0::variant_3(_) = expr_unit.nth_mut::<0>() {
                             // Violation, struct expr not on RHS of struct decl.
                             // Replace with a dummy expr, e.g., 0.
                             let mut new_expr =
@@ -2202,8 +2218,7 @@ mod defs {
                                     nonterminal_field_def_list_0::variant_1(seq) => {
                                         // field_def followed by more field_defs.
                                         // <type> <sep> <field_name> "," "\n" <field_def_list>
-                                        let (_, _, field_name, _, _, rest) =
-                                            seq.children();
+                                        let (_, _, field_name, _, _, rest) = seq.children();
                                         field_names.push(field_name.clone());
                                         fld_current = Some(rest);
                                     }
@@ -2336,7 +2351,10 @@ mod defs {
                 let fn_return_type = _tree.nth::<0>().nth::<0>().clone();
                 let fn_return_type_is_void = match fn_return_type.nth::<0>() {
                     nonterminal_type_0::variant_0(basic_type) => {
-                        matches!(basic_type.nth::<0>(), nonterminal_basic_type_0::variant_5(_))
+                        matches!(
+                            basic_type.nth::<0>(),
+                            nonterminal_basic_type_0::variant_5(_)
+                        )
                     }
                     _ => false,
                 };
@@ -2536,8 +2554,7 @@ mod defs {
                     return result;
                 }
                 // Get the function name and type from the scope trace.
-                if let Some((_, fn_type)) =
-                    get_current_function(self.func_defs, &self.scope_trace)
+                if let Some((_, fn_type)) = get_current_function(self.func_defs, &self.scope_trace)
                 {
                     // We have a function name and type.
                     // <return_stmt> ::= <return_kwd> | <return_kwd> <sep> <expr> ;

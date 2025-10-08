@@ -181,7 +181,7 @@ fn run_once(
             }
             continue;
         }
-        
+
         let process_or_not = Command::new("gcc")
             .arg("-x")
             .arg("c")
@@ -192,8 +192,9 @@ fn run_once(
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
             .spawn();
-        
-        let mut process = match process_or_not {Ok(p) => p,
+
+        let mut process = match process_or_not {
+            Ok(p) => p,
             Err(e) => {
                 if fine_print {
                     println!("Failed to spawn gcc process: {}", e);

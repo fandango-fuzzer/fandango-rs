@@ -5,7 +5,7 @@ use fandango::generation::Generated;
 use fandango::tuple_list::tuple_list;
 use fandango::visitor::Visitor;
 use fandango::visitor::write::WriteVisitor;
-use fandango_runtime::operators::{DepthLimiter};
+use fandango_runtime::operators::DepthLimiter;
 use fandango_targets::clang::{self};
 use rand::SeedableRng;
 use rand::rngs::StdRng;
@@ -63,8 +63,9 @@ fn run_once(
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
             .spawn();
-        
-        let mut process = match process_or_not {Ok(p) => p,
+
+        let mut process = match process_or_not {
+            Ok(p) => p,
             Err(e) => {
                 if fine_print {
                     println!("Failed to spawn gcc process: {}", e);
@@ -72,7 +73,7 @@ fn run_once(
                 continue;
             }
         };
-        
+
         let stdin = process.stdin.as_mut().expect("Failed to open stdin");
         use std::io::Write;
         writeln!(stdin, "#include <stdio.h>").unwrap();

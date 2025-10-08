@@ -9,7 +9,7 @@ use fandango_runtime::evolvers::Evolver;
 use fandango_runtime::evolvers::multi::{KPathDiversityHook, Nsga2Evolver};
 use fandango_runtime::measurement::HasMeasurement;
 use fandango_runtime::measurement::{HasFitness, ViolationFitness};
-use fandango_runtime::operators::{DepthLimiter};
+use fandango_runtime::operators::DepthLimiter;
 use fandango_runtime::population::Individual;
 use fandango_targets::clang::{self};
 use num_rational::Ratio;
@@ -94,7 +94,7 @@ fn run_once(
             }
             continue;
         }
-        
+
         let process_or_not = Command::new("gcc")
             .arg("-x")
             .arg("c")
@@ -105,8 +105,9 @@ fn run_once(
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
             .spawn();
-        
-        let mut process = match process_or_not {Ok(p) => p,
+
+        let mut process = match process_or_not {
+            Ok(p) => p,
             Err(e) => {
                 if fine_print {
                     println!("Failed to spawn gcc process: {}", e);
@@ -114,7 +115,6 @@ fn run_once(
                 continue;
             }
         };
-
 
         let stdin = process.stdin.as_mut().expect("Failed to open stdin");
         use std::io::Write;
