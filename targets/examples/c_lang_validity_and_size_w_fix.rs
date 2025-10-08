@@ -140,7 +140,7 @@ where
 fn run_once(fine_print: bool, print_successful_compile: bool) -> Result<((i32, i32, i32, f32, f32)), Error> {
     let fitness = ViolationFitness::<clang::CombinedConstraintVisitor>::new();
     
-    let nodes = NodeGoal { n: 1000 };
+    let nodes = NodeGoal { n: 500 };
     let structs = StructGoal { n: 1 };
     let fns = FnGoal { n: 2 };
     let stmts = StmtGoal { n: 5 };

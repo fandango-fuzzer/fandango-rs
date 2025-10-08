@@ -459,12 +459,23 @@ mod defs {
                     Vec::new()
                 } else {
                     // In this case, we know it's param_list.
+                    // Let's collect all param names to check for re-declarations.
+                    let mut param_names = Vec::new();
                     let mut current = param_list_e.nth::<0>().nth::<0>();
                     let mut param_type_list_inner = Vec::new();
                     while let Some(pl) = current {
                         match pl.nth::<0>() {
                             // Variant 0, single param.
                             nonterminal_param_list_0::variant_0(param) => {
+                                let param_name = param.nth::<0>().nth::<2>().nth::<0>().clone();
+                                if param_names.contains(&param_name) {
+                                    // Violation: re-declaration in parameters.
+                                    self.violations.push(self.path.clone());
+                                } else {
+                                    self.paths_to_passed_checks.push(self.path.clone());
+                                }
+                                // Always push.
+                                param_names.push(param_name);
                                 let param_type = param.nth::<0>().nth::<0>().clone();
                                 param_type_list_inner.push(param_type);
                                 current = None;
@@ -472,6 +483,15 @@ mod defs {
                             // Variant 1, param followed by more params.
                             nonterminal_param_list_0::variant_1(seq) => {
                                 let (param, _, _, rest) = seq.children();
+                                let param_name = param.nth::<0>().nth::<2>().nth::<0>().clone();
+                                if param_names.contains(&param_name) {
+                                    // Violation: re-declaration in parameters.
+                                    self.violations.push(self.path.clone());
+                                } else {
+                                    self.paths_to_passed_checks.push(self.path.clone());
+                                }
+                                // Always push.
+                                param_names.push(param_name);
                                 let param_type = param.nth::<0>().nth::<0>().clone();
                                 param_type_list_inner.push(param_type);
                                 current = Some(rest);
@@ -488,7 +508,7 @@ mod defs {
                 let mut param_type_list = param_type_list;
                 param_type_list.push(return_type);
                 // [Violations] Check if function already defined.
-                if self.func_defs.contains_key(&(fn_name.clone(), self.scope_trace.clone())) {
+                if get_func_definition(&self.func_defs, &fn_name, &self.scope_trace).is_some() {
                     self.violations.push(self.path.clone());
                 } else {
                     self.paths_to_passed_checks.push(self.path.clone());
@@ -1147,6 +1167,195 @@ mod defs {
         }
     }
     // ================= end of Def before use.
+
+    // ================= Constraint fixer def-use?
+    #[derive(Debug)]
+    pub struct ConstraintFixerDefUse<'a, S, G> {
+        /// Sampler used in generation.
+        pub sampler: &'a mut S,
+        /// Generator used in generation.
+        pub generator: &'a mut G,
+        /// The current path, to be used by the visitor when saving violations.
+        pub path: VecDeque<usize>,
+        /// The current scope_id, to track variable scopes.
+        pub scope_id: usize,
+        /// The current scope depth, to track variable scopes.
+        pub scope_trace: Vec<usize>,
+        /// The collection of function scope IDs, to help manage function scopes.
+        pub function_scopes: Vec<usize>,
+        /// These next three should be initialized by a prior pass of DeclarationCollector.
+        /// The set of currently defined variables, (var_name, scope) -> var_type
+        pub defined_vars: &'a VarSymbolTable,
+        /// The set of currently defined functions. (fn_name, scope) -> Vec<param_type>
+        pub defined_fns: &'a FuncSymbolTable,
+        /// The set of currently defined structs. struct_name -> Vec<(field_name, field_type)>
+        pub defined_structs: &'a alloc::collections::BTreeMap<nonterminal_struct_name, Vec<(nonterminal_field_name, nonterminal_type)>>,
+    }
+
+    impl<'a, S, G> ConstraintFixerDefUse<'a, S, G> {
+        /// Create a new ConstraintFixer with the given defined variables/functions/structs.
+        pub fn new(
+            sampler: &'a mut S,
+            generator: &'a mut G,
+            defined_vars: &'a VarSymbolTable,
+            defined_fns: &'a FuncSymbolTable,
+            defined_structs: &'a alloc::collections::BTreeMap<nonterminal_struct_name, Vec<(nonterminal_field_name, nonterminal_type)>>,
+        ) -> Self {
+            Self {
+                sampler: sampler,
+                generator: generator,
+                path: VecDeque::new(),
+                scope_trace: Vec::new(),
+                function_scopes: Vec::new(),
+                scope_id: 0,
+                defined_vars,
+                defined_fns,
+                defined_structs,
+            }
+        }
+    }
+
+    impl<'a, T, S, G> VisitorMut<T> for ConstraintFixerDefUse<'a, S, G>
+    where
+        nonterminal_var_name: Generated<S, G>,
+        nonterminal_struct_name: Generated<S, G>,
+        nonterminal_field_name: Generated<S, G>,
+        T: VisitableChildrenMut<T> +
+        AsNodeMut<nonterminal_var_access> +
+        AsNodeMut<nonterminal_assignment> +
+        AsNodeMut<nonterminal_decl> +
+        AsNodeMut<nonterminal_fn_def> +
+        AsNodeMut<nonterminal_var_name> +
+        AsNodeMut<nonterminal_fn_call> +
+        AsNodeMut<nonterminal_type> +
+        AsNodeMut<nonterminal_struct_type> +
+        AsNodeMut<nonterminal_struct_def>,
+    {
+        type Continue = Self;
+        type Break = Infallible;
+        type Error = Infallible;
+
+        fn visit_mut<'program, N>(mut self, node: &'program mut N, idx: usize) -> VisitMutResult<Self, T>
+        where
+            N: Node<TypeMut<'program> = T>,
+            T: From<&'program mut N> + AsNodeMut<N>,
+        {
+            self.path.push_back(idx);
+            let mut visited = node.opaque_mut();
+
+            // Assume that defined_vars is correctly populated at the start of the visit.
+
+            // Check if we are in a situation where we need to increase scope depth.
+            if let Some(_tree) = visited.downcast_mut::<nonterminal_fn_def>() {
+                self.scope_id += 1;
+                self.function_scopes.push(self.scope_id);
+                self.scope_trace.push(self.scope_id);
+                // Visit the function, then decrease depth.
+                let result = visited.visit_each_mut(self);
+                let Ok(ControlFlow::Continue(mut visitor)) = result;
+                let pop_until = visitor.function_scopes.pop().unwrap();
+                // Pop the scope trace until we reach the function scope we just popped.
+                while visitor.scope_trace.pop() != Some(pop_until) {}
+                // Pop one extra.
+                visitor.scope_trace.pop();
+                visitor.path.pop_back();
+                return Ok(ControlFlow::Continue(visitor));
+            } // Functions are currently the only scope-increasing construct.
+
+
+            if let Some(tree) = visited.downcast_mut::<nonterminal_type>() {
+                // If the type is a struct type, check if it's defined.
+                // if let nonterminal_type_0::variant_1(struct_type) = tree.nth_mut::<0>() {
+                //     let struct_name = struct_type.nth::<0>().nth::<2>().clone();
+                //     if !self.defined_structs.contains_key(&struct_name) {
+                //         // Struct type not defined, pick a defined struct name and replace.
+                //         if let Some((defined_name, _)) = self.defined_structs.iter().next() {
+                //             struct_name = defined_name.clone();
+                //         }
+                //         tree.nth_mut::<0>().nth_mut::<2>().clone_from(&struct_name);
+                //     } else {
+                //         // Struct type defined, passed check.
+                //         self.paths_to_passed_checks.push(self.path.clone());
+                //     }
+                // }
+            } else if let Some(tree) = visited.downcast_mut::<nonterminal_var_access>() {
+                let var_name_accessed = tree.nth::<0>().clone();
+                if get_var_definition(&self.defined_vars, &var_name_accessed, &self.scope_trace).is_none() {
+                    // Pick a variable that is defined and available now, and replace.
+                    // For each var in defined_vars, check if its scope is a prefix of the current scope_trace.
+                    let mut replacement: Option<nonterminal_var_name> = None;
+                    'outer: for ((defined_var, defined_scope), _var_type) in self.defined_vars.iter() {
+                        if defined_scope.len() <= self.scope_trace.len() {
+                            // Check if defined_scope is a prefix of scope_trace.
+                            let mut is_prefix = true;
+                            for (i, scope_id) in defined_scope.iter().enumerate() {
+                                if *scope_id != self.scope_trace[i] {
+                                    is_prefix = false;
+                                    break;
+                                }
+                            }
+                            if is_prefix {
+                                replacement = Some(defined_var.clone());
+                                break 'outer;
+                            }
+                        }
+                    }
+                    if let Some(replacement) = replacement {
+                        // Generate a new var_name.
+                        mem::swap(tree.nth_mut::<0>(), &mut replacement.clone());
+                    }
+                } else {
+                    // It is defined, so this is a passed check.
+                    // self.paths_to_passed_checks.push(self.path.clone());
+                }
+            } else if let Some(decl_tree) = visited.downcast_mut::<nonterminal_decl>() {
+                // Deal with scoping.
+                self.scope_id += 1;
+                self.scope_trace.push(self.scope_id);
+                // TODO: We probably don't want this, right?
+                // If we want to catch re-definitions, we should do it in the DeclarationCollector.
+                // let var_decl_name = decl_tree.nth::<0>().nth::<2>().clone();
+                // let var_decl_type = decl_tree.nth::<0>().nth::<0>().clone();
+                // // Is the variable already defined in the current scope?
+                // if get_var_definition(&self.defined_vars, &var_decl_name, &self.scope_trace).is_none() {
+                //     // Not defined, that's ok.
+                //     self.paths_to_passed_checks.push(self.path.clone());
+                // } else {
+                //     // Already defined, violation.
+                //     self.violations.push(self.path.clone());
+                // }
+                // Is the type a struct type? If so, check if it's defined.
+                // if let nonterminal_type_0::variant_1(struct_type) = var_decl_type.nth::<0>() {
+                //     let struct_name = struct_type.nth::<0>().nth::<2>().clone();
+                //     if !self.defined_structs.contains_key(&struct_name) {
+                //         // Struct type not defined, violation.
+                //         self.violations.push(self.path.clone());
+                //     } else {
+                //         // Struct type defined, passed check.
+                //         self.paths_to_passed_checks.push(self.path.clone());
+                //     }
+                // }
+            } else if let Some(fn_call) = visited.downcast_mut::<nonterminal_fn_call>() {
+                // Get name and check if function is defined.
+                // let fn_name = fn_call.nth::<0>().nth::<0>().clone();
+                // if get_func_definition(&self.defined_fns, &fn_name, &self.scope_trace).is_none() {
+                //     self.violations.push(self.path.clone());
+                // } else {
+                //     // It is defined, so this is a passed check.
+                //     self.paths_to_passed_checks.push(self.path.clone());
+                // }
+            } else if let Some(_tree) = visited.downcast_mut::<nonterminal_struct_def>() {
+                // Adjust scope for new declaration.
+                self.scope_id += 1;
+                self.scope_trace.push(self.scope_id);
+            }
+            let mut result = visited.visit_each_mut(self);
+            if let Ok(ControlFlow::Continue(visitor)) = &mut result {
+                visitor.path.pop_back();
+            }
+            result
+        }
+    }    
 
     // ================= Returns only inside functions.
     // Constraint visitor.
@@ -2382,6 +2591,12 @@ mod defs {
                                     nonterminal_field_def_list_0::variant_0(field_def) => {
                                         // Single field_def.
                                         let field_name = field_def.nth::<2>().clone();
+                                        if field_names.contains(&field_name) {
+                                            // Duplicate field name, violation.
+                                            self.violations.push(self.path.clone());
+                                        } else {
+                                            self.paths_to_passed_checks.push(self.path.clone());
+                                        }
                                         field_names.push(field_name);
                                         fld_current = None;
                                     },
@@ -2389,6 +2604,12 @@ mod defs {
                                         // field_def followed by more field_defs.
                                         // <type> <sep> <field_name> "," "\n" <field_def_list>
                                         let (field_type, _, field_name, _, _, rest) = seq.children();
+                                        if field_names.contains(&field_name) {
+                                            // Duplicate field name, violation.
+                                            self.violations.push(self.path.clone());
+                                        } else {
+                                            self.paths_to_passed_checks.push(self.path.clone());
+                                        }
                                         field_names.push(field_name.clone());
                                         fld_current = Some(rest);
                                     }
@@ -2401,21 +2622,6 @@ mod defs {
                             current = None;
                         }   
                     }
-                }
-                // Now check for duplicates.
-                let mut seen = alloc::collections::BTreeSet::new();
-                let mut has_duplicates = false;
-                for field_name in field_names { 
-                    if !seen.insert(field_name) {
-                        // Duplicate found.
-                        has_duplicates = true;
-                        break;
-                    }
-                }
-                if has_duplicates {
-                    self.violations.push(self.path.clone());
-                } else {    
-                    self.paths_to_passed_checks.push(self.path.clone());
                 }
             }
             let mut result = visited.visit_each(self);
@@ -3258,6 +3464,11 @@ mod defs {
                 self.violation_list.extend(empty_struct_visitor.violations);
                 self.paths_to_passed_checks.extend(empty_struct_visitor.paths_to_passed_checks);
 
+                // No duplicate field names visitor.
+                let Ok(ControlFlow::Continue(dup_field_visitor)) = ConstraintVisitorNoDuplicateStructFields::default().visit(node, idx);
+                self.violation_list.extend(dup_field_visitor.violations);
+                self.paths_to_passed_checks.extend(dup_field_visitor.paths_to_passed_checks);
+
                 // No void decls or params visitor. This one has Default implemented.
                 let Ok(ControlFlow::Continue(void_decl_visitor)) = ConstraintVisitorNoVoidDecls::default().visit(node, idx);
                 self.violation_list.extend(void_decl_visitor.violations);
@@ -3327,9 +3538,11 @@ mod defs {
         nonterminal_struct_name: Generated<S, G>,
         nonterminal_fn_name: Generated<S, G>,
         nonterminal_decl_rhs: Generated<S, G>,
+        nonterminal_field_name: Generated<S, G>,
         T: VisitableChildrenMut<T> +
             AsNodeMut<nonterminal_start> +
             AsNodeMut<nonterminal_fn_def> +
+            AsNodeMut<nonterminal_fn_call> +
             AsNodeMut<nonterminal_expr_unit> +
             AsNodeMut<nonterminal_decl> +
             AsNodeMut<nonterminal_var_access> +
@@ -3397,20 +3610,31 @@ mod defs {
                 let func_defs = &decl_collector.func_defs;
                 let struct_defs = &decl_collector.struct_defs;
 
-                // Unused variable fixer.
-                let mut added_var_uses = alloc::collections::BTreeMap::new();
-                let mut var_uses_clone = decl_collector.var_uses.clone();
-                let unused_variable_fixer = UnusedVariableFixer::new(
+                // DefUse fixer.
+                let def_use_fixer = ConstraintFixerDefUse::new(
                     decl_collector.sampler,
                     decl_collector.generator,
                     var_defs,
                     func_defs,
                     struct_defs,
-                    &mut var_uses_clone,
-                    &mut added_var_uses,
                 );
-                let result = unused_variable_fixer.visit_mut(_tree, idx);
+                let result = def_use_fixer.visit_mut(_tree, idx);
                 let Ok(ControlFlow::Continue(_)) = result;
+
+                // Unused variable fixer.
+                // let mut added_var_uses = alloc::collections::BTreeMap::new();
+                // let mut var_uses_clone = decl_collector.var_uses.clone();
+                // let unused_variable_fixer = UnusedVariableFixer::new(
+                //     decl_collector.sampler,
+                //     decl_collector.generator,
+                //     var_defs,
+                //     func_defs,
+                //     struct_defs,
+                //     &mut var_uses_clone,
+                //     &mut added_var_uses,
+                // );
+                // let result = unused_variable_fixer.visit_mut(_tree, idx);
+                // let Ok(ControlFlow::Continue(_)) = result;
 
                 // We could add more fixers here in the future.
             }

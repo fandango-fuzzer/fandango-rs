@@ -120,6 +120,22 @@ where
     }
 }
 
+// Make a var access goal?
+struct VarAccessGoal {
+    n: usize,
+}
+
+impl<'a, N> FitnessMeasurer<'a, N> for VarAccessGoal
+where
+    N: Node,
+{
+    type Measurement = Reverse<usize>;
+    type Error = Infallible;
+    fn evaluate(&mut self, node: &'a N) -> Result<Self::Measurement, Self::Error> {
+        Ok(Reverse(self.n.saturating_sub(NodeScan::new(clang::nonterminal_var_access::DISCRIMINANT as usize).visit(node, 0).unwrap().continue_value().unwrap().matches().len())))
+    }
+}
+
 fn run_once(fine_print: bool, print_successful_compile: bool) -> Result<((i32, i32, i32, f32, f32)), Error> {
     let fitness = ViolationFitness::<clang::CombinedConstraintVisitor>::new();
     
@@ -130,13 +146,14 @@ fn run_once(fine_print: bool, print_successful_compile: bool) -> Result<((i32, i
     // let fields = StructFieldGoal { n: 5 };
     // let exprs = ExprGoal { n: 20 };
     // let fixer = XmlFixHook::evaluated();
-    
+    // let var_access = VarAccessGoal { n: 5 };
+
     let fixer = ();
     let hook = KPathDiversityHook::new(fixer, NonZeroUsize::new(10).unwrap());
     let mut runtime = Nsga2Evolver::new::<clang::nonterminal_start>(
-        tuple_list!(fitness, structs, fns, stmts /* nodes, fields, exprs */),
+        tuple_list!(fitness, structs, fns, stmts, /* var_access, nodes, fields, exprs */),
         hook,
-        100,
+        20,
         1000,
         Ratio::new(80, 100),
     )

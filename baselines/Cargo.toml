@@ -20,6 +20,7 @@ static_defs = [
 [dependencies]
 fandango = { path = ".." }
 fandango-runtime = { path = "../runtime" }
+fandango-targets = { path = "../targets" }
 
 common = { path = "common" }
 
