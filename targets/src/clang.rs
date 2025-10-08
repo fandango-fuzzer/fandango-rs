@@ -181,8 +181,6 @@ mod defs {
         }
     }
 
-    
-
     impl<T> Visitor<T> for KeepReasonableStructVisitor
     where
         T: VisitableChildren<T>
@@ -237,7 +235,7 @@ mod defs {
                 }
             }
             self.path.pop_back();
-            
+
             visited.visit_each(self)
         }
     }
@@ -1343,22 +1341,24 @@ mod defs {
         // Check if positional struct fields match named struct fields.
         if let (Some(pos_fields), Some(named_fields)) =
             (&t1.struct_fields_positional, &t2.struct_fields)
-            && pos_fields.len() == named_fields.len() {
-                return pos_fields
-                    .iter()
-                    .zip(named_fields.values())
-                    .all(|(typ1, typ2)| types_compatible(typ1, &typ2.clone().into()));
-            }
+            && pos_fields.len() == named_fields.len()
+        {
+            return pos_fields
+                .iter()
+                .zip(named_fields.values())
+                .all(|(typ1, typ2)| types_compatible(typ1, &typ2.clone().into()));
+        }
 
         // Also other way around.
         if let (Some(pos_fields), Some(named_fields)) =
             (&t2.struct_fields_positional, &t1.struct_fields)
-            && pos_fields.len() == named_fields.len() {
-                return pos_fields
-                    .iter()
-                    .zip(named_fields.values())
-                    .all(|(typ1, typ2)| types_compatible(typ1, &typ2.clone().into()));
-            }
+            && pos_fields.len() == named_fields.len()
+        {
+            return pos_fields
+                .iter()
+                .zip(named_fields.values())
+                .all(|(typ1, typ2)| types_compatible(typ1, &typ2.clone().into()));
+        }
 
         false
     }
@@ -1375,14 +1375,16 @@ mod defs {
         if let nonterminal_binop_op_0::variant_5(_) = binop.nth::<0>() {
             // Bitwise XOR is only valid for integer types.
             if let nonterminal_type_0::variant_0(bt1) = t1.base.nth::<0>()
-                && let nonterminal_basic_type_0::variant_0(_) = bt1.nth::<0>() {
-                    // t1 is int, check t2.
-                    if let nonterminal_type_0::variant_0(bt2) = t2.base.nth::<0>()
-                        && let nonterminal_basic_type_0::variant_0(_) = bt2.nth::<0>() {
-                            // t2 is also int, valid.
-                            return Some(t1.clone());
-                        }
+                && let nonterminal_basic_type_0::variant_0(_) = bt1.nth::<0>()
+            {
+                // t1 is int, check t2.
+                if let nonterminal_type_0::variant_0(bt2) = t2.base.nth::<0>()
+                    && let nonterminal_basic_type_0::variant_0(_) = bt2.nth::<0>()
+                {
+                    // t2 is also int, valid.
+                    return Some(t1.clone());
                 }
+            }
             return None; // Invalid types for bitwise XOR.
         }
 
@@ -1553,7 +1555,9 @@ mod defs {
                 let fn_name = fn_call.nth::<0>().nth::<0>().clone();
                 if let Some(param_types) = get_func_definition(func_defs, &fn_name, scope_trace) {
                     // The return type is the last type in the param_types list.
-                    param_types.last().map(|return_type| return_type.clone().into())
+                    param_types
+                        .last()
+                        .map(|return_type| return_type.clone().into())
                 } else {
                     None // Function not found.
                 }
@@ -1592,13 +1596,9 @@ mod defs {
                     match el.nth::<0>() {
                         // Variant 0, single expr.
                         nonterminal_expr_list_0::variant_0(expr) => {
-                            if let Some(t) = infer_expr_type(
-                                expr,
-                                var_defs,
-                                func_defs,
-                                struct_defs,
-                                scope_trace,
-                            ) {
+                            if let Some(t) =
+                                infer_expr_type(expr, var_defs, func_defs, struct_defs, scope_trace)
+                            {
                                 expr_types.push(t);
                             } else {
                                 return None; // Could not infer type of expression.
@@ -1608,13 +1608,9 @@ mod defs {
                         // Variant 1, expr followed by more exprs.
                         nonterminal_expr_list_0::variant_1(seq) => {
                             let (expr, _, _, rest) = seq.children();
-                            if let Some(t) = infer_expr_type(
-                                expr,
-                                var_defs,
-                                func_defs,
-                                struct_defs,
-                                scope_trace,
-                            ) {
+                            if let Some(t) =
+                                infer_expr_type(expr, var_defs, func_defs, struct_defs, scope_trace)
+                            {
                                 expr_types.push(t);
                             } else {
                                 return None; // Could not infer type of expression.
@@ -1773,7 +1769,7 @@ mod defs {
                                 _ => None, // Should not happen
                             }
                         } else {
-                            None// Could not infer type
+                            None // Could not infer type
                         }
                     }
                 }
@@ -2827,18 +2823,19 @@ mod defs {
                 let field_name = tree.nth::<0>().nth::<2>().clone();
                 // Check if the variable type is a struct and if it has the field.
                 if let Some(vt) = var_type
-                    && let nonterminal_type_0::variant_1(struct_type) = vt.nth::<0>() {
-                        let struct_name = struct_type.nth::<0>().nth::<2>().clone();
-                        if let Some(fields) = self.struct_defs.get(&struct_name) {
-                            if !fields.iter().any(|(fname, _ftype)| fname == &field_name) {
-                                // Field not found in struct definition, violation.
-                                self.violations.push(self.path.clone());
-                            } else {
-                                // Field found, all good.
-                                self.paths_to_passed_checks.push(self.path.clone());
-                            }
+                    && let nonterminal_type_0::variant_1(struct_type) = vt.nth::<0>()
+                {
+                    let struct_name = struct_type.nth::<0>().nth::<2>().clone();
+                    if let Some(fields) = self.struct_defs.get(&struct_name) {
+                        if !fields.iter().any(|(fname, _ftype)| fname == &field_name) {
+                            // Field not found in struct definition, violation.
+                            self.violations.push(self.path.clone());
+                        } else {
+                            // Field found, all good.
+                            self.paths_to_passed_checks.push(self.path.clone());
                         }
                     }
+                }
             } else if let Some(tree) = visited.downcast::<nonterminal_fn_call>() {
                 // <fn_call> ::= <fn_name> "(" <arg_list_e> ")" ;
                 // <arg_list_e> ::= <arg_list> | <e> ;
