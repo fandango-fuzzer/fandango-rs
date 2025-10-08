@@ -4,16 +4,11 @@ use crate::evolvers::multi::{Dom, Multiobjective};
 use crate::measurement::{FitnessMeasurer, HasFitness, HasMeasurement, HasViolations};
 use crate::operators::{MutatorVisitor, crossover};
 use crate::population::Individual;
-<<<<<<< HEAD
 use alloc::collections::BinaryHeap;
-=======
-use alloc::collections::{BTreeSet, BinaryHeap};
->>>>>>> cf4b4e0 (multiobjective)
 use alloc::vec;
 use alloc::vec::Vec;
 use anyhow::Error;
 use core::cmp::Ordering;
-<<<<<<< HEAD
 use core::convert::Infallible;
 use core::marker::PhantomData;
 use core::num::NonZeroUsize;
@@ -37,30 +32,6 @@ where
     let mut front = Vec::with_capacity(population.len());
     for (p, first) in population.iter().enumerate() {
         for (q, other) in population.iter().enumerate().skip(p + 1) {
-=======
-use core::marker::PhantomData;
-use core::num::NonZeroUsize;
-use core::ops::Sub;
-use fandango::generation::{Generated, InPlaceGenerated, Sampler};
-use fandango::lang::FandangoNode;
-use fandango::typing::{AsNode, Node};
-use fandango::visitor::kpath::{KPathUpdate, KPaths};
-use fandango::visitor::navigation::{Advance, CountNodes, GoToMut};
-use fandango::visitor::{VisitWithMut, VisitableChildrenMut, Visitor, VisitorMut};
-use num_rational::Ratio;
-
-fn fast_non_dominated_sort<I>(mut popululation: Vec<I>, survivors: usize) -> Vec<Vec<I>>
-where
-    I: Dom<I>,
-{
-    let mut s = vec![Vec::new(); popululation.len()];
-    let mut n = vec![0usize; popululation.len()];
-
-    let mut front = Vec::with_capacity(popululation.len());
-    for (p, first) in popululation.iter().enumerate() {
-        for q in (p + 1)..popululation.len() {
-            let other = &popululation[q];
->>>>>>> cf4b4e0 (multiobjective)
             let (dominator, dominated) = match first.dominates(other).unwrap_or(Ordering::Equal) {
                 Ordering::Greater => (p, q),
                 Ordering::Equal => continue,
@@ -74,17 +45,10 @@ where
         }
     }
 
-<<<<<<< HEAD
     let mut remaining = population.len() - front.len();
     let mut fronts = vec![front];
     for i in 0.. {
         if population.len() - remaining > survivors || remaining == 0 {
-=======
-    let mut remaining = popululation.len() - front.len();
-    let mut fronts = vec![front];
-    for i in 0.. {
-        if popululation.len() - remaining > survivors || remaining == 0 {
->>>>>>> cf4b4e0 (multiobjective)
             break;
         }
 
@@ -115,11 +79,7 @@ where
             .flat_map(|(idx, front)| front.into_iter().map(move |i| (i, idx))),
     );
     while let Some((extracted, front)) = extracted.pop() {
-<<<<<<< HEAD
         returned[front].push(population.swap_remove(extracted));
-=======
-        returned[front].push(popululation.swap_remove(extracted));
->>>>>>> cf4b4e0 (multiobjective)
     }
     returned
 }
@@ -138,18 +98,12 @@ where
     }
 }
 
-<<<<<<< HEAD
 /// An evolver which implements [NSGA-II], but where diversity is handled by a hook
 ///
 /// [NSGA-II]: https://web.njit.edu/~horacio/Math451H/download/2002-6-2-DEB-NSGA-II.pdf
 pub struct Nsga2Evolver<H, M, N> {
     measurer: M,
     hook: H,
-=======
-pub struct Nsga2Evolver<H, M, N> {
-    measurer: M,
-    hooks: H,
->>>>>>> cf4b4e0 (multiobjective)
 
     size: usize,
     replication: usize,
@@ -159,7 +113,6 @@ pub struct Nsga2Evolver<H, M, N> {
 }
 
 impl<H, MT> Nsga2Evolver<H, Multiobjective<MT>, ()> {
-<<<<<<< HEAD
     /// Create a new [`Nsga2Evolver`]
     ///
     /// - `measurers` specifies the tuple list of [`FitnessMeasurer`]s for this evolver.
@@ -172,11 +125,6 @@ impl<H, MT> Nsga2Evolver<H, Multiobjective<MT>, ()> {
     pub fn new<N>(
         measurers: MT,
         hook: H,
-=======
-    pub fn new<N>(
-        measurers: MT,
-        hooks: H,
->>>>>>> cf4b4e0 (multiobjective)
         size: usize,
         replication: usize,
         crossover_rate: Ratio<usize>,
@@ -186,11 +134,7 @@ impl<H, MT> Nsga2Evolver<H, Multiobjective<MT>, ()> {
         }
         Some(Nsga2Evolver::<H, Multiobjective<MT>, N> {
             measurer: Multiobjective::new(measurers),
-<<<<<<< HEAD
             hook,
-=======
-            hooks,
->>>>>>> cf4b4e0 (multiobjective)
             size,
             replication,
             crossover_rate,
@@ -199,22 +143,14 @@ impl<H, MT> Nsga2Evolver<H, Multiobjective<MT>, ()> {
     }
 }
 
-<<<<<<< HEAD
 impl<N, G, S, H, M, V> Evolver<G, S> for Nsga2Evolver<H, M, N>
-=======
-impl<N, G, S, H, M, V> Evolver<BasicIndividual<N, V>, G, S> for Nsga2Evolver<H, M, N>
->>>>>>> cf4b4e0 (multiobjective)
 where
     H: Nsga2Hook<BasicIndividual<N, V>, G, S>,
     N: Node + Generated<S, G>,
     for<'a, 'b, 'c> N::TypeMut<'a>: VisitWithMut<MutatorVisitor<'b, S, G>>
         + InPlaceGenerated<S, G>
         + VisitableChildrenMut<N::TypeMut<'a>>,
-<<<<<<< HEAD
     for<'a> M: FitnessMeasurer<'a, N, Error = Error, Measurement = V>,
-=======
-    for<'a> M: FitnessMeasurer<'a, N, Error = Error, Value = V>,
->>>>>>> cf4b4e0 (multiobjective)
     V: HasFitness + HasViolations,
     <V as HasFitness>::Fitness: Dom<<V as HasFitness>::Fitness>,
     S: Sampler<N>,
@@ -230,11 +166,7 @@ where
         let mut population = Vec::with_capacity(self.size + self.replication);
         for _ in 0..(self.size + self.replication) {
             let mut node = N::generate(sampler, generators, 0);
-<<<<<<< HEAD
             self.hook
-=======
-            self.hooks
->>>>>>> cf4b4e0 (multiobjective)
                 .individual_created(&mut node, generators, sampler)?;
             let measurement = self.measurer.evaluate(&node)?;
             let individual = BasicIndividual::new(node, measurement);
@@ -243,11 +175,7 @@ where
 
         let mut fronts = fast_non_dominated_sort(population, self.size);
         // only need to diversity sort the last chunk
-<<<<<<< HEAD
         self.hook.diversity_sort(fronts.last_mut().unwrap());
-=======
-        self.hooks.diversity_sort(fronts.last_mut().unwrap());
->>>>>>> cf4b4e0 (multiobjective)
 
         Ok(fronts.into_iter().flatten().take(self.size).collect())
     }
@@ -292,29 +220,17 @@ where
                     .unwrap();
             }
 
-<<<<<<< HEAD
             self.hook
-=======
-            self.hooks
->>>>>>> cf4b4e0 (multiobjective)
                 .individual_created(&mut child, generators, sampler)?;
             let measurement = self.measurer.evaluate(&child)?;
             descendents.push(BasicIndividual::new(child, measurement));
         }
 
-<<<<<<< HEAD
         descendents.append(&mut population);
 
         let mut fronts = fast_non_dominated_sort(descendents, self.size);
         // only need to diversity sort the last chunk
         self.hook.diversity_sort(fronts.last_mut().unwrap());
-=======
-        descendents.extend(population.drain(..));
-
-        let mut fronts = fast_non_dominated_sort(descendents, self.size);
-        // only need to diversity sort the last chunk
-        self.hooks.diversity_sort(fronts.last_mut().unwrap());
->>>>>>> cf4b4e0 (multiobjective)
 
         // memory reuse
         population.extend(fronts.into_iter().flatten().take(self.size));
@@ -323,38 +239,26 @@ where
     }
 }
 
-<<<<<<< HEAD
 /// A hook for [`Nsga2Evolver`]s
-=======
->>>>>>> cf4b4e0 (multiobjective)
 pub trait Nsga2Hook<I, G, S>: BasicHook<I::Node, G, S>
 where
     I: Individual,
 {
-<<<<<<< HEAD
     /// Perform the diversity-based sorting on the last Pareto front
-=======
->>>>>>> cf4b4e0 (multiobjective)
     #[allow(unused)]
     fn diversity_sort(&mut self, individuals: &mut [I]) {}
 }
 
 impl<I, G, S> Nsga2Hook<I, G, S> for () where I: Individual {}
 
-<<<<<<< HEAD
 /// A [`Nsga2Hook`] which wraps a [`BasicHook`] and optimizes diversity by rare k-paths
-=======
->>>>>>> cf4b4e0 (multiobjective)
 pub struct KPathDiversityHook<H> {
     k: NonZeroUsize,
     inner: H,
 }
 
 impl<H> KPathDiversityHook<H> {
-<<<<<<< HEAD
     /// Create the hook over the provided [`BasicHook`] and with some `k`
-=======
->>>>>>> cf4b4e0 (multiobjective)
     pub fn new(inner: H, k: NonZeroUsize) -> Self {
         Self { k, inner }
     }
@@ -379,16 +283,12 @@ where
     H: BasicHook<I::Node, G, S>,
     I: Individual,
     I::Node: Node + AsNode,
-<<<<<<< HEAD
     for<'a> <I::Node as Node>::Type<'a>: NodeLookup,
-=======
->>>>>>> cf4b4e0 (multiobjective)
 {
     fn diversity_sort(&mut self, individuals: &mut [I]) {
         let FandangoNode::Program(program) = individuals[0].node().root() else {
             panic!("The root node wasn't a program node!")
         };
-<<<<<<< HEAD
         let mut kpaths = KPaths::new::<<I::Node as Node>::Type<'_>>(self.k, program);
         let mut update = KPathUpdate::inserting(&mut kpaths);
         for individual in individuals.iter() {
@@ -451,40 +351,5 @@ where
             .unwrap()
             .value()
         });
-=======
-        let mut covered = Vec::with_capacity(individuals.len());
-        let mut kpaths = KPaths::new::<<I::Node as Node>::Type<'_>>(self.k, program);
-        for individual in individuals.iter() {
-            let _ = KPathUpdate::inserting(&mut kpaths).visit(individual.node(), 0);
-            covered.push(
-                kpaths
-                    .lookup()
-                    .iter()
-                    .filter_map(|(k, v)| (*v != 0).then(|| k.clone()))
-                    .collect::<BTreeSet<_>>(),
-            );
-            // we could use clear, but for large k, the number of paths likely exceeds the number
-            // of paths we actually visit!
-            let _ = KPathUpdate::removing(&mut kpaths).visit(individual.node(), 0);
-        }
-        // greedy set cover
-        for i in 0..individuals.len() {
-            let (best_individual, best_set) = covered
-                .iter()
-                .enumerate()
-                .max_by_key(|(_i, set)| set.len())
-                .unwrap();
-            if best_set.is_empty() {
-                break;
-            }
-            covered.swap(i, best_individual);
-            individuals.swap(i, best_individual);
-            let (seen, unevaluated) = covered.split_at_mut(i + 1);
-            let best_set = &seen[i];
-            for set in unevaluated {
-                *set = set.sub(best_set);
-            }
-        }
->>>>>>> cf4b4e0 (multiobjective)
     }
 }

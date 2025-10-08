@@ -153,7 +153,7 @@ fn run_once(fine_print: bool, print_successful_compile: bool) -> Result<((i32, i
     let mut runtime = Nsga2Evolver::new::<clang::nonterminal_start>(
         tuple_list!(fitness, structs, fns, stmts, /* var_access, nodes, fields, exprs */),
         hook,
-        20,
+        100,
         1000,
         Ratio::new(80, 100),
     )
