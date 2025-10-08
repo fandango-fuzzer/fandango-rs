@@ -1,4 +1,4 @@
-// This file will be an attempt at using fandango-rs as a compiler tester. 
+// This file will be an attempt at using fandango-rs as a compiler tester.
 
 // General soundness TODOs:
 // 1. Possible issue with def-use but only in the same scope. Sub-scopes work, but not same scope.
@@ -18,17 +18,21 @@ mod defs {
 #[cfg(feature = "static_defs")]
 mod defs {
     use alloc::collections::VecDeque;
+    use alloc::vec;
     use alloc::vec::Vec;
+    use anyhow::Error;
     use core::convert::Infallible;
+    use core::mem;
     use core::ops::ControlFlow;
     use fandango::Fandango;
     use fandango::generation::Generated;
-    use fandango::typing::{AsNodeMut, AsNodeRef, Node, Nth, Downcast, Opaque, OpaqueMut, DowncastMut, ChildAccessor};
-    use fandango::visitor::{VisitMutResult, VisitResult, VisitableChildren, VisitableChildrenMut, Visitor, VisitorMut};
-    use alloc::vec;
-    use core::mem;
-    use anyhow::Error;
-    
+    use fandango::typing::{
+        AsNodeMut, AsNodeRef, ChildAccessor, Downcast, DowncastMut, Node, Nth, Opaque, OpaqueMut,
+    };
+    use fandango::visitor::{
+        VisitMutResult, VisitResult, VisitableChildren, VisitableChildrenMut, Visitor, VisitorMut,
+    };
+
     // For the experiments
     use fandango_runtime::evolvers::basic::BasicHook;
     use fandango_runtime::measurement::Violations;
@@ -36,10 +40,10 @@ mod defs {
     use num_rational::Ratio;
 
     /// Base for the C language grammar stored in c_lang.fan.
-    #[derive(Fandango)] 
+    #[derive(Fandango)]
     #[fandango(grammar = "grammars/c_lang.fan", parse = false)]
     pub struct CLang(Infallible);
-    
+
     // Helpful definitions.
     // First, a way to track lexical scope.
     // This will be a mapping of (var_name, scope_trace) -> var_type
@@ -48,17 +52,22 @@ mod defs {
     // Note: This is a simplified approach and may not cover all edge cases in a real compiler.
     // For now, we will use a BTreeMap for simplicity, but a more efficient data structure may be needed for large programs.
     type ScopeTrace = Vec<usize>;
-    
+
     // TODO: These could easily be consolidated.
     // Now, a sort of symbol table to track variable definitions.
-    type VarSymbolTable = alloc::collections::BTreeMap<(nonterminal_var_name, ScopeTrace), nonterminal_type>;
+    type VarSymbolTable =
+        alloc::collections::BTreeMap<(nonterminal_var_name, ScopeTrace), nonterminal_type>;
 
     // Also for function definitions, mapping (fn_name, scope_trace) -> Vec<nonterminal_type> (parameter types + return type)
-    type FuncSymbolTable = alloc::collections::BTreeMap<(nonterminal_fn_name, ScopeTrace), Vec<nonterminal_type>>;
+    type FuncSymbolTable =
+        alloc::collections::BTreeMap<(nonterminal_fn_name, ScopeTrace), Vec<nonterminal_type>>;
 
     // A helper function which gets the function name and type given a scope trace.
     // Should find the innermost function definition that matches the scope trace.
-    fn get_current_function<'a>(symbol_table: &'a FuncSymbolTable, current_scope: &ScopeTrace) -> Option<(&'a nonterminal_fn_name, &'a Vec<nonterminal_type>)> {
+    fn get_current_function<'a>(
+        symbol_table: &'a FuncSymbolTable,
+        current_scope: &ScopeTrace,
+    ) -> Option<(&'a nonterminal_fn_name, &'a Vec<nonterminal_type>)> {
         // We will look for the function in the current scope and then in outer scopes.
         for scope_len in (0..=current_scope.len()).rev() {
             let scope_prefix = current_scope[0..scope_len].to_vec();
@@ -86,7 +95,11 @@ mod defs {
     }
 
     // A helper function to get the last definition of a variable in the current or outer scopes.
-    fn get_var_definition<'a>(symbol_table: &'a VarSymbolTable, var_name: &nonterminal_var_name, current_scope: &ScopeTrace) -> Option<&'a nonterminal_type> {
+    fn get_var_definition<'a>(
+        symbol_table: &'a VarSymbolTable,
+        var_name: &nonterminal_var_name,
+        current_scope: &ScopeTrace,
+    ) -> Option<&'a nonterminal_type> {
         // We will look for the variable in the current scope and then in outer scopes.
         for scope_len in (0..=current_scope.len()).rev() {
             let scope_prefix = &current_scope[0..scope_len];
@@ -97,7 +110,11 @@ mod defs {
         None
     }
 
-    fn get_func_definition<'a>(symbol_table: &'a FuncSymbolTable, fn_name: &nonterminal_fn_name, current_scope: &ScopeTrace) -> Option<&'a Vec<nonterminal_type>> {
+    fn get_func_definition<'a>(
+        symbol_table: &'a FuncSymbolTable,
+        fn_name: &nonterminal_fn_name,
+        current_scope: &ScopeTrace,
+    ) -> Option<&'a Vec<nonterminal_type>> {
         // We will look for the function in the current scope and then in outer scopes.
         for scope_len in (0..=current_scope.len()).rev() {
             let scope_prefix = &current_scope[0..scope_len];
@@ -154,7 +171,10 @@ mod defs {
                 return Violations::new(Ratio::new(1, 1), self.violations);
             }
             Violations::new(
-                Ratio::new(self.violations.len(), self.structs_seen.max(1) + self.fields_seen.max(1)), // If no structs, no violations.
+                Ratio::new(
+                    self.violations.len(),
+                    self.structs_seen.max(1) + self.fields_seen.max(1),
+                ), // If no structs, no violations.
                 self.violations,
             )
         }
@@ -174,10 +194,10 @@ mod defs {
 
     impl<T> Visitor<T> for KeepReasonableStructVisitor
     where
-        T: VisitableChildren<T> +
-            AsNodeRef<nonterminal_struct_def> +
-            AsNodeRef<nonterminal_field_def_list> +
-            AsNodeRef<nonterminal_field_def_list_e>,
+        T: VisitableChildren<T>
+            + AsNodeRef<nonterminal_struct_def>
+            + AsNodeRef<nonterminal_field_def_list>
+            + AsNodeRef<nonterminal_field_def_list_e>,
     {
         type Continue = Self;
         type Break = Infallible;
@@ -215,7 +235,7 @@ mod defs {
                             // Variant 0, single field.
                             nonterminal_field_def_list_0::variant_0(_) => {
                                 current = None;
-                            },
+                            }
                             // Variant 1, field followed by more fields.
                             nonterminal_field_def_list_0::variant_1(seq) => {
                                 let (_, _, _, _, _, rest) = seq.children();
@@ -225,7 +245,7 @@ mod defs {
                     }
                 }
             }
-            self.path.pop_back();   
+            self.path.pop_back();
             let mut result = visited.visit_each(self);
             result
         }
@@ -254,9 +274,13 @@ mod defs {
         /// The set of currently defined variables, (var_name, scope) -> var_type
         pub var_defs: VarSymbolTable,
         /// The set of currently defined functions. (fn_name, scope) -> Vec<param_type>
-        pub func_defs: alloc::collections::BTreeMap<(nonterminal_fn_name, ScopeTrace), Vec<nonterminal_type>>,
+        pub func_defs:
+            alloc::collections::BTreeMap<(nonterminal_fn_name, ScopeTrace), Vec<nonterminal_type>>,
         /// The set of currently defined structs. struct_name -> Vec<(field_name, field_type)>
-        pub struct_defs: alloc::collections::BTreeMap<nonterminal_struct_name, Vec<(nonterminal_field_name, nonterminal_type)>>,
+        pub struct_defs: alloc::collections::BTreeMap<
+            nonterminal_struct_name,
+            Vec<(nonterminal_field_name, nonterminal_type)>,
+        >,
         /// The set of variable uses: (var_name, scope_trace) -> usize
         pub var_uses: alloc::collections::BTreeMap<(nonterminal_var_name, ScopeTrace), usize>,
         /// Violations for re-declarations in the same scope.
@@ -266,22 +290,22 @@ mod defs {
     }
 
     impl<T> Visitor<T> for DeclarationCollector
-    where 
-        T: VisitableChildren<T> +
-        AsNodeRef<nonterminal_decl> +
-        AsNodeRef<nonterminal_var_access> +
-        AsNodeRef<nonterminal_var_name> +
-        AsNodeRef<nonterminal_fn_def> + 
-        AsNodeRef<nonterminal_fn_name> +
-        AsNodeRef<nonterminal_param_name> +
-        AsNodeRef<nonterminal_struct_def> +
-        AsNodeRef<nonterminal_struct_name> +
-        AsNodeRef<nonterminal_field_name> +
-        AsNodeRef<nonterminal_type> +
-        AsNodeRef<nonterminal_field_def_list> +
-        AsNodeRef<nonterminal_field_def_list_e> +
-        AsNodeRef<nonterminal_param_list> +
-        AsNodeRef<nonterminal_param> +,
+    where
+        T: VisitableChildren<T>
+            + AsNodeRef<nonterminal_decl>
+            + AsNodeRef<nonterminal_var_access>
+            + AsNodeRef<nonterminal_var_name>
+            + AsNodeRef<nonterminal_fn_def>
+            + AsNodeRef<nonterminal_fn_name>
+            + AsNodeRef<nonterminal_param_name>
+            + AsNodeRef<nonterminal_struct_def>
+            + AsNodeRef<nonterminal_struct_name>
+            + AsNodeRef<nonterminal_field_name>
+            + AsNodeRef<nonterminal_type>
+            + AsNodeRef<nonterminal_field_def_list>
+            + AsNodeRef<nonterminal_field_def_list_e>
+            + AsNodeRef<nonterminal_param_list>
+            + AsNodeRef<nonterminal_param>,
     {
         type Continue = Self;
         type Break = Infallible;
@@ -323,7 +347,7 @@ mod defs {
                                 let param_type = param.nth::<0>().nth::<0>().clone();
                                 param_type_list_inner.push(param_type);
                                 current = None;
-                            },
+                            }
                             // Variant 1, param followed by more params.
                             nonterminal_param_list_0::variant_1(seq) => {
                                 let (param, _, _, rest) = seq.children();
@@ -349,13 +373,17 @@ mod defs {
                 let mut param_type_list = param_type_list;
                 param_type_list.push(return_type);
                 // [Violations] Check if function already defined.
-                if self.func_defs.contains_key(&(fn_name.clone(), self.scope_trace.clone())) {
+                if self
+                    .func_defs
+                    .contains_key(&(fn_name.clone(), self.scope_trace.clone()))
+                {
                     self.violations.push(self.path.clone());
                 } else {
                     self.paths_to_passed_checks.push(self.path.clone());
                 }
                 // Save the function definition using the node as key.
-                self.func_defs.insert((fn_name, self.scope_trace.clone()), param_type_list);
+                self.func_defs
+                    .insert((fn_name, self.scope_trace.clone()), param_type_list);
                 // Update the scope trace.
                 self.scope_id += 1;
                 self.scope_trace.push(self.scope_id);
@@ -394,15 +422,19 @@ mod defs {
                 } else {
                     self.paths_to_passed_checks.push(self.path.clone());
                 }
-                self.var_defs.insert((var_decl_name, self.scope_trace.clone()), var_decl_type);
-            } /* Check now for param_name */
+                self.var_defs
+                    .insert((var_decl_name, self.scope_trace.clone()), var_decl_type);
+            }
+            /* Check now for param_name */
             else if let Some(param_tree) = visited.downcast::<nonterminal_param>() {
                 let type_inside = param_tree.nth::<0>().nth::<0>().clone();
                 let var_name_inside = param_tree.nth::<0>().nth::<2>().nth::<0>().clone();
                 // The parameters should be scoped properly.
                 // Is the parameter already defined in this scope?
-                self.var_defs.insert((var_name_inside, self.scope_trace.clone()), type_inside);
-            } /* Check now for struct definitions */
+                self.var_defs
+                    .insert((var_name_inside, self.scope_trace.clone()), type_inside);
+            }
+            /* Check now for struct definitions */
             else if let Some(struct_tree) = visited.downcast::<nonterminal_struct_def>() {
                 // Adjust scope for new declaration.
                 self.scope_id += 1;
@@ -433,7 +465,7 @@ mod defs {
                                 let field_type = field_def.nth::<0>().clone();
                                 fields.push((field_name.clone(), field_type.clone()));
                                 current = None;
-                            },
+                            }
                             // Variant 1, field followed by more fields.
                             nonterminal_field_def_list_0::variant_1(seq) => {
                                 let (field_type, _, field_name, _, _, rest) = seq.children();
@@ -468,10 +500,12 @@ mod defs {
                     self.paths_to_passed_checks.push(self.path.clone());
                 }
                 self.struct_defs.insert(struct_name, fields);
-            }
-            else if let Some(var_access) = visited.downcast::<nonterminal_var_access>() {
+            } else if let Some(var_access) = visited.downcast::<nonterminal_var_access>() {
                 let var_name = var_access.nth::<0>().clone();
-                *self.var_uses.entry((var_name, self.scope_trace.clone())).or_insert(0) += 1;
+                *self
+                    .var_uses
+                    .entry((var_name, self.scope_trace.clone()))
+                    .or_insert(0) += 1;
             }
             let mut result = visited.visit_each(self);
             if let Ok(ControlFlow::Continue(visitor)) = &mut result {
@@ -499,9 +533,13 @@ mod defs {
         /// The set of currently defined variables, (var_name, scope) -> var_type
         pub var_defs: VarSymbolTable,
         /// The set of currently defined functions. (fn_name, scope) -> Vec<param_type>
-        pub func_defs: alloc::collections::BTreeMap<(nonterminal_fn_name, ScopeTrace), Vec<nonterminal_type>>,
+        pub func_defs:
+            alloc::collections::BTreeMap<(nonterminal_fn_name, ScopeTrace), Vec<nonterminal_type>>,
         /// The set of currently defined structs. struct_name -> Vec<(field_name, field_type)>
-        pub struct_defs: alloc::collections::BTreeMap<nonterminal_struct_name, Vec<(nonterminal_field_name, nonterminal_type)>>,
+        pub struct_defs: alloc::collections::BTreeMap<
+            nonterminal_struct_name,
+            Vec<(nonterminal_field_name, nonterminal_type)>,
+        >,
         /// The set of variable uses: (var_name, scope_trace) -> usize
         pub var_uses: alloc::collections::BTreeMap<(nonterminal_var_name, ScopeTrace), usize>,
     }
@@ -525,30 +563,34 @@ mod defs {
 
     impl<S, G, T> VisitorMut<T> for DeclarationCollectorAndFixer<'_, S, G>
     where
-    nonterminal_var_name: Generated<S, G>,
-    nonterminal_struct_name: Generated<S, G>,
-    nonterminal_fn_name: Generated<S, G>,
-    T: VisitableChildrenMut<T> +
-        AsNodeMut<nonterminal_decl> +
-        AsNodeMut<nonterminal_var_access> +
-        AsNodeMut<nonterminal_var_name> +
-        AsNodeMut<nonterminal_fn_def> +
-        AsNodeMut<nonterminal_fn_name> +
-        AsNodeMut<nonterminal_param_name> +
-        AsNodeMut<nonterminal_struct_def> +
-        AsNodeMut<nonterminal_struct_name> +
-        AsNodeMut<nonterminal_field_name> +
-        AsNodeMut<nonterminal_type> +
-        AsNodeMut<nonterminal_field_def_list> +
-        AsNodeMut<nonterminal_field_def_list_e> +
-        AsNodeMut<nonterminal_param_list> +
-        AsNodeMut<nonterminal_param> +,
+        nonterminal_var_name: Generated<S, G>,
+        nonterminal_struct_name: Generated<S, G>,
+        nonterminal_fn_name: Generated<S, G>,
+        T: VisitableChildrenMut<T>
+            + AsNodeMut<nonterminal_decl>
+            + AsNodeMut<nonterminal_var_access>
+            + AsNodeMut<nonterminal_var_name>
+            + AsNodeMut<nonterminal_fn_def>
+            + AsNodeMut<nonterminal_fn_name>
+            + AsNodeMut<nonterminal_param_name>
+            + AsNodeMut<nonterminal_struct_def>
+            + AsNodeMut<nonterminal_struct_name>
+            + AsNodeMut<nonterminal_field_name>
+            + AsNodeMut<nonterminal_type>
+            + AsNodeMut<nonterminal_field_def_list>
+            + AsNodeMut<nonterminal_field_def_list_e>
+            + AsNodeMut<nonterminal_param_list>
+            + AsNodeMut<nonterminal_param>,
     {
         type Continue = Self;
         type Break = Infallible;
         type Error = Infallible;
 
-        fn visit_mut<'program, N>(mut self, node: &'program mut N, idx: usize) -> VisitMutResult<Self, T>
+        fn visit_mut<'program, N>(
+            mut self,
+            node: &'program mut N,
+            idx: usize,
+        ) -> VisitMutResult<Self, T>
         where
             N: Node<TypeMut<'program> = T>,
             T: From<&'program mut N> + AsNodeMut<N>,
@@ -577,7 +619,7 @@ mod defs {
                                 let param_type = param.nth::<0>().nth::<0>().clone();
                                 param_type_list_inner.push(param_type);
                                 current = None;
-                            },
+                            }
                             // Variant 1, param followed by more params.
                             nonterminal_param_list_0::variant_1(seq) => {
                                 let (param, _, _, rest) = seq.children();
@@ -596,18 +638,26 @@ mod defs {
                 let mut param_type_list = param_type_list;
                 param_type_list.push(return_type);
                 // [Violations] Check if function already defined.
-                if self.func_defs.contains_key(&(fn_name.clone(), self.scope_trace.clone())) {
+                if self
+                    .func_defs
+                    .contains_key(&(fn_name.clone(), self.scope_trace.clone()))
+                {
                     // [Fixer] If so, generate new fn name.
                     let mut new_fn_name: nonterminal_fn_name = loop {
-                        let candidate: nonterminal_fn_name = nonterminal_fn_name::generate(self.sampler, self.generator, 0);
-                        if !self.func_defs.contains_key(&(candidate.clone(), self.scope_trace.clone())) {
+                        let candidate: nonterminal_fn_name =
+                            nonterminal_fn_name::generate(self.sampler, self.generator, 0);
+                        if !self
+                            .func_defs
+                            .contains_key(&(candidate.clone(), self.scope_trace.clone()))
+                        {
                             break candidate;
                         }
                     };
                     mem::swap(fn_name, &mut new_fn_name);
                 }
                 // Save the function definition using the node as key.
-                self.func_defs.insert((fn_name.clone(), self.scope_trace.clone()), param_type_list);
+                self.func_defs
+                    .insert((fn_name.clone(), self.scope_trace.clone()), param_type_list);
                 // Update the scope trace.
                 self.scope_id += 1;
                 self.scope_trace.push(self.scope_id);
@@ -645,21 +695,34 @@ mod defs {
                 if get_var_definition(&self.var_defs, &var_decl_name, &self.scope_trace).is_some() {
                     // [Fixer] If so, generate new var name.
                     let mut new_var_name: nonterminal_var_name = loop {
-                        let candidate: nonterminal_var_name = nonterminal_var_name::generate(self.sampler, self.generator, 0);
-                        if get_var_definition(&self.var_defs, &candidate, &self.scope_trace).is_none() {
+                        let candidate: nonterminal_var_name =
+                            nonterminal_var_name::generate(self.sampler, self.generator, 0);
+                        if get_var_definition(&self.var_defs, &candidate, &self.scope_trace)
+                            .is_none()
+                        {
                             break candidate;
                         }
                     };
                     mem::swap(var_decl_name, &mut new_var_name);
                 }
-                self.var_defs.insert((var_decl_name.clone(), self.scope_trace.clone()), var_decl_type);
-            } /* Check now for param_name */
+                self.var_defs.insert(
+                    (var_decl_name.clone(), self.scope_trace.clone()),
+                    var_decl_type,
+                );
+            }
+            /* Check now for param_name */
             else if let Some(param_tree) = visited.downcast_mut::<nonterminal_param>() {
                 let type_inside = param_tree.nth_mut::<0>().nth_mut::<0>().clone();
-                let var_name_inside = param_tree.nth_mut::<0>().nth_mut::<2>().nth_mut::<0>().clone();
+                let var_name_inside = param_tree
+                    .nth_mut::<0>()
+                    .nth_mut::<2>()
+                    .nth_mut::<0>()
+                    .clone();
                 // The parameters should be scoped properly.
-                self.var_defs.insert((var_name_inside, self.scope_trace.clone()), type_inside);
-            } /* Check now for struct definitions */
+                self.var_defs
+                    .insert((var_name_inside, self.scope_trace.clone()), type_inside);
+            }
+            /* Check now for struct definitions */
             else if let Some(struct_tree) = visited.downcast_mut::<nonterminal_struct_def>() {
                 // Adjust scope for new declaration.
                 self.scope_id += 1;
@@ -683,7 +746,7 @@ mod defs {
                                 let field_type = field_def.nth_mut::<0>().clone();
                                 fields.push((field_name, field_type));
                                 current = None;
-                            },
+                            }
                             // Variant 1, field followed by more fields.
                             nonterminal_field_def_list_0::variant_1(seq) => {
                                 let (field_type, _, field_name, _, _, rest) = seq.children_mut();
@@ -697,18 +760,24 @@ mod defs {
                 if self.struct_defs.contains_key(&struct_name) {
                     // [Fixer] If so, generate new struct name.
                     let mut new_struct_name: nonterminal_struct_name = loop {
-                        let candidate: nonterminal_struct_name = nonterminal_struct_name::generate(self.sampler, self.generator, 0);
+                        let candidate: nonterminal_struct_name =
+                            nonterminal_struct_name::generate(self.sampler, self.generator, 0);
                         if !self.struct_defs.contains_key(&candidate) {
                             break candidate;
                         }
                     };
-                    mem::swap(struct_tree.nth_mut::<0>().nth_mut::<2>(), &mut new_struct_name);
+                    mem::swap(
+                        struct_tree.nth_mut::<0>().nth_mut::<2>(),
+                        &mut new_struct_name,
+                    );
                 }
                 self.struct_defs.insert(struct_name, fields);
-            }
-            else if let Some(var_access) = visited.downcast_mut::<nonterminal_var_access>() {
+            } else if let Some(var_access) = visited.downcast_mut::<nonterminal_var_access>() {
                 let var_name = var_access.nth_mut::<0>().clone();
-                *self.var_uses.entry((var_name, self.scope_trace.clone())).or_insert(0) += 1;
+                *self
+                    .var_uses
+                    .entry((var_name, self.scope_trace.clone()))
+                    .or_insert(0) += 1;
             }
             let mut result = visited.visit_each_mut(self);
             if let Ok(ControlFlow::Continue(visitor)) = &mut result {
@@ -738,19 +807,23 @@ mod defs {
     impl<S, G, T> VisitorMut<T> for FillDeclarationsFixer<'_, S, G>
     where
         nonterminal_decl_rhs: Generated<S, G>,
-        T: VisitableChildrenMut<T> +
-            AsNodeMut<nonterminal_decl> +
-            AsNodeMut<nonterminal_var_access> +
-            AsNodeMut<nonterminal_assignment> +
-            AsNodeMut<nonterminal_type> +
-            AsNodeMut<nonterminal_struct_type> +
-            AsNodeMut<nonterminal_struct_name>,
+        T: VisitableChildrenMut<T>
+            + AsNodeMut<nonterminal_decl>
+            + AsNodeMut<nonterminal_var_access>
+            + AsNodeMut<nonterminal_assignment>
+            + AsNodeMut<nonterminal_type>
+            + AsNodeMut<nonterminal_struct_type>
+            + AsNodeMut<nonterminal_struct_name>,
     {
         type Continue = Self;
         type Break = Infallible;
         type Error = Infallible;
 
-        fn visit_mut<'program, N>(mut self, node: &'program mut N, idx: usize) -> VisitMutResult<Self, T>
+        fn visit_mut<'program, N>(
+            mut self,
+            node: &'program mut N,
+            idx: usize,
+        ) -> VisitMutResult<Self, T>
         where
             N: Node<TypeMut<'program> = T>,
             T: From<&'program mut N> + AsNodeMut<N>,
@@ -766,11 +839,12 @@ mod defs {
                 if let Some(_e) = decl_rhs_e.nth_mut::<0>().nth_mut::<1>() {
                     // No rhs, need to add one.
                     // Generate a new expr.
-                    let new_decl_rhs = nonterminal_decl_rhs::generate(self.sampler, self.generator, 0);
+                    let new_decl_rhs =
+                        nonterminal_decl_rhs::generate(self.sampler, self.generator, 0);
                     // Replace the <e> with the new decl_rhs.
                     *decl_rhs_e.nth_mut::<0>() = nonterminal_decl_rhs_e_0::variant_0(new_decl_rhs);
                 }
-            } 
+            }
             let mut result = visited.visit_each_mut(self);
             if let Ok(ControlFlow::Continue(visitor)) = &mut result {
                 visitor.path.pop_back();
@@ -796,7 +870,10 @@ mod defs {
         /// The set of currently defined functions. (fn_name, scope) -> Vec<param_type>
         pub defined_fns: &'a FuncSymbolTable,
         /// The set of currently defined structs. struct_name -> Vec<(field_name, field_type)>
-        pub defined_structs: &'a alloc::collections::BTreeMap<nonterminal_struct_name, Vec<(nonterminal_field_name, nonterminal_type)>>,
+        pub defined_structs: &'a alloc::collections::BTreeMap<
+            nonterminal_struct_name,
+            Vec<(nonterminal_field_name, nonterminal_type)>,
+        >,
         /// The list of violations found so far.
         pub violations: Vec<VecDeque<usize>>,
         /// The list of places where violations _could_ have occurred, for computing the violation ratio.
@@ -808,7 +885,10 @@ mod defs {
         pub fn new(
             defined_vars: &'a VarSymbolTable,
             defined_fns: &'a FuncSymbolTable,
-            defined_structs: &'a alloc::collections::BTreeMap<nonterminal_struct_name, Vec<(nonterminal_field_name, nonterminal_type)>>,
+            defined_structs: &'a alloc::collections::BTreeMap<
+                nonterminal_struct_name,
+                Vec<(nonterminal_field_name, nonterminal_type)>,
+            >,
         ) -> Self {
             Self {
                 path: VecDeque::new(),
@@ -826,16 +906,16 @@ mod defs {
 
     impl<T> Visitor<T> for ConstraintVisitorDefUse<'_>
     where
-        T: VisitableChildren<T> +
-        AsNodeRef<nonterminal_var_access> +
-        AsNodeRef<nonterminal_assignment> +
-        AsNodeRef<nonterminal_decl> +
-        AsNodeRef<nonterminal_fn_def> +
-        AsNodeRef<nonterminal_var_name> +
-        AsNodeRef<nonterminal_fn_call> +
-        AsNodeRef<nonterminal_type> +
-        AsNodeRef<nonterminal_struct_type> +
-        AsNodeRef<nonterminal_struct_def>,
+        T: VisitableChildren<T>
+            + AsNodeRef<nonterminal_var_access>
+            + AsNodeRef<nonterminal_assignment>
+            + AsNodeRef<nonterminal_decl>
+            + AsNodeRef<nonterminal_fn_def>
+            + AsNodeRef<nonterminal_var_name>
+            + AsNodeRef<nonterminal_fn_call>
+            + AsNodeRef<nonterminal_type>
+            + AsNodeRef<nonterminal_struct_type>
+            + AsNodeRef<nonterminal_struct_def>,
     {
         type Continue = Self;
         type Break = Infallible;
@@ -915,7 +995,6 @@ mod defs {
                 return Ok(ControlFlow::Continue(visitor));
             } // Functions are currently the only scope-increasing construct.
 
-
             if let Some(tree) = visited.downcast::<nonterminal_type>() {
                 // If the type is a struct type, check if it's defined.
                 if let nonterminal_type_0::variant_1(struct_type) = tree.nth::<0>() {
@@ -930,7 +1009,9 @@ mod defs {
                 }
             } else if let Some(tree) = visited.downcast::<nonterminal_var_access>() {
                 let var_name_accessed = tree.nth::<0>().clone();
-                if get_var_definition(&self.defined_vars, &var_name_accessed, &self.scope_trace).is_none() {
+                if get_var_definition(&self.defined_vars, &var_name_accessed, &self.scope_trace)
+                    .is_none()
+                {
                     self.violations.push(self.path.clone());
                 } else {
                     // It is defined, so this is a passed check.
@@ -1004,9 +1085,9 @@ mod defs {
     // Visitor that checks for violations.
     impl<T> Visitor<T> for ConstraintVisitorReturnInFunc
     where
-        T: VisitableChildren<T> +
-            AsNodeRef<nonterminal_return_stmt> +
-            AsNodeRef<nonterminal_fn_def>,
+        T: VisitableChildren<T>
+            + AsNodeRef<nonterminal_return_stmt>
+            + AsNodeRef<nonterminal_fn_def>,
     {
         type Continue = Self;
         type Break = Infallible;
@@ -1018,7 +1099,7 @@ mod defs {
             T: From<&'program N> + AsNodeRef<N>,
         {
             self.path.push_back(idx);
-            let visited = node.opaque();    
+            let visited = node.opaque();
             if let Some(_tree) = visited.downcast::<nonterminal_return_stmt>() {
                 if self.func_depth == 0 {
                     self.violations.push(self.path.clone());
@@ -1058,7 +1139,10 @@ mod defs {
         pub scope_depth: usize,
         /// The current struct definitions, mapping struct names to their field names and types.
         /// This should be initialized by a prior pass of DeclarationCollector.
-        pub struct_defs: &'a alloc::collections::BTreeMap<nonterminal_struct_name, Vec<(nonterminal_field_name, nonterminal_type)>>,
+        pub struct_defs: &'a alloc::collections::BTreeMap<
+            nonterminal_struct_name,
+            Vec<(nonterminal_field_name, nonterminal_type)>,
+        >,
         /// The current variable definitions, mapping variable names to their types.
         pub var_defs: &'a VarSymbolTable,
     }
@@ -1066,7 +1150,10 @@ mod defs {
     impl<'a> ConstraintVisitorStructAccess<'a> {
         /// Create a new ConstraintVisitorStructAccess with the given struct and variable definitions.
         pub fn new(
-            struct_defs: &'a alloc::collections::BTreeMap<nonterminal_struct_name, Vec<(nonterminal_field_name, nonterminal_type)>>,
+            struct_defs: &'a alloc::collections::BTreeMap<
+                nonterminal_struct_name,
+                Vec<(nonterminal_field_name, nonterminal_type)>,
+            >,
             var_defs: &'a VarSymbolTable,
         ) -> Self {
             Self {
@@ -1082,15 +1169,15 @@ mod defs {
 
     impl<T> Visitor<T> for ConstraintVisitorStructAccess<'_>
     where
-        T: VisitableChildren<T> +
-            AsNodeRef<nonterminal_struct_access> +
-            AsNodeRef<nonterminal_var_access> +
-            AsNodeRef<nonterminal_field_name> +
-            AsNodeRef<nonterminal_struct_name> +
-            AsNodeRef<nonterminal_expr> +
-            AsNodeRef<nonterminal_var_name> +
-            AsNodeRef<nonterminal_type> + 
-            AsNodeRef<nonterminal_fn_def>,
+        T: VisitableChildren<T>
+            + AsNodeRef<nonterminal_struct_access>
+            + AsNodeRef<nonterminal_var_access>
+            + AsNodeRef<nonterminal_field_name>
+            + AsNodeRef<nonterminal_struct_name>
+            + AsNodeRef<nonterminal_expr>
+            + AsNodeRef<nonterminal_var_name>
+            + AsNodeRef<nonterminal_type>
+            + AsNodeRef<nonterminal_fn_def>,
     {
         type Continue = Self;
         type Break = Infallible;
@@ -1102,7 +1189,7 @@ mod defs {
             T: From<&'program N> + AsNodeRef<N>,
         {
             self.path.push_back(idx);
-            let visited = node.opaque(); 
+            let visited = node.opaque();
 
             // First, check if we are in a situation where we need to increase scope depth.
             if let Some(_tree) = visited.downcast::<nonterminal_fn_def>() {
@@ -1121,7 +1208,8 @@ mod defs {
                 // First, the var name.
                 let var_name = tree.nth::<0>().nth::<0>().clone();
                 // Look up the var name in the var_defs to get its type.
-                let pot_var_type = get_var_definition(&self.var_defs, &var_name, &vec![self.scope_depth]);
+                let pot_var_type =
+                    get_var_definition(&self.var_defs, &var_name, &vec![self.scope_depth]);
                 match pot_var_type {
                     Some(var_type) => {
                         // We have a variable type, check if it's a struct type.
@@ -1148,7 +1236,7 @@ mod defs {
                             // Variable is not of struct type, violation. But this should be caught by the type checker.
                             // self.violations.push(self.path.clone());
                         }
-                    },
+                    }
                     None => {
                         // Variable not found, violation. But this should be caught by def-before-use.
                         // self.violations.push(self.path.clone());
@@ -1170,7 +1258,7 @@ mod defs {
 
     // Ok, we need to make a light layer above nonterminal_type, specifically to handle struct expressions since they
     // can be anonymous and thus have no name to look up.
-    /// Wrapper around nonterminal_type to handle struct types with field names and types. Idea is to have most of the 
+    /// Wrapper around nonterminal_type to handle struct types with field names and types. Idea is to have most of the
     /// types represented as they are in the language, but esp. structural types have no equivalent in the grammar.
     #[derive(Debug, Clone, PartialEq, Eq)]
     pub struct NonterminalTypeExtended {
@@ -1180,7 +1268,8 @@ mod defs {
         pub base: nonterminal_type,
         /// If this is a struct type, we need to store the field names and types.
         /// This will be None if the type is not a struct.
-        pub struct_fields: Option<alloc::collections::BTreeMap<nonterminal_field_name, nonterminal_type>>,
+        pub struct_fields:
+            Option<alloc::collections::BTreeMap<nonterminal_field_name, nonterminal_type>>,
         /// Alternatively, positional fields could be used.
         pub struct_fields_positional: Option<Vec<NonterminalTypeExtended>>,
     }
@@ -1206,14 +1295,26 @@ mod defs {
     fn coercion_and_subtyping_possible(t1: &nonterminal_type, t2: &nonterminal_type) -> bool {
         // For simplicity, we will consider coercion and subtyping possible only for numeric types.
         let numeric_types = vec![
-            nonterminal_basic_type::new(nonterminal_basic_type_0::from_0th(nonterminal_basic_type_0_0)), // int
-            nonterminal_basic_type::new(nonterminal_basic_type_0::from_1th(nonterminal_basic_type_0_1)), // float
-            nonterminal_basic_type::new(nonterminal_basic_type_0::from_2th(nonterminal_basic_type_0_2)), // double
+            nonterminal_basic_type::new(nonterminal_basic_type_0::from_0th(
+                nonterminal_basic_type_0_0,
+            )), // int
+            nonterminal_basic_type::new(nonterminal_basic_type_0::from_1th(
+                nonterminal_basic_type_0_1,
+            )), // float
+            nonterminal_basic_type::new(nonterminal_basic_type_0::from_2th(
+                nonterminal_basic_type_0_2,
+            )), // double
             // Actually, this should be valid for bools and chars too, since it's C.
-            nonterminal_basic_type::new(nonterminal_basic_type_0::from_3th(nonterminal_basic_type_0_3)), // bool
-            nonterminal_basic_type::new(nonterminal_basic_type_0::from_4th(nonterminal_basic_type_0_4)), // char
+            nonterminal_basic_type::new(nonterminal_basic_type_0::from_3th(
+                nonterminal_basic_type_0_3,
+            )), // bool
+            nonterminal_basic_type::new(nonterminal_basic_type_0::from_4th(
+                nonterminal_basic_type_0_4,
+            )), // char
         ];
-        if let (nonterminal_type_0::variant_0(bt1), nonterminal_type_0::variant_0(bt2)) = (t1.nth::<0>(), t2.nth::<0>()) {
+        if let (nonterminal_type_0::variant_0(bt1), nonterminal_type_0::variant_0(bt2)) =
+            (t1.nth::<0>(), t2.nth::<0>())
+        {
             return numeric_types.contains(&bt1) && numeric_types.contains(&bt2);
         }
         false
@@ -1225,40 +1326,61 @@ mod defs {
         // Ok there are a few cases; let's implement them.
         if t1.base == t2.base || coercion_and_subtyping_possible(&t1.base, &t2.base) {
             return true;
-        } 
+        }
 
         // Check if both are struct types.
         if let (Some(fields1), Some(fields2)) = (&t1.struct_fields, &t2.struct_fields) {
             // If both types are structs, check if their fields are compatible.
             return fields1.iter().all(|(name, typ1)| {
-                fields2.get(name).map_or(false, |typ2| types_compatible(&typ1.clone().into(), &typ2.clone().into()))
+                fields2.get(name).map_or(false, |typ2| {
+                    types_compatible(&typ1.clone().into(), &typ2.clone().into())
+                })
             });
         }
 
         // Check if both are struct types with positional fields.
-        if let (Some(fields1), Some(fields2)) = (&t1.struct_fields_positional, &t2.struct_fields_positional) {
+        if let (Some(fields1), Some(fields2)) =
+            (&t1.struct_fields_positional, &t2.struct_fields_positional)
+        {
             // If both types are structs with positional fields, check if their fields are compatible.
-            return fields1.iter().zip(fields2).all(|(typ1, typ2)| types_compatible(typ1, typ2));
+            return fields1
+                .iter()
+                .zip(fields2)
+                .all(|(typ1, typ2)| types_compatible(typ1, typ2));
         }
 
         // Check if positional struct fields match named struct fields.
-        if let (Some(pos_fields), Some(named_fields)) = (&t1.struct_fields_positional, &t2.struct_fields) {
+        if let (Some(pos_fields), Some(named_fields)) =
+            (&t1.struct_fields_positional, &t2.struct_fields)
+        {
             if pos_fields.len() == named_fields.len() {
-                return pos_fields.iter().zip(named_fields.values()).all(|(typ1, typ2)| types_compatible(typ1, &typ2.clone().into()));
+                return pos_fields
+                    .iter()
+                    .zip(named_fields.values())
+                    .all(|(typ1, typ2)| types_compatible(typ1, &typ2.clone().into()));
             }
-        }   
+        }
 
         // Also other way around.
-        if let (Some(pos_fields), Some(named_fields)) = (&t2.struct_fields_positional, &t1.struct_fields) {
+        if let (Some(pos_fields), Some(named_fields)) =
+            (&t2.struct_fields_positional, &t1.struct_fields)
+        {
             if pos_fields.len() == named_fields.len() {
-                return pos_fields.iter().zip(named_fields.values()).all(|(typ1, typ2)| types_compatible(typ1, &typ2.clone().into()));
+                return pos_fields
+                    .iter()
+                    .zip(named_fields.values())
+                    .all(|(typ1, typ2)| types_compatible(typ1, &typ2.clone().into()));
             }
-        }   
+        }
 
         false
     }
 
-    fn type_resulting_from_binop(t1: &NonterminalTypeExtended, t2: &NonterminalTypeExtended, binop: &nonterminal_binop_op) -> Option<NonterminalTypeExtended> {
+    fn type_resulting_from_binop(
+        t1: &NonterminalTypeExtended,
+        t2: &NonterminalTypeExtended,
+        binop: &nonterminal_binop_op,
+    ) -> Option<NonterminalTypeExtended> {
         // For simplicity, we will consider the resulting type to be the same as the operand types if they are compatible.
         // A more complete implementation would handle type coercion, subtyping, etc.
         // First, check if the binop is '^' (bitwise XOR).
@@ -1275,11 +1397,11 @@ mod defs {
                                     // t2 is also int, valid.
                                     return Some(t1.clone());
                                 }
-                            },
+                            }
                             _ => {}
                         }
                     }
-                },
+                }
                 _ => {}
             }
             return None; // Invalid types for bitwise XOR.
@@ -1293,10 +1415,20 @@ mod defs {
     }
 
     // Returns a vec of booleans, true indicating fine, false indicating issue.
-    fn collect_all_issues_in_struct(expr: &nonterminal_struct_expr, 
-        struct_defs: &alloc::collections::BTreeMap<nonterminal_struct_name, Vec<(nonterminal_field_name, nonterminal_type)>>, 
-        var_defs: &alloc::collections::BTreeMap<(nonterminal_var_name, Vec<usize>), nonterminal_type>,
-        fun_defs: &alloc::collections::BTreeMap<(nonterminal_fn_name, Vec<usize>), Vec<nonterminal_type>>,
+    fn collect_all_issues_in_struct(
+        expr: &nonterminal_struct_expr,
+        struct_defs: &alloc::collections::BTreeMap<
+            nonterminal_struct_name,
+            Vec<(nonterminal_field_name, nonterminal_type)>,
+        >,
+        var_defs: &alloc::collections::BTreeMap<
+            (nonterminal_var_name, Vec<usize>),
+            nonterminal_type,
+        >,
+        fun_defs: &alloc::collections::BTreeMap<
+            (nonterminal_fn_name, Vec<usize>),
+            Vec<nonterminal_type>,
+        >,
         scope_trace: &Vec<usize>,
     ) -> Vec<bool> {
         // Specifically:
@@ -1313,7 +1445,7 @@ mod defs {
             Some(_e) => {
                 // Empty list.
                 return Vec::new(); // No issues.
-            },
+            }
             None => {
                 // In this case, we know it's expr_list.
                 current = expr_list_e.nth::<0>().nth::<0>();
@@ -1323,26 +1455,16 @@ mod defs {
             match el.nth::<0>() {
                 // Variant 0, single expr.
                 nonterminal_expr_list_0::variant_0(expr_i) => {
-                    let expr_type = infer_expr_type(
-                        expr_i,
-                        var_defs,
-                        fun_defs,
-                        struct_defs,
-                        scope_trace,
-                    );
+                    let expr_type =
+                        infer_expr_type(expr_i, var_defs, fun_defs, struct_defs, scope_trace);
                     exprs_successfully_type_checked.push(expr_type.is_some());
                     current = None;
                 }
                 // Variant 1, expr followed by more exprs.
                 nonterminal_expr_list_0::variant_1(seq) => {
                     let (expr_i, _, _, rest) = seq.children();
-                    let expr_type = infer_expr_type(
-                        expr_i,
-                        var_defs,
-                        fun_defs,
-                        struct_defs,
-                        scope_trace,
-                    );
+                    let expr_type =
+                        infer_expr_type(expr_i, var_defs, fun_defs, struct_defs, scope_trace);
                     exprs_successfully_type_checked.push(expr_type.is_some());
                     current = Some(rest);
                 }
@@ -1353,9 +1475,18 @@ mod defs {
 
     fn infer_expr_unit_type(
         expr: &nonterminal_expr_unit,
-        var_defs: &alloc::collections::BTreeMap<(nonterminal_var_name, Vec<usize>), nonterminal_type>,
-        func_defs: &alloc::collections::BTreeMap<(nonterminal_fn_name, Vec<usize>), Vec<nonterminal_type>>,
-        struct_defs: &alloc::collections::BTreeMap<nonterminal_struct_name, Vec<(nonterminal_field_name, nonterminal_type)>>,
+        var_defs: &alloc::collections::BTreeMap<
+            (nonterminal_var_name, Vec<usize>),
+            nonterminal_type,
+        >,
+        func_defs: &alloc::collections::BTreeMap<
+            (nonterminal_fn_name, Vec<usize>),
+            Vec<nonterminal_type>,
+        >,
+        struct_defs: &alloc::collections::BTreeMap<
+            nonterminal_struct_name,
+            Vec<(nonterminal_field_name, nonterminal_type)>,
+        >,
         scope_trace: &Vec<usize>,
     ) -> Option<NonterminalTypeExtended> {
         // Working with expr_unit here.
@@ -1364,13 +1495,12 @@ mod defs {
             nonterminal_expr_unit_0::variant_0(var_access) => {
                 // <var_access> ::= <var_name> ;
                 let var_name = var_access.nth::<0>().clone();
-                let var_def = get_var_definition(var_defs, &var_name, scope_trace)
-                    .cloned();
+                let var_def = get_var_definition(var_defs, &var_name, scope_trace).cloned();
                 match var_def {
                     Some(var_type) => Some(var_type.into()),
                     None => None, // Variable not found.
                 }
-            },
+            }
             nonterminal_expr_unit_0::variant_1(value) => {
                 // <value> ::= <bool_val> | <num_val> | <string_val> ;
                 // <basic_type> ::= "int" | "float" | "double" | "bool" | "char" | "void" ;
@@ -1378,54 +1508,70 @@ mod defs {
                     nonterminal_value_0::variant_0(_) => {
                         // bool_val
                         Some(
-                            nonterminal_type::new(
-                                nonterminal_type_0::from_0th(
-                                    nonterminal_basic_type::new(
-                                        nonterminal_basic_type_0::from_3th(
-                                            nonterminal_basic_type_0_3)))).into())
-                    },
+                            nonterminal_type::new(nonterminal_type_0::from_0th(
+                                nonterminal_basic_type::new(nonterminal_basic_type_0::from_3th(
+                                    nonterminal_basic_type_0_3,
+                                )),
+                            ))
+                            .into(),
+                        )
+                    }
                     nonterminal_value_0::variant_2(_) => {
                         // string_val
                         Some(
-                            nonterminal_type::new(
-                                nonterminal_type_0::from_0th(
-                                    nonterminal_basic_type::new(
-                                        nonterminal_basic_type_0::from_4th(
-                                            nonterminal_basic_type_0_4)))).into())
-                    },
+                            nonterminal_type::new(nonterminal_type_0::from_0th(
+                                nonterminal_basic_type::new(nonterminal_basic_type_0::from_4th(
+                                    nonterminal_basic_type_0_4,
+                                )),
+                            ))
+                            .into(),
+                        )
+                    }
                     nonterminal_value_0::variant_1(num_val) => {
                         match num_val.nth::<0>() {
                             nonterminal_num_val_0::variant_0(_) => {
                                 // int
                                 Some(
-                                    nonterminal_type::new(
-                                        nonterminal_type_0::from_0th(
-                                            nonterminal_basic_type::new(
-                                                nonterminal_basic_type_0::from_0th(
-                                                    nonterminal_basic_type_0_0)))).into())
-                            },
+                                    nonterminal_type::new(nonterminal_type_0::from_0th(
+                                        nonterminal_basic_type::new(
+                                            nonterminal_basic_type_0::from_0th(
+                                                nonterminal_basic_type_0_0,
+                                            ),
+                                        ),
+                                    ))
+                                    .into(),
+                                )
+                            }
                             nonterminal_num_val_0::variant_1(_) => {
                                 // float
                                 Some(
-                                    nonterminal_type::new(
-                                        nonterminal_type_0::from_0th(
-                                            nonterminal_basic_type::new(
-                                                nonterminal_basic_type_0::from_1th(
-                                                    nonterminal_basic_type_0_1)))).into())
-                            },
+                                    nonterminal_type::new(nonterminal_type_0::from_0th(
+                                        nonterminal_basic_type::new(
+                                            nonterminal_basic_type_0::from_1th(
+                                                nonterminal_basic_type_0_1,
+                                            ),
+                                        ),
+                                    ))
+                                    .into(),
+                                )
+                            }
                             nonterminal_num_val_0::variant_2(_) => {
                                 // double
                                 Some(
-                                    nonterminal_type::new(
-                                        nonterminal_type_0::from_0th(
-                                            nonterminal_basic_type::new(
-                                                nonterminal_basic_type_0::from_2th(
-                                                    nonterminal_basic_type_0_2)))).into())
-                            },
+                                    nonterminal_type::new(nonterminal_type_0::from_0th(
+                                        nonterminal_basic_type::new(
+                                            nonterminal_basic_type_0::from_2th(
+                                                nonterminal_basic_type_0_2,
+                                            ),
+                                        ),
+                                    ))
+                                    .into(),
+                                )
+                            }
                         }
-                    },
+                    }
                 }
-            },
+            }
             nonterminal_expr_unit_0::variant_2(fn_call) => {
                 // <fn_call> ::= <fn_name> "(" <arg_list_e> ")" ;
                 let fn_name = fn_call.nth::<0>().nth::<0>().clone();
@@ -1439,7 +1585,7 @@ mod defs {
                 } else {
                     None // Function not found.
                 }
-            },
+            }
             nonterminal_expr_unit_0::variant_3(struct_expr) => {
                 // Specifically:
                 // <struct_expr> ::= "{" "\n" <expr_list_e> "\n" "}" ;
@@ -1456,15 +1602,15 @@ mod defs {
                         // Empty list.
                         return Some(NonterminalTypeExtended {
                             // In the interest of time, just put <type>.<basic_type>."void" here
-                            base: nonterminal_type::new(
-                                nonterminal_type_0::from_0th(
-                                    nonterminal_basic_type::new(
-                                        nonterminal_basic_type_0::from_5th(
-                                            nonterminal_basic_type_0_5)))),
+                            base: nonterminal_type::new(nonterminal_type_0::from_0th(
+                                nonterminal_basic_type::new(nonterminal_basic_type_0::from_5th(
+                                    nonterminal_basic_type_0_5,
+                                )),
+                            )),
                             struct_fields: None,
                             struct_fields_positional: Some(vec![]),
                         });
-                    },
+                    }
                     None => {
                         // Non-empty list.
                         current = expr_list_e.nth::<0>().nth::<0>();
@@ -1474,17 +1620,29 @@ mod defs {
                     match el.nth::<0>() {
                         // Variant 0, single expr.
                         nonterminal_expr_list_0::variant_0(expr) => {
-                            if let Some(t) = infer_expr_type(&expr, var_defs, func_defs, struct_defs, scope_trace) {
+                            if let Some(t) = infer_expr_type(
+                                &expr,
+                                var_defs,
+                                func_defs,
+                                struct_defs,
+                                scope_trace,
+                            ) {
                                 expr_types.push(t);
                             } else {
                                 return None; // Could not infer type of expression.
                             }
                             current = None;
-                        },
+                        }
                         // Variant 1, expr followed by more exprs.
                         nonterminal_expr_list_0::variant_1(seq) => {
                             let (expr, _, _, rest) = seq.children();
-                            if let Some(t) = infer_expr_type(&expr, var_defs, func_defs, struct_defs, scope_trace) {
+                            if let Some(t) = infer_expr_type(
+                                &expr,
+                                var_defs,
+                                func_defs,
+                                struct_defs,
+                                scope_trace,
+                            ) {
                                 expr_types.push(t);
                             } else {
                                 return None; // Could not infer type of expression.
@@ -1497,23 +1655,22 @@ mod defs {
                 // We will create a new NonterminalTypeExtended representing an anonymous struct.
                 Some(NonterminalTypeExtended {
                     // In the interest of time, just put <type>.<basic_type>."void" here
-                    base: nonterminal_type::new(
-                        nonterminal_type_0::from_0th(
-                            nonterminal_basic_type::new(
-                                nonterminal_basic_type_0::from_5th(
-                                    nonterminal_basic_type_0_5)))),
+                    base: nonterminal_type::new(nonterminal_type_0::from_0th(
+                        nonterminal_basic_type::new(nonterminal_basic_type_0::from_5th(
+                            nonterminal_basic_type_0_5,
+                        )),
+                    )),
                     struct_fields: None,
                     struct_fields_positional: Some(expr_types),
                 })
-            },
+            }
             nonterminal_expr_unit_0::variant_4(struct_access) => {
                 // <struct_access> ::= <var_access> "." <field_name> ;
                 let var_name = struct_access.nth::<0>().nth::<0>();
                 let field_name = struct_access.nth::<0>().nth::<2>().clone();
                 // Does the var being accessed exist and is it a struct?
                 // Get the var name.
-                let var_def = get_var_definition(var_defs, var_name, scope_trace)
-                    .cloned();
+                let var_def = get_var_definition(var_defs, var_name, scope_trace).cloned();
                 match var_def {
                     Some(var_type) => {
                         // We have a variable type, check if it's a struct type.
@@ -1523,7 +1680,9 @@ mod defs {
                             let struct_name = struct_type.nth::<0>().nth::<2>().clone();
                             // Look up the struct definition to see if the field exists.
                             if let Some(fields) = struct_defs.get(&struct_name) {
-                                if let Some((_, field_type)) = fields.iter().find(|(fname, _ftype)| fname == &field_name) {
+                                if let Some((_, field_type)) =
+                                    fields.iter().find(|(fname, _ftype)| fname == &field_name)
+                                {
                                     Some(field_type.clone().into())
                                 } else {
                                     // Note: The way this is currently, this will double count some violations.
@@ -1535,19 +1694,28 @@ mod defs {
                         } else {
                             None // Variable is not of struct type.
                         }
-                    },                    
-                    None => None // Variable not found.
+                    }
+                    None => None, // Variable not found.
                 }
-            },
+            }
         }
     }
 
     // A helper function to infer the type of an expression.
     fn infer_expr_type(
         expr: &nonterminal_expr,
-        var_defs: &alloc::collections::BTreeMap<(nonterminal_var_name, Vec<usize>), nonterminal_type>,
-        func_defs: &alloc::collections::BTreeMap<(nonterminal_fn_name, Vec<usize>), Vec<nonterminal_type>>,
-        struct_defs: &alloc::collections::BTreeMap<nonterminal_struct_name, Vec<(nonterminal_field_name, nonterminal_type)>>,
+        var_defs: &alloc::collections::BTreeMap<
+            (nonterminal_var_name, Vec<usize>),
+            nonterminal_type,
+        >,
+        func_defs: &alloc::collections::BTreeMap<
+            (nonterminal_fn_name, Vec<usize>),
+            Vec<nonterminal_type>,
+        >,
+        struct_defs: &alloc::collections::BTreeMap<
+            nonterminal_struct_name,
+            Vec<(nonterminal_field_name, nonterminal_type)>,
+        >,
         scope_trace: &Vec<usize>,
     ) -> Option<NonterminalTypeExtended> {
         // This is being done at the <expr> level, so there are two variants: arith_expr and expr_unit.
@@ -1560,8 +1728,20 @@ mod defs {
                         // <binop> ::= <expr_unit> <sep> <binop_op> <sep> <expr> ;
                         let left_expr_unit = binop.nth::<0>().nth::<0>();
                         let right_expr = binop.nth::<0>().nth::<4>();
-                        let left_type = infer_expr_unit_type(left_expr_unit, var_defs, func_defs, struct_defs, scope_trace);
-                        let right_type = infer_expr_type(&right_expr, var_defs, func_defs, struct_defs, scope_trace);
+                        let left_type = infer_expr_unit_type(
+                            left_expr_unit,
+                            var_defs,
+                            func_defs,
+                            struct_defs,
+                            scope_trace,
+                        );
+                        let right_type = infer_expr_type(
+                            &right_expr,
+                            var_defs,
+                            func_defs,
+                            struct_defs,
+                            scope_trace,
+                        );
                         let binop_op = binop.nth::<0>().nth::<2>();
                         // Are types compatible for the binary operator?
                         if let (Some(lt), Some(rt)) = (left_type, right_type) {
@@ -1573,11 +1753,17 @@ mod defs {
                         } else {
                             None // Could not infer types.
                         }
-                    },
+                    }
                     nonterminal_arith_expr_0::variant_1(unop) => {
                         // <unop> ::= <unop_op> <expr> ;
                         let right_expr = unop.nth::<0>().nth::<1>();
-                        let expr_type_nte = infer_expr_type(&right_expr, var_defs, func_defs, struct_defs, scope_trace);
+                        let expr_type_nte = infer_expr_type(
+                            &right_expr,
+                            var_defs,
+                            func_defs,
+                            struct_defs,
+                            scope_trace,
+                        );
                         // Check if the type is valid for the unary operator.
                         let unop_op = unop.nth::<0>().nth::<0>();
                         // <unop_op> ::= "-" | <sep> "not" <sep> ;
@@ -1599,10 +1785,10 @@ mod defs {
                                                 => Some(t.clone()),
                                                 _ => None, // Invalid type for "-"
                                             }
-                                        },
+                                        }
                                         _ => None, // Invalid type for "-"
                                     }
-                                },
+                                }
                                 nonterminal_unop_op_0::variant_1(_) => {
                                     // "not" operator, valid for bool type.
                                     match expr_type.nth::<0>() {
@@ -1612,18 +1798,18 @@ mod defs {
                                                 => Some(t.clone()),
                                                 _ => None, // Invalid type for "not"
                                             }
-                                        },
+                                        }
                                         _ => None, // Invalid type for "not"
                                     }
-                                },
+                                }
                                 _ => None, // Should not happen
                             }
                         } else {
                             return None; // Could not infer type
                         }
-                    },
+                    }
                 }
-            },
+            }
             nonterminal_expr_0::variant_1(expr_unit) => {
                 infer_expr_unit_type(expr_unit, var_defs, func_defs, struct_defs, scope_trace)
             }
@@ -1643,12 +1829,12 @@ mod defs {
 
     impl<T> Visitor<T> for ConstraintVisitorNoVoidDecls
     where
-        T: VisitableChildren<T> +
-            AsNodeRef<nonterminal_decl> +
-            AsNodeRef<nonterminal_param> +
-            AsNodeRef<nonterminal_type> +
-            AsNodeRef<nonterminal_basic_type> +
-            AsNodeRef<nonterminal_field_def_list>,
+        T: VisitableChildren<T>
+            + AsNodeRef<nonterminal_decl>
+            + AsNodeRef<nonterminal_param>
+            + AsNodeRef<nonterminal_type>
+            + AsNodeRef<nonterminal_basic_type>
+            + AsNodeRef<nonterminal_field_def_list>,
     {
         type Continue = Self;
         type Break = Infallible;
@@ -1660,7 +1846,7 @@ mod defs {
             T: From<&'program N> + AsNodeRef<N>,
         {
             self.path.push_back(idx);
-            let visited = node.opaque();    
+            let visited = node.opaque();
             if let Some(_tree) = visited.downcast::<nonterminal_decl>() {
                 // <decl> ::= <type> <sep> <var_name> | <type> <sep> <var_name> "=" <sep> <expr> ;
                 // TODO: Update this to handle the alternation.
@@ -1696,7 +1882,9 @@ mod defs {
                             // Single field_def.
                             let field_type = field_def.nth::<0>().nth::<0>().clone();
                             if let nonterminal_type_0::variant_0(basic_type) = field_type {
-                                if let nonterminal_basic_type_0::variant_5(_) = basic_type.nth::<0>() {
+                                if let nonterminal_basic_type_0::variant_5(_) =
+                                    basic_type.nth::<0>()
+                                {
                                     // Void type in field definition, violation.
                                     self.violations.push(self.path.clone());
                                 } else {
@@ -1705,13 +1893,16 @@ mod defs {
                                 }
                             }
                             current = None;
-                        },
+                        }
                         nonterminal_field_def_list_0::variant_1(seq) => {
                             // field_def followed by more field_defs.
                             // <type> <sep> <field_name> "," "\n" <field_def_list>
                             let (field_type, _, _, _, _, rest) = seq.children();
-                            if let nonterminal_type_0::variant_0(basic_type) = field_type.nth::<0>() {
-                                if let nonterminal_basic_type_0::variant_5(_) = basic_type.nth::<0>() {
+                            if let nonterminal_type_0::variant_0(basic_type) = field_type.nth::<0>()
+                            {
+                                if let nonterminal_basic_type_0::variant_5(_) =
+                                    basic_type.nth::<0>()
+                                {
                                     // Void type in field definition, violation.
                                     self.violations.push(self.path.clone());
                                 } else {
@@ -1725,7 +1916,7 @@ mod defs {
                 }
             }
             let mut result = visited.visit_each(self);
-            if let Ok(ControlFlow::Continue(visitor)) = & mut result {
+            if let Ok(ControlFlow::Continue(visitor)) = &mut result {
                 visitor.path.pop_back();
             }
             result
@@ -1744,11 +1935,18 @@ mod defs {
         /// The current path, to be used by the visitor when saving violations.
         pub path: VecDeque<usize>,
         /// The variable definitions in scope, to be used for type inference.
-        pub var_defs: &'a alloc::collections::BTreeMap<(nonterminal_var_name, Vec<usize>), nonterminal_type>,
+        pub var_defs:
+            &'a alloc::collections::BTreeMap<(nonterminal_var_name, Vec<usize>), nonterminal_type>,
         /// The function definitions in scope, to be used for type inference.
-        pub fun_defs: &'a alloc::collections::BTreeMap<(nonterminal_fn_name, Vec<usize>), Vec<nonterminal_type>>,
+        pub fun_defs: &'a alloc::collections::BTreeMap<
+            (nonterminal_fn_name, Vec<usize>),
+            Vec<nonterminal_type>,
+        >,
         /// The struct definitions in scope, to be used for type inference.
-        pub struct_defs: &'a alloc::collections::BTreeMap<nonterminal_struct_name, Vec<(nonterminal_field_name, nonterminal_type)>>,
+        pub struct_defs: &'a alloc::collections::BTreeMap<
+            nonterminal_struct_name,
+            Vec<(nonterminal_field_name, nonterminal_type)>,
+        >,
         /// The current scope trace, to be used for looking up variable and function definitions.
         pub scope_trace: &'a mut Vec<usize>,
         /// Function scopes, to help manage definitions.
@@ -1760,27 +1958,31 @@ mod defs {
     impl<'a, S, G, T> VisitorMut<T> for ConstraintFixerNoVoidDecls<'a, S, G>
     where
         nonterminal_type: Generated<S, G>,
-        T: VisitableChildrenMut<T> +
-            AsNodeMut<nonterminal_decl> + 
-            AsNodeMut<nonterminal_param> +
-            AsNodeMut<nonterminal_type> +
-            AsNodeMut<nonterminal_basic_type> +
-            AsNodeMut<nonterminal_expr> +
-            AsNodeMut<nonterminal_field_def_list> +
-            AsNodeMut<nonterminal_fn_def> + 
-            AsNodeMut<nonterminal_struct_def>,
+        T: VisitableChildrenMut<T>
+            + AsNodeMut<nonterminal_decl>
+            + AsNodeMut<nonterminal_param>
+            + AsNodeMut<nonterminal_type>
+            + AsNodeMut<nonterminal_basic_type>
+            + AsNodeMut<nonterminal_expr>
+            + AsNodeMut<nonterminal_field_def_list>
+            + AsNodeMut<nonterminal_fn_def>
+            + AsNodeMut<nonterminal_struct_def>,
     {
         type Continue = Self;
         type Break = Infallible;
         type Error = Infallible;
 
-        fn visit_mut<'program, N>(mut self, node: &'program mut N, idx: usize) -> VisitMutResult<Self, T>
+        fn visit_mut<'program, N>(
+            mut self,
+            node: &'program mut N,
+            idx: usize,
+        ) -> VisitMutResult<Self, T>
         where
             N: Node<TypeMut<'program> = T>,
             T: From<&'program mut N> + AsNodeMut<N>,
         {
             self.path.push_back(idx);
-            let mut visited = node.opaque_mut(); 
+            let mut visited = node.opaque_mut();
             if let Some(_tree) = visited.downcast_mut::<nonterminal_decl>() {
                 // Update scope after dealing with everything.
                 // <decl> ::= <type> <sep> <var_name> <sep> <decl_rhs_e> ;
@@ -1790,19 +1992,29 @@ mod defs {
                         // <decl_rhs_e> ::= <decl_rhs> | <e> ;
                         // <decl_rhs> ::= "=" <sep> <expr> ;
                         // What is the type?
-                        if let nonterminal_type_0::variant_0(basic_type) = decl_type.nth_mut::<0>() {
-                            if let nonterminal_basic_type_0::variant_5(_) = basic_type.nth_mut::<0>() {
+                        if let nonterminal_type_0::variant_0(basic_type) = decl_type.nth_mut::<0>()
+                        {
+                            if let nonterminal_basic_type_0::variant_5(_) =
+                                basic_type.nth_mut::<0>()
+                            {
                                 // Void type in declaration, violation.
                                 // Can we fix it by looking at the RHS expr?
                                 let expr = decl_rhs.nth::<0>().nth::<2>();
-                                if let Some(expr_type_nte) = infer_expr_type(expr, self.var_defs, self.fun_defs, self.struct_defs, self.scope_trace) {
+                                if let Some(expr_type_nte) = infer_expr_type(
+                                    expr,
+                                    self.var_defs,
+                                    self.fun_defs,
+                                    self.struct_defs,
+                                    self.scope_trace,
+                                ) {
                                     // We have inferred a type for the expr.
                                     // Update the decl_type to match expr_type.
                                     let new_type: nonterminal_type = expr_type_nte.into();
                                     mem::swap(decl_type, &mut new_type.clone());
                                 } else {
                                     // Could not infer type, replace with a random generated type.
-                                    let mut new_type = nonterminal_type::generate(self.sampler, self.generator, 0);
+                                    let mut new_type =
+                                        nonterminal_type::generate(self.sampler, self.generator, 0);
                                     mem::swap(decl_type, &mut new_type);
                                 }
                             } else {
@@ -1812,11 +2024,15 @@ mod defs {
                     }
                     nonterminal_decl_rhs_e_0::variant_1(_e) => {
                         // Is the type void?
-                        if let nonterminal_type_0::variant_0(basic_type) = decl_type.nth_mut::<0>() {
-                            if let nonterminal_basic_type_0::variant_5(_) = basic_type.nth_mut::<0>() {
+                        if let nonterminal_type_0::variant_0(basic_type) = decl_type.nth_mut::<0>()
+                        {
+                            if let nonterminal_basic_type_0::variant_5(_) =
+                                basic_type.nth_mut::<0>()
+                            {
                                 // Void type in declaration, violation.
                                 // No RHS expr, cannot fix, replace with a random generated type.
-                                let mut new_type = nonterminal_type::generate(self.sampler, self.generator, 0);
+                                let mut new_type =
+                                    nonterminal_type::generate(self.sampler, self.generator, 0);
                                 mem::swap(decl_type, &mut new_type);
                             } else {
                                 // Valid declaration type.
@@ -1834,7 +2050,8 @@ mod defs {
                     if let nonterminal_basic_type_0::variant_5(_) = basic_type.nth_mut::<0>() {
                         // Void type in parameter, violation.
                         // Replace with a random generated type.
-                        let mut new_type = nonterminal_type::generate(self.sampler, self.generator, 0);
+                        let mut new_type =
+                            nonterminal_type::generate(self.sampler, self.generator, 0);
                         mem::swap(param_type, &mut new_type);
                     } else {
                         // Valid parameter type.
@@ -1848,27 +2065,37 @@ mod defs {
                         nonterminal_field_def_list_0::variant_0(field_def) => {
                             // Single field_def.
                             let field_type = field_def.nth_mut::<0>();
-                            if let nonterminal_type_0::variant_0(basic_type) = field_type.nth_mut::<0>() {
-                                if let nonterminal_basic_type_0::variant_5(_) = basic_type.nth_mut::<0>() {
+                            if let nonterminal_type_0::variant_0(basic_type) =
+                                field_type.nth_mut::<0>()
+                            {
+                                if let nonterminal_basic_type_0::variant_5(_) =
+                                    basic_type.nth_mut::<0>()
+                                {
                                     // Void type in field definition, violation.
                                     // Replace with a random generated type.
-                                    let mut new_type = nonterminal_type::generate(self.sampler, self.generator, 0);
+                                    let mut new_type =
+                                        nonterminal_type::generate(self.sampler, self.generator, 0);
                                     mem::swap(field_type, &mut new_type);
                                 } else {
                                     // Valid field type.
                                 }
                             }
                             current = None;
-                        },
+                        }
                         nonterminal_field_def_list_0::variant_1(seq) => {
                             // field_def followed by more field_defs.
                             // <type> <sep> <field_name> "," "\n" <field_def_list>
                             let (field_type, _, _, _, _, rest) = seq.children_mut();
-                            if let nonterminal_type_0::variant_0(basic_type) = field_type.nth_mut::<0>() {
-                                if let nonterminal_basic_type_0::variant_5(_) = basic_type.nth_mut::<0>() {
+                            if let nonterminal_type_0::variant_0(basic_type) =
+                                field_type.nth_mut::<0>()
+                            {
+                                if let nonterminal_basic_type_0::variant_5(_) =
+                                    basic_type.nth_mut::<0>()
+                                {
                                     // Void type in field definition, violation.
                                     // Replace with a random generated type.
-                                    let mut new_type = nonterminal_type::generate(self.sampler, self.generator, 0);
+                                    let mut new_type =
+                                        nonterminal_type::generate(self.sampler, self.generator, 0);
                                     mem::swap(field_type, &mut new_type);
                                 } else {
                                     // Valid field type.
@@ -1878,7 +2105,8 @@ mod defs {
                         }
                     }
                 }
-            } /* Also do function definitions to handle scope */
+            }
+            /* Also do function definitions to handle scope */
             else if let Some(_tree) = visited.downcast_mut::<nonterminal_fn_def>() {
                 // Just update the scope trace.
                 self.scope_id += 1;
@@ -1895,8 +2123,9 @@ mod defs {
                 // Now pop the function scope itself.
                 visitor.function_scopes.pop();
                 visitor.path.pop_back();
-                return Ok(ControlFlow::Continue(visitor));  
-            } /* Struct defs too */
+                return Ok(ControlFlow::Continue(visitor));
+            }
+            /* Struct defs too */
             else if let Some(_tree) = visited.downcast_mut::<nonterminal_struct_def>() {
                 // Just update the scope trace.
                 // But before, visit children.
@@ -1932,22 +2161,26 @@ mod defs {
     impl<'a, S, G, T> VisitorMut<T> for ConstraintFixerStructExprRHSOfDecl<'a, S, G>
     where
         nonterminal_expr: Generated<S, G>,
-        T: VisitableChildrenMut<T> +
-            AsNodeMut<nonterminal_struct_expr> +
-            AsNodeMut<nonterminal_decl> + 
-            AsNodeMut<nonterminal_expr>,
+        T: VisitableChildrenMut<T>
+            + AsNodeMut<nonterminal_struct_expr>
+            + AsNodeMut<nonterminal_decl>
+            + AsNodeMut<nonterminal_expr>,
     {
         type Continue = Self;
         type Break = Infallible;
         type Error = Infallible;
 
-        fn visit_mut<'program, N>(mut self, node: &'program mut N, idx: usize) -> VisitMutResult<Self, T>
+        fn visit_mut<'program, N>(
+            mut self,
+            node: &'program mut N,
+            idx: usize,
+        ) -> VisitMutResult<Self, T>
         where
             N: Node<TypeMut<'program> = T>,
             T: From<&'program mut N> + AsNodeMut<N>,
         {
             self.path.push_back(idx);
-            let mut visited = node.opaque_mut(); 
+            let mut visited = node.opaque_mut();
             // Check if we are entering or leaving a decl.
             if let Some(_tree) = visited.downcast_mut::<nonterminal_decl>() {
                 self.inside_struct_decl = true;
@@ -1964,10 +2197,13 @@ mod defs {
                     // <expr> ::= <arith_expr> | <expr_unit> ;
                     // <expr_unit> ::= <var_access> | <value> | <fn_call> | <struct_expr> | <struct_access> ;
                     if let nonterminal_expr_0::variant_1(expr_unit) = _tree.nth_mut::<0>() {
-                        if let nonterminal_expr_unit_0::variant_3(struct_expr) = expr_unit.nth_mut::<0>() {
+                        if let nonterminal_expr_unit_0::variant_3(struct_expr) =
+                            expr_unit.nth_mut::<0>()
+                        {
                             // Violation, struct expr not on RHS of struct decl.
                             // Replace with a dummy expr, e.g., 0.
-                            let mut new_expr = nonterminal_expr::generate(self.sampler, self.generator, 0);
+                            let mut new_expr =
+                                nonterminal_expr::generate(self.sampler, self.generator, 0);
                             mem::swap(_tree, &mut new_expr);
                         } else {
                             // Valid usage.
@@ -1975,13 +2211,12 @@ mod defs {
                     } else {
                         // Valid usage.
                     }
-                    
                 } else {
                     // Valid usage.
                 }
             }
             let mut result = visited.visit_each_mut(self);
-            if let Ok(ControlFlow::Continue(visitor)) = & mut result {
+            if let Ok(ControlFlow::Continue(visitor)) = &mut result {
                 visitor.path.pop_back();
             }
             result
@@ -2003,10 +2238,10 @@ mod defs {
 
     impl<T> Visitor<T> for ConstraintVisitorStructExprRHSOfDecl
     where
-        T: VisitableChildren<T> +
-            AsNodeRef<nonterminal_struct_expr> +
-            AsNodeRef<nonterminal_decl> +
-            AsNodeRef<nonterminal_expr>,
+        T: VisitableChildren<T>
+            + AsNodeRef<nonterminal_struct_expr>
+            + AsNodeRef<nonterminal_decl>
+            + AsNodeRef<nonterminal_expr>,
     {
         type Continue = Self;
         type Break = Infallible;
@@ -2018,7 +2253,7 @@ mod defs {
             T: From<&'program N> + AsNodeRef<N>,
         {
             self.path.push_back(idx);
-            let visited = node.opaque(); 
+            let visited = node.opaque();
             // Check if we are entering or leaving a decl.
             if let Some(_tree) = visited.downcast::<nonterminal_decl>() {
                 // Check if the decl is a struct decl; i.e., what is the type?
@@ -2038,7 +2273,7 @@ mod defs {
                 visitor.path.pop_back();
                 return Ok(ControlFlow::Continue(visitor));
             }
-            
+
             // Now, actual logic.
             if let Some(_tree) = visited.downcast::<nonterminal_struct_expr>() {
                 // We are in a struct_expr.
@@ -2052,7 +2287,7 @@ mod defs {
             }
 
             let mut result = visited.visit_each(self);
-            if let Ok(ControlFlow::Continue(visitor)) = & mut result {
+            if let Ok(ControlFlow::Continue(visitor)) = &mut result {
                 visitor.path.pop_back();
             }
             result
@@ -2073,11 +2308,11 @@ mod defs {
 
     impl<T> Visitor<T> for ConstraintVisitorNoEmptyStructs
     where
-        T: VisitableChildren<T> +
-            AsNodeRef<nonterminal_struct_def> +
-            AsNodeRef<nonterminal_field_def_list_e> +
-            AsNodeRef<nonterminal_struct_expr> +
-            AsNodeRef<nonterminal_expr_list_e>,
+        T: VisitableChildren<T>
+            + AsNodeRef<nonterminal_struct_def>
+            + AsNodeRef<nonterminal_field_def_list_e>
+            + AsNodeRef<nonterminal_struct_expr>
+            + AsNodeRef<nonterminal_expr_list_e>,
     {
         type Continue = Self;
         type Break = Infallible;
@@ -2089,7 +2324,7 @@ mod defs {
             T: From<&'program N> + AsNodeRef<N>,
         {
             self.path.push_back(idx);
-            let visited = node.opaque();    
+            let visited = node.opaque();
             if let Some(_tree) = visited.downcast::<nonterminal_struct_def>() {
                 // <struct_def> ::= "struct" <sep> <struct_name> <sep> "{" <sep> <field_list_e> <sep> "}" ";" ;
                 let field_list_e = _tree.nth::<0>().nth::<6>();
@@ -2097,13 +2332,14 @@ mod defs {
                     nonterminal_field_def_list_e_0::variant_1(_) => {
                         // Empty field list, violation.
                         self.violations.push(self.path.clone());
-                    },
+                    }
                     nonterminal_field_def_list_e_0::variant_0(_) => {
                         // Non-empty field list, valid.
                         self.paths_to_passed_checks.push(self.path.clone());
                     }
                 }
-            } /* also catch empty struct exprs */
+            }
+            /* also catch empty struct exprs */
             else if let Some(_tree) = visited.downcast::<nonterminal_struct_expr>() {
                 // <struct_expr> ::= "{" "\n" <expr_list_e> "\n" "}" ;
                 // <expr_list_e> ::= <expr_list> | <e> ;
@@ -2113,7 +2349,7 @@ mod defs {
                     nonterminal_expr_list_e_0::variant_1(_) => {
                         // Empty expr list, violation.
                         self.violations.push(self.path.clone());
-                    },
+                    }
                     nonterminal_expr_list_e_0::variant_0(_) => {
                         // Non-empty expr list, valid.
                         self.paths_to_passed_checks.push(self.path.clone());
@@ -2121,7 +2357,7 @@ mod defs {
                 }
             }
             let mut result = visited.visit_each(self);
-            if let Ok(ControlFlow::Continue(visitor)) = & mut result {
+            if let Ok(ControlFlow::Continue(visitor)) = &mut result {
                 visitor.path.pop_back();
             }
             result
@@ -2142,10 +2378,10 @@ mod defs {
 
     impl<T> Visitor<T> for ConstraintVisitorNoDuplicateStructFields
     where
-        T: VisitableChildren<T> +
-            AsNodeRef<nonterminal_struct_def> +
-            AsNodeRef<nonterminal_field_def_list> +
-            AsNodeRef<nonterminal_field_name>,
+        T: VisitableChildren<T>
+            + AsNodeRef<nonterminal_struct_def>
+            + AsNodeRef<nonterminal_field_def_list>
+            + AsNodeRef<nonterminal_field_name>,
     {
         type Continue = Self;
         type Break = Infallible;
@@ -2157,7 +2393,7 @@ mod defs {
             T: From<&'program N> + AsNodeRef<N>,
         {
             self.path.push_back(idx);
-            let visited = node.opaque();    
+            let visited = node.opaque();
             if let Some(_tree) = visited.downcast::<nonterminal_struct_def>() {
                 // <struct_def> ::= "struct" <sep> <struct_name> <sep> "{" <sep> <field_list_e> <sep> "}" ";" ;
                 let field_list_e = _tree.nth::<0>().nth::<6>();
@@ -2176,28 +2412,29 @@ mod defs {
                                         let field_name = field_def.nth::<2>().clone();
                                         field_names.push(field_name);
                                         fld_current = None;
-                                    },
+                                    }
                                     nonterminal_field_def_list_0::variant_1(seq) => {
                                         // field_def followed by more field_defs.
                                         // <type> <sep> <field_name> "," "\n" <field_def_list>
-                                        let (field_type, _, field_name, _, _, rest) = seq.children();
+                                        let (field_type, _, field_name, _, _, rest) =
+                                            seq.children();
                                         field_names.push(field_name.clone());
                                         fld_current = Some(rest);
                                     }
                                 }
                             }
                             current = None;
-                        },
+                        }
                         nonterminal_field_def_list_e_0::variant_1(_) => {
                             // Empty field list, nothing to do.
                             current = None;
-                        }   
+                        }
                     }
                 }
                 // Now check for duplicates.
                 let mut seen = alloc::collections::BTreeSet::new();
                 let mut has_duplicates = false;
-                for field_name in field_names { 
+                for field_name in field_names {
                     if !seen.insert(field_name) {
                         // Duplicate found.
                         has_duplicates = true;
@@ -2206,12 +2443,12 @@ mod defs {
                 }
                 if has_duplicates {
                     self.violations.push(self.path.clone());
-                } else {    
+                } else {
                     self.paths_to_passed_checks.push(self.path.clone());
                 }
             }
             let mut result = visited.visit_each(self);
-            if let Ok(ControlFlow::Continue(visitor)) = & mut result {  
+            if let Ok(ControlFlow::Continue(visitor)) = &mut result {
                 visitor.path.pop_back();
             }
             result
@@ -2240,7 +2477,10 @@ mod defs {
         pub func_defs: &'a FuncSymbolTable,
         /// The current struct definitions, mapping struct names to their field names and types.
         /// This should be initialized by a prior pass of DeclarationCollector.
-        pub struct_defs: &'a alloc::collections::BTreeMap<nonterminal_struct_name, Vec<(nonterminal_field_name, nonterminal_type)>>,
+        pub struct_defs: &'a alloc::collections::BTreeMap<
+            nonterminal_struct_name,
+            Vec<(nonterminal_field_name, nonterminal_type)>,
+        >,
     }
 
     impl<'a> ConstraintVisitorTypeCheck<'a> {
@@ -2248,7 +2488,10 @@ mod defs {
         pub fn new(
             var_defs: &'a VarSymbolTable,
             func_defs: &'a FuncSymbolTable,
-            struct_defs: &'a alloc::collections::BTreeMap<nonterminal_struct_name, Vec<(nonterminal_field_name, nonterminal_type)>>,
+            struct_defs: &'a alloc::collections::BTreeMap<
+                nonterminal_struct_name,
+                Vec<(nonterminal_field_name, nonterminal_type)>,
+            >,
         ) -> Self {
             Self {
                 path: VecDeque::new(),
@@ -2265,24 +2508,24 @@ mod defs {
 
     impl<T> Visitor<T> for ConstraintVisitorTypeCheck<'_>
     where
-        T: VisitableChildren<T> +
-            AsNodeRef<nonterminal_assignment> +
-            AsNodeRef<nonterminal_expr> +
-            AsNodeRef<nonterminal_var_access> +
-            AsNodeRef<nonterminal_var_name> +
-            AsNodeRef<nonterminal_decl> +
-            AsNodeRef<nonterminal_type> +
-            AsNodeRef<nonterminal_fn_def> +
-            AsNodeRef<nonterminal_fn_name> +
-            AsNodeRef<nonterminal_param_list> +
-            AsNodeRef<nonterminal_param_list_e> +
-            AsNodeRef<nonterminal_fn_call> +
-            AsNodeRef<nonterminal_return_stmt> +
-            AsNodeRef<nonterminal_struct_access> +
-            AsNodeRef<nonterminal_field_name> +
-            AsNodeRef<nonterminal_expr_stmt> +
-            AsNodeRef<nonterminal_struct_expr> +
-            AsNodeRef<nonterminal_struct_name>,
+        T: VisitableChildren<T>
+            + AsNodeRef<nonterminal_assignment>
+            + AsNodeRef<nonterminal_expr>
+            + AsNodeRef<nonterminal_var_access>
+            + AsNodeRef<nonterminal_var_name>
+            + AsNodeRef<nonterminal_decl>
+            + AsNodeRef<nonterminal_type>
+            + AsNodeRef<nonterminal_fn_def>
+            + AsNodeRef<nonterminal_fn_name>
+            + AsNodeRef<nonterminal_param_list>
+            + AsNodeRef<nonterminal_param_list_e>
+            + AsNodeRef<nonterminal_fn_call>
+            + AsNodeRef<nonterminal_return_stmt>
+            + AsNodeRef<nonterminal_struct_access>
+            + AsNodeRef<nonterminal_field_name>
+            + AsNodeRef<nonterminal_expr_stmt>
+            + AsNodeRef<nonterminal_struct_expr>
+            + AsNodeRef<nonterminal_struct_name>,
     {
         type Continue = Self;
         type Break = Infallible;
@@ -2294,7 +2537,7 @@ mod defs {
             T: From<&'program N> + AsNodeRef<N>,
         {
             self.path.push_back(idx);
-            let visited = node.opaque(); 
+            let visited = node.opaque();
 
             // First, check if we are in a situation where we need to increase scope depth.
             if let Some(_tree) = visited.downcast::<nonterminal_fn_def>() {
@@ -2305,15 +2548,16 @@ mod defs {
                 // If it's not void, we need to make sure there's at least one return statement in the function body.
                 // <fn_def> ::= <type> <sep> <fn_kwd> <sep> <fn_name> "(" <param_list_e> ")" <sep> "{" <sep> <fn_body_e> <sep> "}" ;
                 let fn_return_type = _tree.nth::<0>().nth::<0>().clone();
-                let fn_return_type_is_void = if let nonterminal_type_0::variant_0(basic_type) = fn_return_type.nth::<0>() {
-                    if let nonterminal_basic_type_0::variant_5(_) = basic_type.nth::<0>() {
-                        true
+                let fn_return_type_is_void =
+                    if let nonterminal_type_0::variant_0(basic_type) = fn_return_type.nth::<0>() {
+                        if let nonterminal_basic_type_0::variant_5(_) = basic_type.nth::<0>() {
+                            true
+                        } else {
+                            false
+                        }
                     } else {
                         false
-                    }
-                } else {
-                    false
-                };
+                    };
                 let fn_body_e = _tree.nth::<0>().nth::<11>();
                 // Is there a body?
                 // <fn_body_e> ::= <statements> | <e> ;
@@ -2332,11 +2576,11 @@ mod defs {
                                         nonterminal_stmt_0::variant_4(return_stmt) => {
                                             // We have a return statement.
                                             return_statements.push(return_stmt);
-                                        },
+                                        }
                                         _ => { /* Not a return statement, continue. */ }
                                     }
                                     current = None;
-                                },
+                                }
                                 // Variant 1, statement followed by more statements.
                                 nonterminal_statements_0::variant_1(seq) => {
                                     let (stmt, _, rest) = seq.children();
@@ -2344,7 +2588,7 @@ mod defs {
                                         nonterminal_stmt_0::variant_4(return_stmt) => {
                                             // We have a return statement.
                                             return_statements.push(return_stmt);
-                                        },
+                                        }
                                         _ => { /* Not a return statement, continue. */ }
                                     }
                                     current = Some(rest);
@@ -2368,16 +2612,25 @@ mod defs {
                                     nonterminal_return_stmt_0::variant_0(_) => {
                                         // Void return in non-void function, violation.
                                         self.violations.push(self.path.clone());
-                                    },
+                                    }
                                     nonterminal_return_stmt_0::variant_1(seq) => {
                                         let expr = seq.nth::<2>();
-                                        let expr_type = infer_expr_type(expr, &self.var_defs, &self.func_defs, &self.struct_defs, &self.scope_trace);
+                                        let expr_type = infer_expr_type(
+                                            expr,
+                                            &self.var_defs,
+                                            &self.func_defs,
+                                            &self.struct_defs,
+                                            &self.scope_trace,
+                                        );
                                         if let Some(et) = expr_type {
-                                            if !types_compatible(&fn_return_type.clone().into(), &et) {
+                                            if !types_compatible(
+                                                &fn_return_type.clone().into(),
+                                                &et,
+                                            ) {
                                                 self.violations.push(self.path.clone());
                                             } else {
                                                 // Types match, all good.
-                                                self.paths_to_passed_checks.push(self.path.clone()); 
+                                                self.paths_to_passed_checks.push(self.path.clone());
                                             }
                                         } else {
                                             // Could not infer expression type, consider it a violation.
@@ -2393,7 +2646,8 @@ mod defs {
                             for return_stmt in return_statements {
                                 let return_stmt_0 = return_stmt.nth::<0>();
                                 match return_stmt_0.nth::<0>() {
-                                    nonterminal_return_stmt_0::variant_0(_) => { /* Void return, all good. */ },
+                                    nonterminal_return_stmt_0::variant_0(_) => { /* Void return, all good. */
+                                    }
                                     nonterminal_return_stmt_0::variant_1(_) => {
                                         // Non-void return in void function, violation.
                                         all_void_returns = false;
@@ -2406,7 +2660,7 @@ mod defs {
                                 self.paths_to_passed_checks.push(self.path.clone());
                             }
                         }
-                    },
+                    }
                     nonterminal_fn_body_e_0::variant_1(_) => {
                         // No body, so no return statements.
                         if !fn_return_type_is_void {
@@ -2416,7 +2670,7 @@ mod defs {
                             // Function is void and has no body, all good.
                             self.paths_to_passed_checks.push(self.path.clone());
                         }
-                    },
+                    }
                 }
                 // Visit the function.
                 let result = visited.visit_each(self);
@@ -2436,7 +2690,13 @@ mod defs {
                     // We have an RHS expression, infer its type.
                     // <decl_rhs> ::= "=" <sep> <expr> ;
                     let rhs_expr = decl_rhs.nth::<0>().nth::<2>();
-                    let expr_type = infer_expr_type(rhs_expr, &self.var_defs, &self.func_defs, &self.struct_defs, &self.scope_trace);
+                    let expr_type = infer_expr_type(
+                        rhs_expr,
+                        &self.var_defs,
+                        &self.func_defs,
+                        &self.struct_defs,
+                        &self.scope_trace,
+                    );
                     if let Some(et) = expr_type {
                         if !types_compatible(&var_type.into(), &et) {
                             self.violations.push(self.path.clone());
@@ -2449,7 +2709,8 @@ mod defs {
                         // Could not infer expression type, consider it a violation.
                         self.violations.push(self.path.clone());
                     }
-                } else { /* Nothing to check if no RHS. */ }
+                } else { /* Nothing to check if no RHS. */
+                }
                 // Declaration processed; continue visiting.
                 // No need to add to var_defs here, should be done by DeclarationCollector.
             } else if let Some(tree) = visited.downcast::<nonterminal_assignment>() {
@@ -2459,9 +2720,16 @@ mod defs {
                 // Get the variable name from the var_access.
                 let var_name = var_access.nth::<0>().clone();
                 // Look up the variable type.
-                let var_type = get_var_definition(&self.var_defs, &var_name, &self.scope_trace).cloned();
+                let var_type =
+                    get_var_definition(&self.var_defs, &var_name, &self.scope_trace).cloned();
                 // Get the expression type.
-                let expr_type = infer_expr_type(expr, &self.var_defs, &self.func_defs, &self.struct_defs, &self.scope_trace);
+                let expr_type = infer_expr_type(
+                    expr,
+                    &self.var_defs,
+                    &self.func_defs,
+                    &self.struct_defs,
+                    &self.scope_trace,
+                );
                 // Compare types.
                 if let (Some(vt), Some(et)) = (var_type, expr_type) {
                     if !types_compatible(&vt.into(), &et) {
@@ -2486,7 +2754,9 @@ mod defs {
                     return result;
                 }
                 // Get the function name and type from the scope trace.
-                if let Some((fn_name, fn_type)) = get_current_function(&self.func_defs, &self.scope_trace) {
+                if let Some((fn_name, fn_type)) =
+                    get_current_function(&self.func_defs, &self.scope_trace)
+                {
                     // We have a function name and type.
                     // <return_stmt> ::= <return_kwd> | <return_kwd> <sep> <expr> ;
                     // What kind of return statement?
@@ -2500,7 +2770,13 @@ mod defs {
                                 Some(t) => t,
                                 None => {
                                     // No return type found? This should never happen, but assume void just in case something is wrong with the grammar.
-                                    &nonterminal_type::new(nonterminal_type_0::from_0th(nonterminal_basic_type::new(nonterminal_basic_type_0::from_5th(nonterminal_basic_type_0_5))))
+                                    &nonterminal_type::new(nonterminal_type_0::from_0th(
+                                        nonterminal_basic_type::new(
+                                            nonterminal_basic_type_0::from_5th(
+                                                nonterminal_basic_type_0_5,
+                                            ),
+                                        ),
+                                    ))
                                 }
                             };
                             match fn_return_type.nth::<0>() {
@@ -2511,33 +2787,45 @@ mod defs {
                                         nonterminal_basic_type_0::variant_5(_) => {
                                             // Basic type is void. All good.
                                             self.paths_to_passed_checks.push(self.path.clone());
-                                        },
+                                        }
                                         _ => {
                                             // Basic type is not void. Violation.
                                             self.violations.push(self.path.clone());
                                         }
                                     }
-                                },
+                                }
                                 nonterminal_type_0::variant_1(_) => {
                                     // Function return type is a struct type, not void. Violation.
                                     self.violations.push(self.path.clone());
-                                },
+                                }
                                 _ => {
                                     // This should never happen. Violation just in case.
                                     self.violations.push(self.path.clone());
                                 }
                             }
-                        },
+                        }
                         nonterminal_return_stmt_0::variant_1(ret_seq) => {
                             // Return with expression.
                             let ret_expr = ret_seq.nth::<2>();
-                            let expr_type = infer_expr_type(ret_expr, &self.var_defs, &self.func_defs, &self.struct_defs, &self.scope_trace);
+                            let expr_type = infer_expr_type(
+                                ret_expr,
+                                &self.var_defs,
+                                &self.func_defs,
+                                &self.struct_defs,
+                                &self.scope_trace,
+                            );
                             let some_last = fn_type.last();
                             let fn_return_type = match some_last {
                                 Some(t) => t,
                                 None => {
                                     // No return type found, assume void.
-                                    &nonterminal_type::new(nonterminal_type_0::from_0th(nonterminal_basic_type::new(nonterminal_basic_type_0::from_5th(nonterminal_basic_type_0_5))))
+                                    &nonterminal_type::new(nonterminal_type_0::from_0th(
+                                        nonterminal_basic_type::new(
+                                            nonterminal_basic_type_0::from_5th(
+                                                nonterminal_basic_type_0_5,
+                                            ),
+                                        ),
+                                    ))
                                 }
                             };
                             if let Some(et) = expr_type {
@@ -2552,7 +2840,7 @@ mod defs {
                                 // Could not infer expression type, consider it a violation.
                                 self.violations.push(self.path.clone());
                             }
-                        },
+                        }
                     }
                 } else {
                     // Could not determine current function, just continue; this violation is caught by another visitor.
@@ -2586,11 +2874,13 @@ mod defs {
                 }
             } else if let Some(tree) = visited.downcast::<nonterminal_fn_call>() {
                 // <fn_call> ::= <fn_name> "(" <arg_list_e> ")" ;
-                // <arg_list_e> ::= <arg_list> | <e> ; 
+                // <arg_list_e> ::= <arg_list> | <e> ;
                 // <arg_list> ::= <arg> | <arg> "," <sep> <arg_list> ;
                 let fn_name = tree.nth::<0>().nth::<0>().clone();
                 // Look up the function definition.
-                if let Some(param_types) = get_func_definition(&self.func_defs, &fn_name, &self.scope_trace) {
+                if let Some(param_types) =
+                    get_func_definition(&self.func_defs, &fn_name, &self.scope_trace)
+                {
                     // We have the function definition.
                     // Now check the argument types.
                     let arg_list_e = tree.nth::<0>().nth::<2>();
@@ -2614,7 +2904,13 @@ mod defs {
                                 nonterminal_arg_list_0::variant_0(arg) => {
                                     // Single expression.
                                     let expr = arg.nth::<0>();
-                                    if let Some(at) = infer_expr_type(&expr, &self.var_defs, &self.func_defs, &self.struct_defs, &self.scope_trace) {
+                                    if let Some(at) = infer_expr_type(
+                                        &expr,
+                                        &self.var_defs,
+                                        &self.func_defs,
+                                        &self.struct_defs,
+                                        &self.scope_trace,
+                                    ) {
                                         arg_types.push(at);
                                         // Successfully inferred argument type, a passed check.
                                         self.paths_to_passed_checks.push(self.path.clone());
@@ -2623,12 +2919,18 @@ mod defs {
                                         self.violations.push(self.path.clone());
                                     }
                                     current = None;
-                                },
+                                }
                                 nonterminal_arg_list_0::variant_1(seq) => {
                                     // expr , sep , arg_list
                                     let arg = seq.nth::<0>();
                                     let expr = arg.nth::<0>();
-                                    if let Some(at) = infer_expr_type(&expr, &self.var_defs, &self.func_defs, &self.struct_defs, &self.scope_trace) {
+                                    if let Some(at) = infer_expr_type(
+                                        &expr,
+                                        &self.var_defs,
+                                        &self.func_defs,
+                                        &self.struct_defs,
+                                        &self.scope_trace,
+                                    ) {
                                         arg_types.push(at);
                                         // Successfully inferred argument type, a passed check.
                                         self.paths_to_passed_checks.push(self.path.clone());
@@ -2644,13 +2946,15 @@ mod defs {
                     }
                     // Now compare arg_types with param_types (excluding the last type which is the return type).
                     if param_types.len() > 1 {
-                        let expected_param_types = &param_types[..param_types.len()-1];
+                        let expected_param_types = &param_types[..param_types.len() - 1];
                         if expected_param_types.len() != arg_types.len() {
                             // Argument count mismatch, violation.
                             self.violations.push(self.path.clone());
                         } else {
                             let mut mismatch_found = false;
-                            for (expected, actual) in expected_param_types.iter().zip(arg_types.iter()) {
+                            for (expected, actual) in
+                                expected_param_types.iter().zip(arg_types.iter())
+                            {
                                 if !types_compatible(&expected.clone().into(), actual) {
                                     // Type mismatch, violation.
                                     self.violations.push(self.path.clone());
@@ -2684,7 +2988,15 @@ mod defs {
                 // <expr_stmt> ::= <expr> ";" ;
                 let expr = tree.nth::<0>();
                 // Just infer the type to see if it can be inferred.
-                if infer_expr_type(expr, &self.var_defs, &self.func_defs, &self.struct_defs, &self.scope_trace).is_some() {
+                if infer_expr_type(
+                    expr,
+                    &self.var_defs,
+                    &self.func_defs,
+                    &self.struct_defs,
+                    &self.scope_trace,
+                )
+                .is_some()
+                {
                     // Type could be inferred, all good.
                     self.paths_to_passed_checks.push(self.path.clone());
                 } else {
@@ -2714,9 +3026,9 @@ mod defs {
 
             // Finally, continue visiting children.
             let mut result = visited.visit_each(self);
-                if let Ok(ControlFlow::Continue(visitor)) = &mut result {
-                    visitor.path.pop_back();
-                }
+            if let Ok(ControlFlow::Continue(visitor)) = &mut result {
+                visitor.path.pop_back();
+            }
             return result;
         }
     }
@@ -2735,19 +3047,22 @@ mod defs {
     impl<'a, S, G, T> VisitorMut<T> for EmptyFunctionBodiesFixer<'a, S, G>
     where
         nonterminal_statements: Generated<S, G>,
-        T: VisitableChildrenMut<T> +
-            AsNodeMut<nonterminal_fn_def>,
+        T: VisitableChildrenMut<T> + AsNodeMut<nonterminal_fn_def>,
     {
         type Continue = Self;
         type Break = Infallible;
         type Error = Infallible;
 
-        fn visit_mut<'program, N>(mut self, node: &'program mut N, idx: usize) -> VisitMutResult<Self, T>
+        fn visit_mut<'program, N>(
+            mut self,
+            node: &'program mut N,
+            idx: usize,
+        ) -> VisitMutResult<Self, T>
         where
             N: Node<TypeMut<'program> = T>,
             T: From<&'program mut N> + AsNodeMut<N>,
         {
-            let mut visited = node.opaque_mut(); 
+            let mut visited = node.opaque_mut();
             if let Some(tree) = AsNodeMut::<nonterminal_fn_def>::as_node_mut(&mut visited) {
                 // <fn_def> ::= <type> <sep> <fn_kwd> <sep> <fn_name> "(" <param_list_e> ")" <sep> "{" <sep> <fn_body_e> <sep> "}" ;
                 let fn_body_e = tree.nth_mut::<0>().nth_mut::<11>();
@@ -2755,18 +3070,13 @@ mod defs {
                     nonterminal_fn_body_e_0::variant_1(_) => {
                         // Empty function body, need to fix.
                         // Generate a random statement to insert.
-                        let mut new_body = nonterminal_fn_body_e::new(
-                            nonterminal_fn_body_e_0::from_0th(
-                                nonterminal_statements::generate(
-                                    self.sampler, 
-                                    self.generator,
-                                    0 
-                                )
-                            )
-                        );
+                        let mut new_body =
+                            nonterminal_fn_body_e::new(nonterminal_fn_body_e_0::from_0th(
+                                nonterminal_statements::generate(self.sampler, self.generator, 0),
+                            ));
                         // Swap the new body in.
                         mem::swap(fn_body_e, &mut new_body);
-                    },
+                    }
                     nonterminal_fn_body_e_0::variant_0(_) => {
                         // Non-empty function body, all good.
                     }
@@ -2795,55 +3105,63 @@ mod defs {
                 if self.violation_list.is_empty() && self.paths_to_passed_checks.is_empty() {
                     // No checks were performed, return default ratio.
                     Default::default()
-                } else if !self.violation_list.is_empty() && self.paths_to_passed_checks.is_empty() {
+                } else if !self.violation_list.is_empty() && self.paths_to_passed_checks.is_empty()
+                {
                     // All checks failed.
                     Ratio::new(0, self.violation_list.len())
-                } else if self.violation_list.is_empty() && !self.paths_to_passed_checks.is_empty() {
+                } else if self.violation_list.is_empty() && !self.paths_to_passed_checks.is_empty()
+                {
                     // All checks passed.
-                    Ratio::new(self.paths_to_passed_checks.len(), self.paths_to_passed_checks.len())
+                    Ratio::new(
+                        self.paths_to_passed_checks.len(),
+                        self.paths_to_passed_checks.len(),
+                    )
                 } else {
                     // Some checks passed, some failed.
-                    Ratio::new(self.paths_to_passed_checks.len(), self.violation_list.len() + self.paths_to_passed_checks.len())
+                    Ratio::new(
+                        self.paths_to_passed_checks.len(),
+                        self.violation_list.len() + self.paths_to_passed_checks.len(),
+                    )
                 },
                 self.violation_list,
             )
         }
     }
 
-    impl <T> Visitor<T> for CombinedConstraintVisitor
+    impl<T> Visitor<T> for CombinedConstraintVisitor
     where
-        T: VisitableChildren<T> +
-            AsNodeRef<nonterminal_start> +
-            AsNodeRef<nonterminal_decl> +
-            AsNodeRef<nonterminal_var_name> +
-            AsNodeRef<nonterminal_type> +
-            AsNodeRef<nonterminal_fn_def> +
-            AsNodeRef<nonterminal_struct_def> +
-            AsNodeRef<nonterminal_assignment> +
-            AsNodeRef<nonterminal_expr> +
-            AsNodeRef<nonterminal_var_access> +
-            AsNodeRef<nonterminal_fn_name> +
-            AsNodeRef<nonterminal_param_list> +
-            AsNodeRef<nonterminal_param_list_e> +
-            AsNodeRef<nonterminal_fn_call> +
-            AsNodeRef<nonterminal_return_stmt> +
-            AsNodeRef<nonterminal_struct_access> +
-            AsNodeRef<nonterminal_field_name> +
-            AsNodeRef<nonterminal_expr_stmt> + 
-            AsNodeRef<nonterminal_basic_type> +
-            AsNodeRef<nonterminal_struct_type> +
-            AsNodeRef<nonterminal_param_name> + 
-            AsNodeRef<nonterminal_struct_name> +
-            AsNodeRef<nonterminal_arith_expr> +
-            AsNodeRef<nonterminal_binop> +
-            AsNodeRef<nonterminal_binop_op> +
-            AsNodeRef<nonterminal_unop> +
-            AsNodeRef<nonterminal_unop_op> +
-            AsNodeRef<nonterminal_field_def_list> +
-            AsNodeRef<nonterminal_field_def_list_e> + 
-            AsNodeRef<nonterminal_param> +
-            AsNodeRef<nonterminal_struct_expr> +
-            AsNodeRef<nonterminal_expr_list_e>,
+        T: VisitableChildren<T>
+            + AsNodeRef<nonterminal_start>
+            + AsNodeRef<nonterminal_decl>
+            + AsNodeRef<nonterminal_var_name>
+            + AsNodeRef<nonterminal_type>
+            + AsNodeRef<nonterminal_fn_def>
+            + AsNodeRef<nonterminal_struct_def>
+            + AsNodeRef<nonterminal_assignment>
+            + AsNodeRef<nonterminal_expr>
+            + AsNodeRef<nonterminal_var_access>
+            + AsNodeRef<nonterminal_fn_name>
+            + AsNodeRef<nonterminal_param_list>
+            + AsNodeRef<nonterminal_param_list_e>
+            + AsNodeRef<nonterminal_fn_call>
+            + AsNodeRef<nonterminal_return_stmt>
+            + AsNodeRef<nonterminal_struct_access>
+            + AsNodeRef<nonterminal_field_name>
+            + AsNodeRef<nonterminal_expr_stmt>
+            + AsNodeRef<nonterminal_basic_type>
+            + AsNodeRef<nonterminal_struct_type>
+            + AsNodeRef<nonterminal_param_name>
+            + AsNodeRef<nonterminal_struct_name>
+            + AsNodeRef<nonterminal_arith_expr>
+            + AsNodeRef<nonterminal_binop>
+            + AsNodeRef<nonterminal_binop_op>
+            + AsNodeRef<nonterminal_unop>
+            + AsNodeRef<nonterminal_unop_op>
+            + AsNodeRef<nonterminal_field_def_list>
+            + AsNodeRef<nonterminal_field_def_list_e>
+            + AsNodeRef<nonterminal_param>
+            + AsNodeRef<nonterminal_struct_expr>
+            + AsNodeRef<nonterminal_expr_list_e>,
     {
         type Continue = Self;
         type Break = Infallible;
@@ -2854,52 +3172,69 @@ mod defs {
             N: Node<Type<'program> = T>,
             T: From<&'program N> + AsNodeRef<N>,
         {
-            let visited = node.opaque(); 
+            let visited = node.opaque();
             if let Some(_tree) = visited.downcast::<nonterminal_start>() {
                 // First, collect declarations.
-                let Ok(ControlFlow::Continue(decl_collector)) = DeclarationCollector::default().visit(node, idx);
+                let Ok(ControlFlow::Continue(decl_collector)) =
+                    DeclarationCollector::default().visit(node, idx);
                 // Now run each constraint visitor in sequence, passing along the collected definitions.
                 let var_defs = &decl_collector.var_defs;
                 let func_defs = &decl_collector.func_defs;
                 let struct_defs = &decl_collector.struct_defs;
                 // DeclarationCollector now computes re-declaration violations; so, include those.
                 self.violation_list.extend(decl_collector.violations);
-                self.paths_to_passed_checks.extend(decl_collector.paths_to_passed_checks);
-                
+                self.paths_to_passed_checks
+                    .extend(decl_collector.paths_to_passed_checks);
+
                 // No empty struct visitor.
-                let Ok(ControlFlow::Continue(empty_struct_visitor)) = ConstraintVisitorNoEmptyStructs::default().visit(node, idx);
+                let Ok(ControlFlow::Continue(empty_struct_visitor)) =
+                    ConstraintVisitorNoEmptyStructs::default().visit(node, idx);
                 self.violation_list.extend(empty_struct_visitor.violations);
-                self.paths_to_passed_checks.extend(empty_struct_visitor.paths_to_passed_checks);
+                self.paths_to_passed_checks
+                    .extend(empty_struct_visitor.paths_to_passed_checks);
 
                 // No void decls or params visitor. This one has Default implemented.
-                let Ok(ControlFlow::Continue(void_decl_visitor)) = ConstraintVisitorNoVoidDecls::default().visit(node, idx);
+                let Ok(ControlFlow::Continue(void_decl_visitor)) =
+                    ConstraintVisitorNoVoidDecls::default().visit(node, idx);
                 self.violation_list.extend(void_decl_visitor.violations);
-                self.paths_to_passed_checks.extend(void_decl_visitor.paths_to_passed_checks);
+                self.paths_to_passed_checks
+                    .extend(void_decl_visitor.paths_to_passed_checks);
 
                 // Return-in-fn constraint visitor. This one has Default implemented.
-                let Ok(ControlFlow::Continue(ret_in_fn_visitor)) = ConstraintVisitorReturnInFunc::default().visit(node, idx);
+                let Ok(ControlFlow::Continue(ret_in_fn_visitor)) =
+                    ConstraintVisitorReturnInFunc::default().visit(node, idx);
                 self.violation_list.extend(ret_in_fn_visitor.violations);
-                self.paths_to_passed_checks.extend(ret_in_fn_visitor.paths_to_passed_checks);
-                
+                self.paths_to_passed_checks
+                    .extend(ret_in_fn_visitor.paths_to_passed_checks);
+
                 // Struct-access constraint visitor. This one needs struct_defs and var_defs.
-                let Ok(ControlFlow::Continue(struct_access_visitor)) = ConstraintVisitorStructAccess::new(struct_defs, var_defs).visit(node, idx);
+                let Ok(ControlFlow::Continue(struct_access_visitor)) =
+                    ConstraintVisitorStructAccess::new(struct_defs, var_defs).visit(node, idx);
                 self.violation_list.extend(struct_access_visitor.violations);
-                self.paths_to_passed_checks.extend(struct_access_visitor.paths_to_passed_checks);
+                self.paths_to_passed_checks
+                    .extend(struct_access_visitor.paths_to_passed_checks);
 
                 // Def-use constraint visitor. This one needs var_defs, func_defs, struct_defs.
-                let Ok(ControlFlow::Continue(def_use_visitor)) = ConstraintVisitorDefUse::new(var_defs, func_defs, struct_defs).visit(node, idx);
+                let Ok(ControlFlow::Continue(def_use_visitor)) =
+                    ConstraintVisitorDefUse::new(var_defs, func_defs, struct_defs).visit(node, idx);
                 self.violation_list.extend(def_use_visitor.violations);
-                self.paths_to_passed_checks.extend(def_use_visitor.paths_to_passed_checks);
+                self.paths_to_passed_checks
+                    .extend(def_use_visitor.paths_to_passed_checks);
 
                 // Limit usage of struct expressions.
-                let Ok(ControlFlow::Continue(struct_expr_visitor)) = ConstraintVisitorStructExprRHSOfDecl::default().visit(node, idx);
+                let Ok(ControlFlow::Continue(struct_expr_visitor)) =
+                    ConstraintVisitorStructExprRHSOfDecl::default().visit(node, idx);
                 self.violation_list.extend(struct_expr_visitor.violations);
-                self.paths_to_passed_checks.extend(struct_expr_visitor.paths_to_passed_checks);
+                self.paths_to_passed_checks
+                    .extend(struct_expr_visitor.paths_to_passed_checks);
 
                 // Type-checking constraint visitor. This one needs var_defs, func_defs, struct_defs.
-                let Ok(ControlFlow::Continue(type_check_visitor)) = ConstraintVisitorTypeCheck::new(var_defs, func_defs, struct_defs).visit(node, idx);
+                let Ok(ControlFlow::Continue(type_check_visitor)) =
+                    ConstraintVisitorTypeCheck::new(var_defs, func_defs, struct_defs)
+                        .visit(node, idx);
                 self.violation_list.extend(type_check_visitor.violations);
-                self.paths_to_passed_checks.extend(type_check_visitor.paths_to_passed_checks);
+                self.paths_to_passed_checks
+                    .extend(type_check_visitor.paths_to_passed_checks);
 
                 // KeepReasonableStructVisitor
                 // let Ok(ControlFlow::Continue(keep_structs_reasonable_visitor)) = KeepReasonableStructVisitor::default().visit(node, idx);
@@ -2921,16 +3256,10 @@ mod defs {
 
     impl<'a, S, G> CombinedFixer<'a, S, G> {
         /// Create a new CombinedFixer with the given sampler, generator, and symbol tables.
-        pub fn new(
-            sampler: &'a mut S,
-            generator: &'a mut G,
-        ) -> Self {
-            Self {
-                sampler,
-                generator
-            }
+        pub fn new(sampler: &'a mut S, generator: &'a mut G) -> Self {
+            Self { sampler, generator }
         }
-    }   
+    }
 
     impl<'a, S, G, T> VisitorMut<T> for CombinedFixer<'a, S, G>
     where
@@ -2940,37 +3269,41 @@ mod defs {
         nonterminal_struct_name: Generated<S, G>,
         nonterminal_fn_name: Generated<S, G>,
         nonterminal_decl_rhs: Generated<S, G>,
-        T: VisitableChildrenMut<T> +
-            AsNodeMut<nonterminal_start> +
-            AsNodeMut<nonterminal_fn_def> +
-            AsNodeMut<nonterminal_expr_unit> +
-            AsNodeMut<nonterminal_decl> +
-            AsNodeMut<nonterminal_var_access> +
-            AsNodeMut<nonterminal_var_name> +
-            AsNodeMut<nonterminal_fn_name> +
-            AsNodeMut<nonterminal_param_name> +
-            AsNodeMut<nonterminal_struct_def> +
-            AsNodeMut<nonterminal_struct_name> +
-            AsNodeMut<nonterminal_field_name> +
-            AsNodeMut<nonterminal_type> +
-            AsNodeMut<nonterminal_field_def_list> +
-            AsNodeMut<nonterminal_field_def_list_e> +
-            AsNodeMut<nonterminal_param_list> +
-            AsNodeMut<nonterminal_param> +
-            AsNodeMut<nonterminal_statements> +
-            AsNodeMut<nonterminal_assignment> +
-            AsNodeMut<nonterminal_struct_type>,
+        T: VisitableChildrenMut<T>
+            + AsNodeMut<nonterminal_start>
+            + AsNodeMut<nonterminal_fn_def>
+            + AsNodeMut<nonterminal_expr_unit>
+            + AsNodeMut<nonterminal_decl>
+            + AsNodeMut<nonterminal_var_access>
+            + AsNodeMut<nonterminal_var_name>
+            + AsNodeMut<nonterminal_fn_name>
+            + AsNodeMut<nonterminal_param_name>
+            + AsNodeMut<nonterminal_struct_def>
+            + AsNodeMut<nonterminal_struct_name>
+            + AsNodeMut<nonterminal_field_name>
+            + AsNodeMut<nonterminal_type>
+            + AsNodeMut<nonterminal_field_def_list>
+            + AsNodeMut<nonterminal_field_def_list_e>
+            + AsNodeMut<nonterminal_param_list>
+            + AsNodeMut<nonterminal_param>
+            + AsNodeMut<nonterminal_statements>
+            + AsNodeMut<nonterminal_assignment>
+            + AsNodeMut<nonterminal_struct_type>,
     {
         type Continue = Self;
         type Break = Infallible;
         type Error = Infallible;
 
-        fn visit_mut<'program, N>(mut self, node: &'program mut N, idx: usize) -> VisitMutResult<Self, T>
+        fn visit_mut<'program, N>(
+            mut self,
+            node: &'program mut N,
+            idx: usize,
+        ) -> VisitMutResult<Self, T>
         where
             N: Node<TypeMut<'program> = T>,
             T: From<&'program mut N> + AsNodeMut<N>,
         {
-            let mut visited = node.opaque_mut(); 
+            let mut visited = node.opaque_mut();
             if let Some(_tree) = AsNodeMut::<nonterminal_start>::as_node_mut(&mut visited) {
                 // First, generate some new expressions.
                 // Empty function bodies fixer.
@@ -2990,7 +3323,7 @@ mod defs {
                 // let Ok(ControlFlow::Continue(fdf)) = fixer.visit_mut(_tree, idx);
 
                 // Then, collect declarations and repair repeated declarations.
-                let Ok(ControlFlow::Continue(decl_collector)) = DeclarationCollectorAndFixer{
+                let Ok(ControlFlow::Continue(decl_collector)) = DeclarationCollectorAndFixer {
                     // sampler: fdf.sampler,
                     // generator: fdf.generator,
                     sampler: efbf.sampler,
@@ -3003,7 +3336,8 @@ mod defs {
                     func_defs: alloc::collections::BTreeMap::new(),
                     struct_defs: alloc::collections::BTreeMap::new(),
                     var_uses: alloc::collections::BTreeMap::new(),
-                }.visit_mut(_tree, idx);
+                }
+                .visit_mut(_tree, idx);
 
                 // Now run each fixer in sequence, passing along the collected definitions.
                 // let var_defs = &decl_collector.var_defs;
@@ -3048,22 +3382,22 @@ mod defs {
 #[cfg(test)]
 mod test {
     use crate::clang as lang;
-    use alloc::collections::vec_deque::VecDeque;
-    use fandango_runtime::operators::DepthLimiter;
     use alloc::boxed::Box;
+    use alloc::collections::vec_deque::VecDeque;
+    use alloc::string::String;
+    use alloc::vec::Vec;
     use core::error::Error;
     use core::ops::ControlFlow;
     use fandango::generation::Generated;
     use fandango::tuple_list::tuple_list;
-    use fandango::typing::{Structured};
+    use fandango::typing::Structured;
+    use fandango::visitor::write::WriteVisitor;
     use fandango::visitor::{Visitor, VisitorMut};
+    use fandango_runtime::measurement::Violations;
+    use fandango_runtime::operators::DepthLimiter;
+    use num_rational::Ratio;
     use rand::SeedableRng;
     use rand::rngs::StdRng;
-    use alloc::string::String;
-    use fandango::visitor::write::WriteVisitor;
-    use alloc::vec::Vec;
-    use fandango_runtime::measurement::Violations;
-    use num_rational::Ratio;
 
     #[test]
     fn check_ret_in_fn_constraint_c() -> Result<(), Box<dyn Error>> {
@@ -3078,16 +3412,23 @@ mod test {
                 violations, ..
             })) = lang::ConstraintVisitorReturnInFunc::default().visit(&tree, 0);
             std::println!("==============================");
-            std::println!("Program {i} has {} return-in-fn violations.", violations.len());
+            std::println!(
+                "Program {i} has {} return-in-fn violations.",
+                violations.len()
+            );
             // Print the program.
-            std::println!("Program:\n{}", String::from_utf8(
-                WriteVisitor::new(Vec::new())
-                    .visit(&tree, 0)
-                    .unwrap()
-                    .continue_value()
-                    .unwrap()
-                    .output(),
-            ).unwrap());
+            std::println!(
+                "Program:\n{}",
+                String::from_utf8(
+                    WriteVisitor::new(Vec::new())
+                        .visit(&tree, 0)
+                        .unwrap()
+                        .continue_value()
+                        .unwrap()
+                        .output(),
+                )
+                .unwrap()
+            );
         }
         Ok(())
     }
@@ -3101,27 +3442,34 @@ mod test {
         // Generate 50 programs and check for violations.
         for i in 0..200 {
             let tree = lang::nonterminal_start::generate(&mut rng, &mut generators, 0);
-            let Ok(ControlFlow::Continue(lang::DeclarationCollector {
-                struct_defs, ..
-            })) = lang::DeclarationCollector::default().visit(&tree, 0);
+            let Ok(ControlFlow::Continue(lang::DeclarationCollector { struct_defs, .. })) =
+                lang::DeclarationCollector::default().visit(&tree, 0);
 
             std::println!("==============================");
             std::println!("Program {i} has {} struct definitions.", struct_defs.len());
 
             let Ok(ControlFlow::Continue(lang::ConstraintVisitorStructAccess {
                 violations, ..
-            })) = lang::ConstraintVisitorStructAccess ::new(&struct_defs, &Default::default()).visit(&tree, 0);
+            })) = lang::ConstraintVisitorStructAccess::new(&struct_defs, &Default::default())
+                .visit(&tree, 0);
 
-            std::println!("Program {i} has {} struct-access violations.", violations.len());
+            std::println!(
+                "Program {i} has {} struct-access violations.",
+                violations.len()
+            );
             // Print the program.
-            std::println!("Program:\n{}", String::from_utf8(
-                WriteVisitor::new(Vec::new())
-                    .visit(&tree, 0)
-                    .unwrap()
-                    .continue_value()
-                    .unwrap()
-                    .output(),
-            ).unwrap());
+            std::println!(
+                "Program:\n{}",
+                String::from_utf8(
+                    WriteVisitor::new(Vec::new())
+                        .visit(&tree, 0)
+                        .unwrap()
+                        .continue_value()
+                        .unwrap()
+                        .output(),
+                )
+                .unwrap()
+            );
         }
         Ok(())
     }
@@ -3137,22 +3485,33 @@ mod test {
         for i in 0..200 {
             let tree = lang::nonterminal_start::generate(&mut rng, &mut generators, 0);
             let Ok(ControlFlow::Continue(lang::DeclarationCollector {
-                var_defs, func_defs, struct_defs, ..
+                var_defs,
+                func_defs,
+                struct_defs,
+                ..
             })) = lang::DeclarationCollector::default().visit(&tree, 0);
             std::println!("==============================");
             std::println!("Program {i} has {} variable definitions.", var_defs.len());
-            let Ok(ControlFlow::Continue(lang::ConstraintVisitorDefUse {
-                violations, ..
-            })) = lang::ConstraintVisitorDefUse::new(&var_defs, &func_defs, &struct_defs).visit(&tree, 0);
-            std::println!("Program {i} has {} def-before-use violations.", violations.len());
+            let Ok(ControlFlow::Continue(lang::ConstraintVisitorDefUse { violations, .. })) =
+                lang::ConstraintVisitorDefUse::new(&var_defs, &func_defs, &struct_defs)
+                    .visit(&tree, 0);
+            std::println!(
+                "Program {i} has {} def-before-use violations.",
+                violations.len()
+            );
             // Print the program.
-            std::println!("Program:\n{}", String::from_utf8(
-                WriteVisitor::new(Vec::new())
-                    .visit(&tree, 0)
-                    .unwrap()
-                    .continue_value()
-                    .unwrap().output(),
-            ).unwrap());
+            std::println!(
+                "Program:\n{}",
+                String::from_utf8(
+                    WriteVisitor::new(Vec::new())
+                        .visit(&tree, 0)
+                        .unwrap()
+                        .continue_value()
+                        .unwrap()
+                        .output(),
+                )
+                .unwrap()
+            );
         }
         Ok(())
     }
@@ -3171,13 +3530,18 @@ mod test {
             // Print program before.
             std::println!("==============================");
             std::println!("Program {i} before fixing:");
-            std::println!("Program:\n{}", String::from_utf8(
-                WriteVisitor::new(Vec::new())
-                    .visit(&tree, 0)
-                    .unwrap()
-                    .continue_value()
-                    .unwrap().output(),
-            ).unwrap());
+            std::println!(
+                "Program:\n{}",
+                String::from_utf8(
+                    WriteVisitor::new(Vec::new())
+                        .visit(&tree, 0)
+                        .unwrap()
+                        .continue_value()
+                        .unwrap()
+                        .output(),
+                )
+                .unwrap()
+            );
 
             // Apply the fixer.
             let fixer = lang::EmptyFunctionBodiesFixer {
@@ -3187,13 +3551,18 @@ mod test {
             let _ = fixer.visit_mut(&mut tree, 0);
 
             // Print the program after fixing.
-            std::println!("Program:\n{}", String::from_utf8(
-                WriteVisitor::new(Vec::new())
-                    .visit(&tree, 0)
-                    .unwrap()
-                    .continue_value()
-                    .unwrap().output(),
-            ).unwrap());
+            std::println!(
+                "Program:\n{}",
+                String::from_utf8(
+                    WriteVisitor::new(Vec::new())
+                        .visit(&tree, 0)
+                        .unwrap()
+                        .continue_value()
+                        .unwrap()
+                        .output(),
+                )
+                .unwrap()
+            );
         }
         Ok(())
     }
@@ -3209,17 +3578,25 @@ mod test {
         for i in 0..40 {
             let mut tree = lang::nonterminal_start::generate(&mut rng, &mut generators, 0);
             let Ok(ControlFlow::Continue(lang::DeclarationCollector {
-                var_defs, func_defs, struct_defs, ..
+                var_defs,
+                func_defs,
+                struct_defs,
+                ..
             })) = lang::DeclarationCollector::default().visit(&tree, 0);
             std::println!("==============================");
             std::println!("Program {i} before fixing:");
-            std::println!("\n{}", String::from_utf8(
-                WriteVisitor::new(Vec::new())
-                    .visit(&tree, 0)
-                    .unwrap()
-                    .continue_value()
-                    .unwrap().output(),
-            ).unwrap());
+            std::println!(
+                "\n{}",
+                String::from_utf8(
+                    WriteVisitor::new(Vec::new())
+                        .visit(&tree, 0)
+                        .unwrap()
+                        .continue_value()
+                        .unwrap()
+                        .output(),
+                )
+                .unwrap()
+            );
             // Apply the fixer.
             let fixer = lang::ConstraintFixerNoVoidDecls {
                 sampler: &mut rng,
@@ -3235,13 +3612,18 @@ mod test {
             let _ = fixer.visit_mut(&mut tree, 0);
             // Print the program after fixing.
             std::println!("Program {i} after fixing:");
-            std::println!("\n{}", String::from_utf8(
-                WriteVisitor::new(Vec::new())
-                    .visit(&tree, 0)
-                    .unwrap()
-                    .continue_value()
-                    .unwrap().output(),
-            ).unwrap());
+            std::println!(
+                "\n{}",
+                String::from_utf8(
+                    WriteVisitor::new(Vec::new())
+                        .visit(&tree, 0)
+                        .unwrap()
+                        .continue_value()
+                        .unwrap()
+                        .output(),
+                )
+                .unwrap()
+            );
         }
         Ok(())
     }
@@ -3257,38 +3639,52 @@ mod test {
         for i in 0..200 {
             let mut tree = lang::nonterminal_start::generate(&mut rng, &mut generators, 0);
             let Ok(ControlFlow::Continue(lang::DeclarationCollector {
-                var_defs, func_defs, struct_defs, mut var_uses, ..
+                var_defs,
+                func_defs,
+                struct_defs,
+                mut var_uses,
+                ..
             })) = lang::DeclarationCollector::default().visit(&tree, 0);
             std::println!("==============================");
             std::println!("Program {i} before fixing:");
-            std::println!("\n{}", String::from_utf8(
-                WriteVisitor::new(Vec::new())
-                    .visit(&tree, 0)
-                    .unwrap()
-                    .continue_value()
-                    .unwrap().output(),
-            ).unwrap());
+            std::println!(
+                "\n{}",
+                String::from_utf8(
+                    WriteVisitor::new(Vec::new())
+                        .visit(&tree, 0)
+                        .unwrap()
+                        .continue_value()
+                        .unwrap()
+                        .output(),
+                )
+                .unwrap()
+            );
             // Apply the fixer.
             let mut added_var_uses = alloc::collections::BTreeMap::new();
             let fixer = lang::UnusedVariableFixer::new(
                 &mut rng,
                 &mut generators,
-                 &var_defs,
-                 &func_defs,
-                 &struct_defs,
-                 &mut var_uses,
-                &mut added_var_uses
+                &var_defs,
+                &func_defs,
+                &struct_defs,
+                &mut var_uses,
+                &mut added_var_uses,
             );
             let _ = fixer.visit_mut(&mut tree, 0);
             // Print the program after fixing.
             std::println!("Program {i} after fixing:");
-            std::println!("\n{}", String::from_utf8(
-                WriteVisitor::new(Vec::new())
-                    .visit(&tree, 0)
-                    .unwrap()
-                    .continue_value()
-                    .unwrap().output(),
-            ).unwrap());
+            std::println!(
+                "\n{}",
+                String::from_utf8(
+                    WriteVisitor::new(Vec::new())
+                        .visit(&tree, 0)
+                        .unwrap()
+                        .continue_value()
+                        .unwrap()
+                        .output(),
+                )
+                .unwrap()
+            );
         }
         Ok(())
     }
@@ -3305,13 +3701,18 @@ mod test {
             let mut tree = lang::nonterminal_start::generate(&mut rng, &mut generators, 0);
             std::println!("==============================");
             std::println!("Program {i} before fixing:");
-            std::println!("\n{}", String::from_utf8(
-                WriteVisitor::new(Vec::new())
-                    .visit(&tree, 0)
-                    .unwrap()
-                    .continue_value()
-                    .unwrap().output(),
-            ).unwrap());
+            std::println!(
+                "\n{}",
+                String::from_utf8(
+                    WriteVisitor::new(Vec::new())
+                        .visit(&tree, 0)
+                        .unwrap()
+                        .continue_value()
+                        .unwrap()
+                        .output(),
+                )
+                .unwrap()
+            );
             // Apply the fixer.
             let fixer = lang::ConstraintFixerStructExprRHSOfDecl {
                 sampler: &mut rng,
@@ -3322,13 +3723,18 @@ mod test {
             let _ = fixer.visit_mut(&mut tree, 0);
             // Print the program after fixing.
             std::println!("Program {i} after fixing:");
-            std::println!("\n{}", String::from_utf8(
-                WriteVisitor::new(Vec::new())
-                    .visit(&tree, 0)
-                    .unwrap()
-                    .continue_value()
-                    .unwrap().output(),
-            ).unwrap());
+            std::println!(
+                "\n{}",
+                String::from_utf8(
+                    WriteVisitor::new(Vec::new())
+                        .visit(&tree, 0)
+                        .unwrap()
+                        .continue_value()
+                        .unwrap()
+                        .output(),
+                )
+                .unwrap()
+            );
         }
         Ok(())
     }
@@ -3344,22 +3750,38 @@ mod test {
         for i in 0..200 {
             let tree = lang::nonterminal_start::generate(&mut rng, &mut generators, 0);
             let Ok(ControlFlow::Continue(lang::DeclarationCollector {
-                var_defs, func_defs, struct_defs, ..
+                var_defs,
+                func_defs,
+                struct_defs,
+                ..
             })) = lang::DeclarationCollector::default().visit(&tree, 0);
             std::println!("==============================");
-            std::println!("Program {i} has {} variable definitions, {} function definitions, and {} struct definitions.", var_defs.len(), func_defs.len(), struct_defs.len());
-            let Ok(ControlFlow::Continue(lang::ConstraintVisitorTypeCheck {
-                violations, ..
-            })) = lang::ConstraintVisitorTypeCheck::new(&var_defs, &func_defs, &struct_defs).visit(&tree, 0);
-            std::println!("Program {i} has {} type-checking violations.", violations.len());
+            std::println!(
+                "Program {i} has {} variable definitions, {} function definitions, and {} struct definitions.",
+                var_defs.len(),
+                func_defs.len(),
+                struct_defs.len()
+            );
+            let Ok(ControlFlow::Continue(lang::ConstraintVisitorTypeCheck { violations, .. })) =
+                lang::ConstraintVisitorTypeCheck::new(&var_defs, &func_defs, &struct_defs)
+                    .visit(&tree, 0);
+            std::println!(
+                "Program {i} has {} type-checking violations.",
+                violations.len()
+            );
             // Print the program.
-            std::println!("Program:\n{}", String::from_utf8(
-                WriteVisitor::new(Vec::new())
-                    .visit(&tree, 0)
-                    .unwrap()
-                    .continue_value()
-                    .unwrap().output(),
-            ).unwrap());
+            std::println!(
+                "Program:\n{}",
+                String::from_utf8(
+                    WriteVisitor::new(Vec::new())
+                        .visit(&tree, 0)
+                        .unwrap()
+                        .continue_value()
+                        .unwrap()
+                        .output(),
+                )
+                .unwrap()
+            );
         }
         Ok(())
     }
@@ -3375,44 +3797,72 @@ mod test {
         for i in 0..200 {
             let tree = lang::nonterminal_start::generate(&mut rng, &mut generators, 0);
             let Ok(ControlFlow::Continue(lang::DeclarationCollector {
-                var_defs, func_defs, struct_defs, ..
+                var_defs,
+                func_defs,
+                struct_defs,
+                ..
             })) = lang::DeclarationCollector::default().visit(&tree, 0);
             std::println!("==============================");
-            std::println!("Program {i} has {} variable definitions, {} function definitions, and {} struct definitions.", var_defs.len(), func_defs.len(), struct_defs.len());
+            std::println!(
+                "Program {i} has {} variable definitions, {} function definitions, and {} struct definitions.",
+                var_defs.len(),
+                func_defs.len(),
+                struct_defs.len()
+            );
             let mut total_violations = 0;
             // Def-before-use
-            let Ok(ControlFlow::Continue(lang::ConstraintVisitorDefUse {
-                violations, ..
-            })) = lang::ConstraintVisitorDefUse::new(&var_defs, &func_defs, &struct_defs).visit(&tree, 0);
-            std::println!("Program {i} has {} def-before-use violations.", violations.len());
+            let Ok(ControlFlow::Continue(lang::ConstraintVisitorDefUse { violations, .. })) =
+                lang::ConstraintVisitorDefUse::new(&var_defs, &func_defs, &struct_defs)
+                    .visit(&tree, 0);
+            std::println!(
+                "Program {i} has {} def-before-use violations.",
+                violations.len()
+            );
             total_violations += violations.len();
             // Fn-call arg count
             let Ok(ControlFlow::Continue(lang::ConstraintVisitorReturnInFunc {
                 violations, ..
             })) = lang::ConstraintVisitorReturnInFunc::default().visit(&tree, 0);
-            std::println!("Program {i} has {} return-in-fn violations.", violations.len());
+            std::println!(
+                "Program {i} has {} return-in-fn violations.",
+                violations.len()
+            );
             total_violations += violations.len();
             // Struct access
             let Ok(ControlFlow::Continue(lang::ConstraintVisitorStructAccess {
                 violations, ..
             })) = lang::ConstraintVisitorStructAccess::new(&struct_defs, &var_defs).visit(&tree, 0);
-            std::println!("Program {i} has {} struct-access violations.", violations.len());
+            std::println!(
+                "Program {i} has {} struct-access violations.",
+                violations.len()
+            );
             total_violations += violations.len();
             // Type checking
-            let Ok(ControlFlow::Continue(lang::ConstraintVisitorTypeCheck {
-                violations, ..
-            })) = lang::ConstraintVisitorTypeCheck::new(&var_defs, &func_defs, &struct_defs).visit(&tree, 0);
-            std::println!("Program {i} has {} type-checking violations.", violations.len());
+            let Ok(ControlFlow::Continue(lang::ConstraintVisitorTypeCheck { violations, .. })) =
+                lang::ConstraintVisitorTypeCheck::new(&var_defs, &func_defs, &struct_defs)
+                    .visit(&tree, 0);
+            std::println!(
+                "Program {i} has {} type-checking violations.",
+                violations.len()
+            );
             total_violations += violations.len();
-            std::println!("Program {i} has a total of {} violations.", total_violations);
+            std::println!(
+                "Program {i} has a total of {} violations.",
+                total_violations
+            );
             // Print the program.
-            std::println!("Program:\n{}", String::from_utf8(
-                WriteVisitor::new(Vec::new())
-                    .visit(&tree, 0)
-                    .unwrap()
-                    .continue_value()
-                    .unwrap().output(),
-            ).unwrap());
+            std::println!(
+                "Program:\n{}",
+                String::from_utf8(
+                    WriteVisitor::new(Vec::new())
+                        .visit(&tree, 0)
+                        .unwrap()
+                        .continue_value()
+                        .unwrap()
+                        .output(),
+                )
+                .unwrap()
+            );
         }
         Ok(())
     }
@@ -3422,31 +3872,42 @@ mod test {
     fn check_combined_fixer_c() -> Result<(), Box<dyn Error>> {
         extern crate std;
         let mut rng = StdRng::seed_from_u64(0);
-        let mut generators = tuple_list!(DepthLimiter::new(lang::nonterminal_start::ROOT.inner(), 50));
+        let mut generators =
+            tuple_list!(DepthLimiter::new(lang::nonterminal_start::ROOT.inner(), 50));
         // Generate 200 programs and check for violations.
         for i in 0..200 {
             let mut tree = lang::nonterminal_start::generate(&mut rng, &mut generators, 0);
             std::println!("==========================");
             std::println!("=     Program Before     =");
-            std::println!("Program:\n{}", String::from_utf8(
-                WriteVisitor::new(Vec::new())
-                    .visit(&tree, 0)
-                    .unwrap()
-                    .continue_value()
-                    .unwrap().output(),
-            ).unwrap());
+            std::println!(
+                "Program:\n{}",
+                String::from_utf8(
+                    WriteVisitor::new(Vec::new())
+                        .visit(&tree, 0)
+                        .unwrap()
+                        .continue_value()
+                        .unwrap()
+                        .output(),
+                )
+                .unwrap()
+            );
             let combined_constraint_visitor = lang::CombinedFixer::new(&mut rng, &mut generators);
             let Ok(ControlFlow::Continue(_)) = combined_constraint_visitor.visit_mut(&mut tree, 0);
             // Print the program.
             std::println!("==========================");
             std::println!("=     Program After      =");
-            std::println!("Program:\n{}", String::from_utf8(
-                WriteVisitor::new(Vec::new())
-                    .visit(&tree, 0)
-                    .unwrap()
-                    .continue_value()
-                    .unwrap().output(),
-            ).unwrap());
+            std::println!(
+                "Program:\n{}",
+                String::from_utf8(
+                    WriteVisitor::new(Vec::new())
+                        .visit(&tree, 0)
+                        .unwrap()
+                        .continue_value()
+                        .unwrap()
+                        .output(),
+                )
+                .unwrap()
+            );
         }
         Ok(())
     }
@@ -3463,13 +3924,18 @@ mod test {
             let mut tree = lang::nonterminal_start::generate(&mut rng, &mut generators, 0);
             std::println!("==============================");
             std::println!("Program {i} before fixing:");
-            std::println!("\n{}", String::from_utf8(
-                WriteVisitor::new(Vec::new())
-                    .visit(&tree, 0)
-                    .unwrap()
-                    .continue_value()
-                    .unwrap().output(),
-            ).unwrap());
+            std::println!(
+                "\n{}",
+                String::from_utf8(
+                    WriteVisitor::new(Vec::new())
+                        .visit(&tree, 0)
+                        .unwrap()
+                        .continue_value()
+                        .unwrap()
+                        .output(),
+                )
+                .unwrap()
+            );
             // Apply the fixer.
             let fixer = lang::FillDeclarationsFixer {
                 sampler: &mut rng,
@@ -3479,13 +3945,18 @@ mod test {
             let _ = fixer.visit_mut(&mut tree, 0);
             // Print the program after fixing.
             std::println!("Program {i} after fixing:");
-            std::println!("\n{}", String::from_utf8(
-                WriteVisitor::new(Vec::new())
-                    .visit(&tree, 0)
-                    .unwrap()
-                    .continue_value()
-                    .unwrap().output(),
-            ).unwrap());
+            std::println!(
+                "\n{}",
+                String::from_utf8(
+                    WriteVisitor::new(Vec::new())
+                        .visit(&tree, 0)
+                        .unwrap()
+                        .continue_value()
+                        .unwrap()
+                        .output(),
+                )
+                .unwrap()
+            );
         }
         Ok(())
     }
@@ -3503,17 +3974,28 @@ mod test {
             std::println!("==============================");
             let combined_constraint_visitor = lang::CombinedConstraintVisitor::default();
             let Ok(ControlFlow::Continue(lang::CombinedConstraintVisitor {
-                                             violation_list, paths_to_passed_checks, ..
-                                         })) = combined_constraint_visitor.visit(&tree, 0);
-            std::println!("Program {i} has {} violations and {} passed checks.", violation_list.len(), paths_to_passed_checks.len());
+                violation_list,
+                paths_to_passed_checks,
+                ..
+            })) = combined_constraint_visitor.visit(&tree, 0);
+            std::println!(
+                "Program {i} has {} violations and {} passed checks.",
+                violation_list.len(),
+                paths_to_passed_checks.len()
+            );
             // Print the program.
-            std::println!("Program:\n{}", String::from_utf8(
-                WriteVisitor::new(Vec::new())
-                    .visit(&tree, 0)
-                    .unwrap()
-                    .continue_value()
-                    .unwrap().output(),
-            ).unwrap());
+            std::println!(
+                "Program:\n{}",
+                String::from_utf8(
+                    WriteVisitor::new(Vec::new())
+                        .visit(&tree, 0)
+                        .unwrap()
+                        .continue_value()
+                        .unwrap()
+                        .output(),
+                )
+                .unwrap()
+            );
 
             // Also print the violations returned by the Checker impl.
             // Just copy the implementation here to check.
@@ -3529,11 +4011,17 @@ mod test {
                     Ratio::new(paths_to_passed_checks.len(), paths_to_passed_checks.len())
                 } else {
                     // Some checks passed, some failed.
-                    Ratio::new(paths_to_passed_checks.len(), violation_list.len() + paths_to_passed_checks.len())
+                    Ratio::new(
+                        paths_to_passed_checks.len(),
+                        violation_list.len() + paths_to_passed_checks.len(),
+                    )
                 },
                 violation_list,
             );
-            std::println!("Checker reports violations with ratio {:?}.", violations.pass_rate());
+            std::println!(
+                "Checker reports violations with ratio {:?}.",
+                violations.pass_rate()
+            );
         }
         Ok(())
     }

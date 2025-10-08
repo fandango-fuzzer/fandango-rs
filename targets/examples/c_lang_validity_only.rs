@@ -1,10 +1,10 @@
-//! Run fandango-rs for 10 minutes, see how many programs we generate. 
+//! Run fandango-rs for 10 minutes, see how many programs we generate.
 
 use anyhow::Error;
 use fandango::tuple_list::tuple_list;
 use fandango::typing::{Node, StaticDiscriminable};
 use fandango::visitor::Visitor;
-use fandango::visitor::navigation::{CountNodes};
+use fandango::visitor::navigation::CountNodes;
 use fandango::visitor::write::WriteVisitor;
 use fandango_runtime::evolvers::Evolver;
 use fandango_runtime::evolvers::multi::{KPathDiversityHook, Nsga2Evolver};
@@ -49,7 +49,16 @@ where
     type Error = Infallible;
 
     fn evaluate(&mut self, node: &'a N) -> Result<Self::Measurement, Self::Error> {
-        Ok(Reverse(NodeScan::new(clang::nonterminal_struct_def::DISCRIMINANT as usize).visit(node, 0).unwrap().continue_value().unwrap().matches().len().saturating_sub(self.n)))
+        Ok(Reverse(
+            NodeScan::new(clang::nonterminal_struct_def::DISCRIMINANT as usize)
+                .visit(node, 0)
+                .unwrap()
+                .continue_value()
+                .unwrap()
+                .matches()
+                .len()
+                .saturating_sub(self.n),
+        ))
     }
 }
 
@@ -66,7 +75,16 @@ where
     type Error = Infallible;
 
     fn evaluate(&mut self, node: &'a N) -> Result<Self::Measurement, Self::Error> {
-        Ok(Reverse(NodeScan::new(clang::nonterminal_field_name::DISCRIMINANT as usize).visit(node, 0).unwrap().continue_value().unwrap().matches().len().saturating_sub(self.n)))
+        Ok(Reverse(
+            NodeScan::new(clang::nonterminal_field_name::DISCRIMINANT as usize)
+                .visit(node, 0)
+                .unwrap()
+                .continue_value()
+                .unwrap()
+                .matches()
+                .len()
+                .saturating_sub(self.n),
+        ))
     }
 }
 
@@ -83,7 +101,16 @@ where
     type Error = Infallible;
 
     fn evaluate(&mut self, node: &'a N) -> Result<Self::Measurement, Self::Error> {
-        Ok(Reverse(NodeScan::new(clang::nonterminal_fn_def::DISCRIMINANT as usize).visit(node, 0).unwrap().continue_value().unwrap().matches().len().saturating_sub(self.n)))
+        Ok(Reverse(
+            NodeScan::new(clang::nonterminal_fn_def::DISCRIMINANT as usize)
+                .visit(node, 0)
+                .unwrap()
+                .continue_value()
+                .unwrap()
+                .matches()
+                .len()
+                .saturating_sub(self.n),
+        ))
     }
 }
 
@@ -100,13 +127,26 @@ where
     type Error = Infallible;
 
     fn evaluate(&mut self, node: &'a N) -> Result<Self::Measurement, Self::Error> {
-        Ok(Reverse(self.n.saturating_sub(NodeScan::new(clang::nonterminal_expr::DISCRIMINANT as usize).visit(node, 0).unwrap().continue_value().unwrap().matches().len())))
+        Ok(Reverse(
+            self.n.saturating_sub(
+                NodeScan::new(clang::nonterminal_expr::DISCRIMINANT as usize)
+                    .visit(node, 0)
+                    .unwrap()
+                    .continue_value()
+                    .unwrap()
+                    .matches()
+                    .len(),
+            ),
+        ))
     }
 }
 
-fn run_once(fine_print: bool, print_successful_compile: bool) -> Result<((i32, i32, i32, f32, f32)), Error> {
+fn run_once(
+    fine_print: bool,
+    print_successful_compile: bool,
+) -> Result<((i32, i32, i32, f32, f32)), Error> {
     let fitness = ViolationFitness::<clang::CombinedConstraintVisitor>::new();
-    /* 
+    /*
     let nodes = NodeGoal { n: 1000 };
     let structs = StructGoal { n: 1 };
     let fns = FnGoal { n: 1 };
@@ -117,7 +157,7 @@ fn run_once(fine_print: bool, print_successful_compile: bool) -> Result<((i32, i
     let fixer = ();
     let hook = KPathDiversityHook::new(fixer, NonZeroUsize::new(10).unwrap());
     let mut runtime = Nsga2Evolver::new::<clang::nonterminal_start>(
-        tuple_list!(fitness, /* nodes, structs, fields, fns, exprs */),
+        tuple_list!(fitness /* nodes, structs, fields, fns, exprs */,),
         hook,
         100,
         1000,
@@ -165,7 +205,7 @@ fn run_once(fine_print: bool, print_successful_compile: bool) -> Result<((i32, i
     for (i, candidate) in population.into_iter().enumerate() {
         if fine_print {
             println!("Candidate #{i} ===============================================");
-        } 
+        }
         number_of_generated_programs += 1;
         // If fitness is 1.0, it means no violations.
         // Try to pass the candidate to gcc.
@@ -174,7 +214,9 @@ fn run_once(fine_print: bool, print_successful_compile: bool) -> Result<((i32, i
         // If gcc returns 0, it means the program is valid.
         // If gcc returns non-zero, it means the program is invalid.
         // First, check fitness ratio to see if it's 1.0
-        if *candidate.measurement().fitness().0.numer() == *candidate.measurement().fitness().0.denom() {
+        if *candidate.measurement().fitness().0.numer()
+            == *candidate.measurement().fitness().0.denom()
+        {
             number_of_programs_with_fitness_1 += 1;
         } else {
             if fine_print {
@@ -204,31 +246,40 @@ fn run_once(fine_print: bool, print_successful_compile: bool) -> Result<((i32, i
             writeln!(stdin).unwrap();
             // Wrap this in a main function.
             // writeln!(stdin, "int main() {{").unwrap();
-            stdin.write_all(&WriteVisitor::new(Vec::new())
-                .visit(candidate.node(), 0)?
-                .continue_value()
-                .unwrap()
-                .output()).unwrap();
+            stdin
+                .write_all(
+                    &WriteVisitor::new(Vec::new())
+                        .visit(candidate.node(), 0)?
+                        .continue_value()
+                        .unwrap()
+                        .output(),
+                )
+                .unwrap();
             // writeln!(stdin, " return 0; }}").unwrap();
             // Also add a main function that returns 0 to make it a valid C program.
             writeln!(stdin).unwrap();
             writeln!(stdin, "int main() {{ return 0; }}").unwrap();
         }
 
-        let output = process.wait_with_output().expect("Failed to read gcc output");
+        let output = process
+            .wait_with_output()
+            .expect("Failed to read gcc output");
 
         if output.status.success() {
             if fine_print {
                 println!("GCC accepted the program.");
             }
             if print_successful_compile {
-                println!("{}", String::from_utf8(
-                    WriteVisitor::new(Vec::new())
-                        .visit(candidate.node(), 0)?
-                        .continue_value()
-                        .unwrap()
-                        .output()
-                )?);
+                println!(
+                    "{}",
+                    String::from_utf8(
+                        WriteVisitor::new(Vec::new())
+                            .visit(candidate.node(), 0)?
+                            .continue_value()
+                            .unwrap()
+                            .output()
+                    )?
+                );
             }
             number_of_programs_accepted_by_gcc += 1;
         } else {
@@ -240,13 +291,16 @@ fn run_once(fine_print: bool, print_successful_compile: bool) -> Result<((i32, i
         if fine_print {
             println!("GCC exit code: {}", output.status);
             println!("GCC stdout: {}", String::from_utf8_lossy(&output.stdout));
-            println!("{}", String::from_utf8(
-                WriteVisitor::new(Vec::new())
-                    .visit(candidate.node(), 0)?
-                    .continue_value()
-                    .unwrap()
-                    .output()
-            )?);
+            println!(
+                "{}",
+                String::from_utf8(
+                    WriteVisitor::new(Vec::new())
+                        .visit(candidate.node(), 0)?
+                        .continue_value()
+                        .unwrap()
+                        .output()
+                )?
+            );
         }
 
         if fine_print {
@@ -260,7 +314,13 @@ fn run_once(fine_print: bool, print_successful_compile: bool) -> Result<((i32, i
     // Print a small summary of this run
     println!("Completed a run.");
 
-    Ok((number_of_generated_programs, number_of_programs_with_fitness_1, number_of_programs_accepted_by_gcc, elapsed_gen.as_secs_f32(), elapsed_compile.as_secs_f32()))
+    Ok((
+        number_of_generated_programs,
+        number_of_programs_with_fitness_1,
+        number_of_programs_accepted_by_gcc,
+        elapsed_gen.as_secs_f32(),
+        elapsed_compile.as_secs_f32(),
+    ))
 }
 
 #[allow(deprecated)]
@@ -293,10 +353,25 @@ fn main() -> Result<(), Error> {
         }
     }
 
-    println!("\\newcommand{{\\validConstrainedTotalRs}}{{{}\\xspace}}", total_programs_generated);
-    println!("\\newcommand{{\\validConstrainedFitOneRs}}{{{}\\xspace}}", total_programs_with_fitness_1);
-    println!("\\newcommand{{\\validConstrainedCompileRs}}{{{}\\xspace}}", total_programs_accepted_by_gcc);
-    println!("\\newcommand{{\\validConstrainedGenTimeRs}}{{{}s\\xspace}}", total_elapsed_gen);
-    println!("\\newcommand{{\\validConstrainedCompileTimeRs}}{{{}s\\xspace}}", total_elapsed_compile);
+    println!(
+        "\\newcommand{{\\validConstrainedTotalRs}}{{{}\\xspace}}",
+        total_programs_generated
+    );
+    println!(
+        "\\newcommand{{\\validConstrainedFitOneRs}}{{{}\\xspace}}",
+        total_programs_with_fitness_1
+    );
+    println!(
+        "\\newcommand{{\\validConstrainedCompileRs}}{{{}\\xspace}}",
+        total_programs_accepted_by_gcc
+    );
+    println!(
+        "\\newcommand{{\\validConstrainedGenTimeRs}}{{{}s\\xspace}}",
+        total_elapsed_gen
+    );
+    println!(
+        "\\newcommand{{\\validConstrainedCompileTimeRs}}{{{}s\\xspace}}",
+        total_elapsed_compile
+    );
     Ok(())
 }
