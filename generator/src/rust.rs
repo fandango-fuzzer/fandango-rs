@@ -512,6 +512,7 @@ impl<'program, 'source> IntoRustSource<FandangoGenContext<'_, '_, 'program, 'sou
                     impl #name {
                         #(
                             #[doc = concat!("Create a new [`", stringify!(#name), "`] from its ", stringify!(#indices), " variant (a [`", stringify!(#child_types), "`]")]
+                            #[allow(clippy::too_many_arguments)]
                             pub fn #constructors(#construction_argument) -> Self {
                                 Self::#child_variants(#construction_expr)
                             }
@@ -824,6 +825,7 @@ impl<'program, 'source> IntoRustSource<FandangoGenContext<'_, '_, 'program, 'sou
                     impl #name {
                         #(
                             #[doc = concat!("Create a new [`", stringify!(#name), "`] from a sequence of [`", stringify!(#child_types), "`]s")]
+                            #[allow(clippy::too_many_arguments)]
                             pub fn new(#construction_argument) -> Self {
                                 Self {
                                     child_0: #construction_expr
@@ -1072,6 +1074,7 @@ impl<'program, 'source> IntoRustSource<FandangoGenContext<'_, '_, 'program, 'sou
 
                     impl #name {
                         #[doc = concat!("Create a new [`", stringify!(#name), "`]")]
+                        #[allow(clippy::too_many_arguments)]
                         pub fn new(#(#construction_argument),*) -> Self {
                             Self {
                                 #(
