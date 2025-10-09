@@ -2,17 +2,19 @@
 
 use anyhow::Error;
 use fandango::tuple_list::tuple_list;
+use fandango::typing::Structured;
 use fandango::typing::{Node, StaticDiscriminable};
 use fandango::visitor::Visitor;
 use fandango::visitor::navigation::CountNodes;
 use fandango::visitor::write::WriteVisitor;
+use fandango_core::visitor::kpath::{KPathUpdate, KPaths};
 use fandango_runtime::evolvers::Evolver;
 use fandango_runtime::evolvers::multi::{KPathDiversityHook, Nsga2Evolver};
 use fandango_runtime::measurement::HasMeasurement;
 use fandango_runtime::measurement::{FitnessMeasurer, HasFitness, ViolationFitness};
 use fandango_runtime::operators::{DepthLimiter, NodeScan};
 use fandango_runtime::population::Individual;
-use fandango_targets::clang::{self};
+use fandango_targets::clang::{self, TypeMut, nonterminal_start};
 use num_rational::Ratio;
 use rand::SeedableRng;
 use rand::rngs::StdRng;
@@ -99,8 +101,10 @@ where
 }
 
 fn run_once(
+    all_population: &mut Vec<nonterminal_start>,
     fine_print: bool,
     print_successful_compile: bool,
+    print_unsuccessful_compile: bool,
 ) -> Result<(i32, i32, i32, f32, f32), Error> {
     let fitness = ViolationFitness::<clang::CombinedConstraintVisitor>::new();
 
@@ -231,6 +235,9 @@ fn run_once(
             .expect("Failed to read gcc output");
 
         if output.status.success() {
+            // Currently, we will collect all generated programs that pass gcc.
+            all_population.push(candidate.node().clone());
+
             if fine_print {
                 println!("GCC accepted the program.");
             }
@@ -252,6 +259,19 @@ fn run_once(
             if fine_print {
                 println!("GCC rejected the program.");
                 println!("GCC stderr: {}", String::from_utf8_lossy(&output.stderr));
+            }
+            if print_unsuccessful_compile {
+                println!("---------------------------------------------------[Failure]-");
+                println!(
+                    "{}",
+                    String::from_utf8(
+                        WriteVisitor::new(Vec::new())
+                            .visit(candidate.node(), 0)?
+                            .continue_value()
+                            .unwrap()
+                            .output()
+                    )?
+                );
             }
             if print_successful_compile {
                 println!("---------------------------------------------------[Failure]-");
@@ -313,13 +333,27 @@ fn main() -> Result<(), Error> {
     let mut total_elapsed_gen = 0.0;
     let mut total_elapsed_compile = 0.0;
 
-    // let start = std::time::Instant::now();
-    // Actually, just run for 1 minute for testing
-    // let duration = std::time::Duration::from_secs(60);
+    // Initialize KPath stuff for the C language grammar.
+    let mut kpaths = KPaths::new::<TypeMut<'static>>(
+        NonZeroUsize::new(5).unwrap(),
+        nonterminal_start::ROOT.inner(),
+    );
+
+    let mut updater: KPathUpdate<'_, true> = KPathUpdate::inserting(&mut kpaths);
+
+    // Also part of initialization:
+    let (mut _zero, _total) = updater.kpaths().k_paths();
+
+    // Collect all generated programs by passing this into the run_once calls
+    let mut all_programs: Vec<nonterminal_start> = Vec::new();
+
+    // Target time to run experiment
     let target_time_seconds = 60;
     let mut total_elapsed_gen_and_compile = 0.0;
+
     loop {
-        let (generated, fitness_1, accepted, elapsed_gen, elapsed_compile) = run_once(false, true)?;
+        let (generated, fitness_1, accepted, elapsed_gen, elapsed_compile) =
+            run_once(&mut all_programs, false, false, true)?;
         total_programs_generated += generated;
         total_programs_with_fitness_1 += fitness_1;
         total_programs_accepted_by_gcc += accepted;
@@ -331,6 +365,28 @@ fn main() -> Result<(), Error> {
             break;
         }
     }
+
+    // Once all is said and done, compute KPaths
+    for gprog in all_programs {
+        updater = updater.visit(&gprog, 0).unwrap().continue_value().unwrap();
+    }
+
+    // Produce KPath results
+    let (uncovered, total) = updater.kpaths().k_paths();
+
+    println!("Covered: {} of: {}", total - uncovered, total);
+
+    // print a macro with the covered %
+    let covered_percentage = if total == 0 {
+        0.0
+    } else {
+        (total - uncovered) as f32 / total as f32 * 100.0
+    };
+
+    println!(
+        "\\newcommand{{\\validAndSizedConstrainedKPathCoverageRs}}{{{:.2}\\%\\xspace}}",
+        covered_percentage
+    );
 
     println!(
         "\\newcommand{{\\validAndSizedConstrainedTotalRs}}{{{}\\xspace}}",

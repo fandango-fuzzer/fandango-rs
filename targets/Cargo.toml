@@ -23,6 +23,7 @@ rand = { workspace = true, features = ["default"] }
 [dependencies]
 fandango = { path = ".." }
 fandango-runtime = { path = "../runtime" }
+fandango-core = { path = "../core" }
 
 anyhow.workspace = true
 embedded-io.workspace = true

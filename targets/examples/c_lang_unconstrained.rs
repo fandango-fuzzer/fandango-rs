@@ -3,16 +3,20 @@
 use anyhow::Error;
 use fandango::generation::Generated;
 use fandango::tuple_list::tuple_list;
+use fandango::typing::Structured;
 use fandango::visitor::Visitor;
 use fandango::visitor::write::WriteVisitor;
+use fandango_core::visitor::kpath::{KPathUpdate, KPaths};
 use fandango_runtime::operators::DepthLimiter;
-use fandango_targets::clang::{self};
+use fandango_targets::clang::{self, TypeMut, nonterminal_start};
 use rand::SeedableRng;
 use rand::rngs::StdRng;
 use std::collections::VecDeque;
+use std::num::NonZeroUsize;
 use std::process::{Command, Stdio};
 
 fn run_once(
+    all_population: &mut Vec<nonterminal_start>,
     fine_print: bool,
     print_successful_compile: bool,
 ) -> Result<(i32, i32, i32, f32, f32), Error> {
@@ -31,7 +35,8 @@ fn run_once(
     let start_time = std::time::Instant::now();
     for _i in 0..100 {
         let the_input = clang::nonterminal_start::generate(&mut sampler, &mut generators, 0);
-        population.push_back(the_input);
+        population.push_back(the_input.clone());
+        all_population.push(the_input);
     }
 
     let elapsed_gen = start_time.elapsed();
@@ -161,13 +166,28 @@ fn main() -> Result<(), Error> {
     let mut total_elapsed_gen = 0.0;
     let mut total_elapsed_compile = 0.0;
 
+    // Initialize KPath stuff for the C language grammar.
+    let mut kpaths = KPaths::new::<TypeMut<'static>>(
+        NonZeroUsize::new(5).unwrap(),
+        clang::nonterminal_start::ROOT.inner(),
+    );
+
+    let mut updater: KPathUpdate<'_, true> = KPathUpdate::inserting(&mut kpaths);
+
+    // Also part of initialization:
+    let (mut _zero, _total) = updater.kpaths().k_paths();
+
+    // Collect all generated programs by passing this into the run_once calls
+    let mut all_programs: Vec<nonterminal_start> = Vec::new();
+
     // let start = std::time::Instant::now();
     // Actually, just run for 1 minute for testing
     // let duration = std::time::Duration::from_secs(60);
     let target_time_seconds = 60;
     let mut total_elapsed_gen_and_compile = 0.0;
     loop {
-        let (generated, fitness_1, accepted, elapsed_gen, elapsed_compile) = run_once(false, true)?;
+        let (generated, fitness_1, accepted, elapsed_gen, elapsed_compile) =
+            run_once(&mut all_programs, false, false)?;
         total_programs_generated += generated;
         total_programs_with_fitness_1 += fitness_1;
         total_programs_accepted_by_gcc += accepted;
@@ -179,6 +199,28 @@ fn main() -> Result<(), Error> {
             break;
         }
     }
+
+    // Once all is said and done, compute KPaths
+    for gprog in all_programs {
+        updater = updater.visit(&gprog, 0).unwrap().continue_value().unwrap();
+    }
+
+    // Produce KPath results
+    let (uncovered, total) = updater.kpaths().k_paths();
+
+    println!("Covered: {} of: {}", total - uncovered, total);
+
+    // print a macro with the covered %
+    let covered_percentage = if total == 0 {
+        0.0
+    } else {
+        (total - uncovered) as f32 / total as f32 * 100.0
+    };
+
+    println!(
+        "\\newcommand{{\\unconstrainedKPathCoverageRs}}{{{:.2}\\%\\xspace}}",
+        covered_percentage
+    );
 
     println!(
         "\\newcommand{{\\unconstrainedTotalRs}}{{{}\\xspace}}",

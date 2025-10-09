@@ -33,6 +33,7 @@ mod defs {
     use fandango::visitor::{
         VisitMutResult, VisitResult, VisitableChildren, VisitableChildrenMut, Visitor, VisitorMut,
     };
+    use fandango_core::lang::FandangoNode;
 
     // For the experiments
     use fandango_runtime::evolvers::basic::BasicHook;
@@ -126,6 +127,90 @@ mod defs {
         None
     }
 
+    /// A visitor that compares terminal nodes to a given byte sequence.
+    #[derive(Debug, Copy, Clone)]
+    pub struct TerminalCompareVisitor<'a> {
+        seq: &'a [u8],
+    }
+
+    impl<'a> TerminalCompareVisitor<'a> {
+        /// Make a new TerminalCompareVisitor with the given byte sequence.
+        pub const fn new(seq: &'a [u8]) -> Self {
+            Self { seq }
+        }
+
+        /// True if empty (all terminals matched).
+        pub fn into_eq(self) -> bool {
+            self.seq.is_empty()
+        }
+    }
+
+    impl<T> Visitor<T> for TerminalCompareVisitor<'_>
+    where
+        T: VisitableChildren<T>,
+    {
+        type Continue = Self;
+        type Break = ();
+        type Error = Infallible;
+
+        fn visit<'program, N>(self, node: &'program N, _idx: usize) -> VisitResult<Self, T>
+        where
+            N: Node<Type<'program> = T>,
+            T: From<&'program N> + AsNodeRef<N>,
+        {
+            match node.definition() {
+                FandangoNode::String(s) => {
+                    let cmp = s.inner();
+                    let Some((current, remainder)) = self.seq.split_at_checked(cmp.len()) else {
+                        return Ok(ControlFlow::Break(()));
+                    };
+                    if *cmp == current {
+                        Ok(ControlFlow::Continue(Self { seq: remainder }))
+                    } else {
+                        Ok(ControlFlow::Break(()))
+                    }
+                }
+                _ => node.opaque().visit_each(self),
+            }
+        }
+    }
+
+    static RESERVED_KEYWORDS: [TerminalCompareVisitor<'static>; 33] = [
+        TerminalCompareVisitor::new(b"auto"),
+        TerminalCompareVisitor::new(b"else"),
+        TerminalCompareVisitor::new(b"long"),
+        TerminalCompareVisitor::new(b"switch"),
+        TerminalCompareVisitor::new(b"break"),
+        TerminalCompareVisitor::new(b"enum"),
+        TerminalCompareVisitor::new(b"register"),
+        TerminalCompareVisitor::new(b"typedef"),
+        TerminalCompareVisitor::new(b"case"),
+        TerminalCompareVisitor::new(b"extern"),
+        TerminalCompareVisitor::new(b"return"),
+        TerminalCompareVisitor::new(b"union"),
+        TerminalCompareVisitor::new(b"char"),
+        TerminalCompareVisitor::new(b"float"),
+        TerminalCompareVisitor::new(b"short"),
+        TerminalCompareVisitor::new(b"unsigned"),
+        TerminalCompareVisitor::new(b"const"),
+        TerminalCompareVisitor::new(b"for"),
+        TerminalCompareVisitor::new(b"signed"),
+        TerminalCompareVisitor::new(b"void"),
+        TerminalCompareVisitor::new(b"continue"),
+        TerminalCompareVisitor::new(b"goto"),
+        TerminalCompareVisitor::new(b"sizeof"),
+        TerminalCompareVisitor::new(b"volatile"),
+        TerminalCompareVisitor::new(b"default"),
+        TerminalCompareVisitor::new(b"if"),
+        TerminalCompareVisitor::new(b"static"),
+        TerminalCompareVisitor::new(b"while"),
+        TerminalCompareVisitor::new(b"do"),
+        TerminalCompareVisitor::new(b"int"),
+        TerminalCompareVisitor::new(b"struct"),
+        TerminalCompareVisitor::new(b"_Packed"),
+        TerminalCompareVisitor::new(b"double"),
+    ];
+
     // ================= Def before use.
     // Constraint visitor.
     //
@@ -197,6 +282,15 @@ mod defs {
             if let Some(tree) = visited.downcast::<nonterminal_fn_def>() {
                 // First, record the function name and its parameter count.
                 let fn_name = tree.nth::<0>().nth::<4>().clone();
+                // Is the function name a reserved identifier?
+                if RESERVED_KEYWORDS.into_iter().any(|v| {
+                    v.visit(&fn_name, 0)
+                        .unwrap()
+                        .continue_value()
+                        .is_some_and(|v| v.into_eq())
+                }) {
+                    self.violations.push(self.path.clone());
+                }
                 // Get the param_list_e.
                 let param_list_e = tree.nth::<0>().nth::<6>();
                 // Is param_list_e <e> or <param_list>?
@@ -277,6 +371,15 @@ mod defs {
 
             if let Some(decl_tree) = visited.downcast::<nonterminal_decl>() {
                 let var_decl_name = decl_tree.nth::<0>().nth::<2>().clone();
+                // Is the variable name a reserved identifier?
+                if RESERVED_KEYWORDS.into_iter().any(|v| {
+                    v.visit(&var_decl_name, 0)
+                        .unwrap()
+                        .continue_value()
+                        .is_some_and(|v| v.into_eq())
+                }) {
+                    self.violations.push(self.path.clone());
+                }
                 let var_decl_type = decl_tree.nth::<0>().nth::<0>().clone();
                 // To manage variable scoping, we increase the scope depth when declaring a variable.
                 self.scope_id += 1;
@@ -304,6 +407,15 @@ mod defs {
             else if let Some(param_tree) = visited.downcast::<nonterminal_param>() {
                 let type_inside = param_tree.nth::<0>().nth::<0>().clone();
                 let var_name_inside = param_tree.nth::<0>().nth::<2>().nth::<0>().clone();
+                // Is the parameter name a reserved identifier?
+                if RESERVED_KEYWORDS.into_iter().any(|v| {
+                    v.visit(&var_name_inside, 0)
+                        .unwrap()
+                        .continue_value()
+                        .is_some_and(|v| v.into_eq())
+                }) {
+                    self.violations.push(self.path.clone());
+                }
                 // The parameters should be scoped properly.
                 // Is the parameter already defined in this scope?
                 self.var_defs
@@ -315,6 +427,15 @@ mod defs {
                 self.scope_id += 1;
                 self.scope_trace.push(self.scope_id);
                 let struct_name = struct_tree.nth::<0>().nth::<2>().clone();
+                // Is it a reserved identifier?
+                if RESERVED_KEYWORDS.into_iter().any(|v| {
+                    v.visit(&struct_name, 0)
+                        .unwrap()
+                        .continue_value()
+                        .is_some_and(|v| v.into_eq())
+                }) {
+                    self.violations.push(self.path.clone());
+                }
                 let mut fields = Vec::new();
                 // Get the field_def_list.
                 let field_def_list_e = struct_tree.nth::<0>().nth::<6>();
@@ -1125,6 +1246,7 @@ mod defs {
         // A more complete implementation would handle type coercion, subtyping, etc.
         // First, check if the binop is '^' (bitwise XOR).
         // <binop_op> ::= "+" | "-" | "/" | "*" | "%" | "^" | "==" | "!=" | "<=" | ">=" | "<" | ">" | "&&" | "||" ;
+
         if let nonterminal_binop_op_0::variant_5(_) = binop.nth::<0>() {
             // Bitwise XOR is only valid for integer types.
             if let nonterminal_type_0::variant_0(bt1) = t1.base.nth::<0>()
@@ -1139,6 +1261,20 @@ mod defs {
                 }
             }
             return None; // Invalid types for bitwise XOR.
+        } else if let nonterminal_binop_op_0::variant_4(_) = binop.nth::<0>() {
+            // Modulo is only valid for integer types.
+            if let nonterminal_type_0::variant_0(bt1) = t1.base.nth::<0>()
+                && let nonterminal_basic_type_0::variant_0(_) = bt1.nth::<0>()
+            {
+                // t1 is int, check t2.
+                if let nonterminal_type_0::variant_0(bt2) = t2.base.nth::<0>()
+                    && let nonterminal_basic_type_0::variant_0(_) = bt2.nth::<0>()
+                {
+                    // t2 is also int, valid.
+                    return Some(t1.clone());
+                }
+            }
+            return None; // Invalid types for modulo.
         }
 
         if types_compatible(t1, t2) {
