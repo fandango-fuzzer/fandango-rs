@@ -1,4 +1,5 @@
-// This file will be an attempt at using fandango-rs as a compiler tester.
+// This file uses fandango-rs as a compiler tester.
+// Note: This file contains code generated with Copilot.
 
 // General soundness TODOs:
 // 1. Possible issue with def-use but only in the same scope. Sub-scopes work, but not same scope.
@@ -654,77 +655,6 @@ mod defs {
                     .var_uses
                     .entry((var_name, self.scope_trace.clone()))
                     .or_insert(0) += 1;
-            }
-            let mut result = visited.visit_each_mut(self);
-            if let Ok(ControlFlow::Continue(visitor)) = &mut result {
-                visitor.path.pop_back();
-            }
-            result
-        }
-    }
-
-    /// A fixer that adds a rhs to most declarations.
-    pub struct FillDeclarationsFixer<'a, S, G> {
-        /// The sampler.
-        pub sampler: &'a mut S,
-        /// The generator.
-        pub generator: &'a mut G,
-        /// The current path.
-        pub path: VecDeque<usize>,
-    }
-
-    impl<'a, S, G> FillDeclarationsFixer<'a, S, G> {
-        /// Create a new FillDeclarationsFixer; requires the sampler and generator to be passed,
-        /// otherwise all internal fields are created empty.
-        pub fn new(sampler: &'a mut S, generator: &'a mut G) -> Self {
-            Self {
-                sampler,
-                generator,
-                path: VecDeque::new(),
-            }
-        }
-    }
-
-    impl<S, G, T> VisitorMut<T> for FillDeclarationsFixer<'_, S, G>
-    where
-        nonterminal_decl_rhs: Generated<S, G>,
-        T: VisitableChildrenMut<T>
-            + AsNodeMut<nonterminal_decl>
-            + AsNodeMut<nonterminal_var_access>
-            + AsNodeMut<nonterminal_assignment>
-            + AsNodeMut<nonterminal_type>
-            + AsNodeMut<nonterminal_struct_type>
-            + AsNodeMut<nonterminal_struct_name>,
-    {
-        type Continue = Self;
-        type Break = Infallible;
-        type Error = Infallible;
-
-        fn visit_mut<'program, N>(
-            mut self,
-            node: &'program mut N,
-            idx: usize,
-        ) -> VisitMutResult<Self, T>
-        where
-            N: Node<TypeMut<'program> = T>,
-            T: From<&'program mut N> + AsNodeMut<N>,
-        {
-            self.path.push_back(idx);
-            let mut visited = node.opaque_mut();
-            if let Some(decl_tree) = visited.downcast_mut::<nonterminal_decl>() {
-                let decl_tree_0 = decl_tree.nth_mut::<0>();
-                // <decl> ::= <type> <sep> <var_name> <sep> <decl_rhs_e> ;
-                // <decl_rhs_e> ::= <decl_rhs> | <e> ;
-                // <decl_rhs> ::= "=" <sep> <expr> ;
-                let decl_rhs_e = decl_tree_0.nth_mut::<4>();
-                if let Some(_e) = decl_rhs_e.nth_mut::<0>().nth_mut::<1>() {
-                    // No rhs, need to add one.
-                    // Generate a new expr.
-                    let new_decl_rhs =
-                        nonterminal_decl_rhs::generate(self.sampler, self.generator, 0);
-                    // Replace the <e> with the new decl_rhs.
-                    *decl_rhs_e.nth_mut::<0>() = nonterminal_decl_rhs_e_0::variant_0(new_decl_rhs);
-                }
             }
             let mut result = visited.visit_each_mut(self);
             if let Ok(ControlFlow::Continue(visitor)) = &mut result {
@@ -2206,7 +2136,7 @@ mod defs {
                     match field_list.nth::<0>() {
                         nonterminal_field_def_list_e_0::variant_0(field_def_list) => {
                             // Non-empty field list.
-                            let mut fld_current = Some(field_def_list);
+                            let mut fld_current = Some(maybe_deref!(field_def_list));
                             while let Some(fld_list) = fld_current {
                                 match fld_list.nth::<0>() {
                                     nonterminal_field_def_list_0::variant_0(field_def) => {
@@ -2366,7 +2296,7 @@ mod defs {
                         // We have statements, grab references to all return statements in the body.
                         // We will do this by traversing the statements.
                         let mut return_statements = Vec::new();
-                        let mut current = Some(statements);
+                        let mut current = Some(maybe_deref!(statements));
                         while let Some(stmts) = current {
                             match stmts.nth::<0>() {
                                 // Variant 0, single statement.
@@ -3111,14 +3041,6 @@ mod defs {
                 let result = empty_function_fixer.visit_mut(_tree, idx);
                 let Ok(ControlFlow::Continue(efbf)) = result;
 
-                // Then, fill in missing declarations.
-                // let fixer = FillDeclarationsFixer {
-                //     sampler: efbf.sampler,
-                //     generator: efbf.generator,
-                //     path: VecDeque::new(),
-                // };
-                // let Ok(ControlFlow::Continue(fdf)) = fixer.visit_mut(_tree, idx);
-
                 // Then, collect declarations and repair repeated declarations.
                 let Ok(ControlFlow::Continue(_decl_collector)) = DeclarationCollectorAndFixer {
                     // sampler: fdf.sampler,
@@ -3705,55 +3627,6 @@ mod test {
             std::println!("      Program {i} After       ");
             std::println!(
                 "Program:\n{}",
-                String::from_utf8(
-                    WriteVisitor::new(Vec::new())
-                        .visit(&tree, 0)
-                        .unwrap()
-                        .continue_value()
-                        .unwrap()
-                        .output(),
-                )
-                .unwrap()
-            );
-        }
-        Ok(())
-    }
-
-    // Test the fill decl fixer.
-    #[test]
-    fn check_fill_decl_fixer_c() -> Result<(), Box<dyn Error>> {
-        extern crate std;
-        let mut rng = StdRng::seed_from_u64(0);
-        let mut generators =
-            tuple_list!(DepthLimiter::new(lang::nonterminal_start::ROOT.inner(), 50));
-        // Generate 40 programs and apply the fixer.
-        for i in 0..40 {
-            let mut tree = lang::nonterminal_start::generate(&mut rng, &mut generators, 0);
-            std::println!("==============================");
-            std::println!("Program {i} before fixing:");
-            std::println!(
-                "\n{}",
-                String::from_utf8(
-                    WriteVisitor::new(Vec::new())
-                        .visit(&tree, 0)
-                        .unwrap()
-                        .continue_value()
-                        .unwrap()
-                        .output(),
-                )
-                .unwrap()
-            );
-            // Apply the fixer.
-            let fixer = lang::FillDeclarationsFixer {
-                sampler: &mut rng,
-                generator: &mut generators,
-                path: VecDeque::new(),
-            };
-            let _ = fixer.visit_mut(&mut tree, 0);
-            // Print the program after fixing.
-            std::println!("Program {i} after fixing:");
-            std::println!(
-                "\n{}",
                 String::from_utf8(
                     WriteVisitor::new(Vec::new())
                         .visit(&tree, 0)
