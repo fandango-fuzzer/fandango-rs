@@ -45,15 +45,13 @@ The table presented in section 5 is as follows:
 \end{table}
 ```
 
-These macros are generated automatically by running our compiler evaluation script from the root directory of the project.
+These macros are generated automatically by running our compiler evaluation script from the `case-study` directory.
 To see the macros, inspect the generated files in `compiler-testing-results` (the folder is re-generated each time the script is run).
-Note: building the project is slow due to deficiencies in the Rust trait solver.
-These are addressed by `-Znext-solver`; simply export `RUSTFLAGS=-Znext-solver` and set the default toolchain to `nightly` to mitigate this (`RUSTFLAGS=-Znext-solver cargo +nightly run ...`).
-For maximum reproducibility this experiment does not run with these, but consider enabling them for your own experiments.
 
 To run the experiment:
 
 ```
+cd case-study
 ./compiler_experiment.sh
 ```
 
