@@ -28,7 +28,7 @@ mv ./c_lang_unconstrained_results_python.txt "${RESULTS}/c_lang_unconstrained_re
 taskset -c 0 python lang_validity_only.py
 mv ./c_lang_validity_only_results_python.txt "${RESULTS}/c_lang_validity_only_results_python.txt"
 
-# This experiment times out.
+# This experiment dramatically times out.
 # taskset -c 0 python lang_validity_and_size.py
 # mv ./c_lang_validity_and_size_results_python.txt "${RESULTS}/c_lang_validity_and_size_results_python.txt"
 
@@ -39,17 +39,17 @@ deactivate
 # fandango-rs side
 #
 
-cd ..
-cargo build
+cd ../..
+cargo build --release --example c_lang_unconstrained --example c_lang_validity_only --example c_lang_validity_and_size --features clang,static_defs
 
 # For unconstrained
-taskset -c 0 cargo run --release --example c_lang_unconstrained --features clang static_defs
+taskset -c 0 cargo run --release --example c_lang_unconstrained --features clang,static_defs
 mv ./c_lang_unconstrained_results.txt "${RESULTS}/c_lang_unconstrained_results.txt"
 
 # For validity only
-taskset -c 0 cargo run --release --example c_lang_validity_only --features clang static_defs
+taskset -c 0 cargo run --release --example c_lang_validity_only --features clang,static_defs
 mv ./c_lang_validity_only_results.txt "${RESULTS}/c_lang_validity_only_results.txt"
 
 # For validity + size
-taskset -c 0 cargo run --release --example c_lang_validity_and_size --features clang static_defs
+taskset -c 0 cargo run --release --example c_lang_validity_and_size --features clang,static_defs
 mv ./c_lang_validity_and_size_results.txt "${RESULTS}/c_lang_validity_and_size_results.txt"
