@@ -13,7 +13,7 @@ use fandango_core::visitor::kpath::{KPathUpdate, KPaths};
 use fandango_runtime::evolvers::Evolver;
 use fandango_runtime::evolvers::multi::{KPathDiversityHook, Nsga2Evolver};
 use fandango_runtime::measurement::HasMeasurement;
-use fandango_runtime::measurement::{FitnessMeasurer, HasFitness, ViolationFitness};
+use fandango_runtime::measurement::{FitnessMeasurer, HasFitness};
 use fandango_runtime::operators::{DepthLimiter, NodeScan};
 use fandango_runtime::population::Individual;
 use fandango_targets::clang::{
