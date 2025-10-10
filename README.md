@@ -37,6 +37,12 @@ There are a number of individual software packages provided here, summarized bel
 - *lm3s6965-demo*: Not all the cool things made it into the paper.
   This directory contains an example of running fandango-rs within a baremetal firmware.
 
+## Notice on use of generative AI
+
+This repository was written nearly entirely without AI.
+Generative code assistance was used as part of the Section 5 evaluation, but ultimately did not have any specific interesting findings to include in the paper about this.
+Files which were in any part produced with generative code assistance are clearly marked at the start of the file.
+
 ## Licensing
 
 This crate is licensed under EUPL v1.2.
