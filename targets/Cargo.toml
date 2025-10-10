@@ -12,6 +12,7 @@ csv = []
 rest = []
 scriptsizec = []
 xml = []
+clang = []
 
 static_defs = []
 
@@ -22,6 +23,7 @@ rand = { workspace = true, features = ["default"] }
 [dependencies]
 fandango = { path = ".." }
 fandango-runtime = { path = "../runtime" }
+fandango-core = { path = "../core" }
 
 anyhow.workspace = true
 embedded-io.workspace = true
@@ -40,3 +42,18 @@ required-features = ["xml", "static_defs"]
 name = "xml_multiobjective"
 path = "examples/xml_multiobjective.rs"
 required-features = ["xml", "static_defs"]
+
+[[example]]
+name = "c_lang_unconstrained"
+path = "examples/c_lang_unconstrained.rs"
+required-features = ["clang", "static_defs"]
+
+[[example]]
+name = "c_lang_validity_only"
+path = "examples/c_lang_validity_only.rs"
+required-features = ["clang", "static_defs"]
+
+[[example]]
+name = "c_lang_validity_and_size"
+path = "examples/c_lang_validity_and_size.rs"
+required-features = ["clang", "static_defs"]

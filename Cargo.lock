@@ -418,6 +418,7 @@ dependencies = [
  "anyhow",
  "embedded-io",
  "fandango",
+ "fandango-core",
  "fandango-runtime",
  "hashbrown 0.16.0",
  "num-rational",

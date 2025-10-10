@@ -12,10 +12,56 @@ You'll need to have Rust and Python 3 already installed for this to work.
 
 The table presented in section 5 is as follows:
 ```tex
-TODO
+\begin{table}
+    \centering
+    \caption{Results of \tool{} and \fandango{} generating C programs until one minute is surpassed.
+    }
+    \label{tab:compiler-test-summary}
+    \begin{threeparttable}
+    \begin{tabular}{crrrrr}
+        \toprule
+         & \multicolumn{5}{c}{\tool{}} \\
+          \cmidrule(l{0.25em}r{0.25em}){2-6}
+        Objectives & \# Prog. Gen. & $k$-path ($k=5$) & Gen. Time & {\tt gcc} Time & Total Time \\
+        \midrule
+        $\varnothing$ & \unconstrainedTotalAvgRs & \unconstrainedKPathCoverageAvgRs & \unconstrainedGenTimeAvgRs & \unconstrainedCompileTimeAvgRs & \unconstrainedTotalTimeAvgRs \\
+        Validity & \validConstrainedCompileAvgRs & \validConstrainedKPathCoverageAvgRs & \validConstrainedGenTimeAvgRs & \validConstrainedCompileTimeAvgRs & \validConstrainedTotalTimeAvgRs \\
+        Validity $\cup$ Generation & \validAndSizedConstrainedCompileAvgRs & \validAndSizedConstrainedKPathCoverageAvgRs & \validAndSizedConstrainedGenTimeAvgRs & \validAndSizedConstrainedCompileTimeAvgRs & \validAndSizedConstrainedTotalTimeAvgRs \\
+        \midrule
+         & \multicolumn{5}{c}{\fandango{}} \\
+          \cmidrule(l{0.25em}r{0.25em}){2-6}
+        Objectives & \# Prog. Gen. & $k$-path ($k=5$) & Gen. Time & {\tt gcc} Time & Total Time \\
+        \midrule
+        $\varnothing$ & \unconstrainedTotalAvgPy & \unconstrainedKPathCoverageAvgPy & \unconstrainedGenTimeAvgPy & \unconstrainedCompileTimeAvgPy & \unconstrainedTotalTimeAvgPy \\
+        Validity & \validConstrainedCompileAvgPy & \validConstrainedKPathCoverageAvgPy & \validConstrainedGenTimeAvgPy & \validConstrainedCompileTimeAvgPy & \validConstrainedTotalTimeAvgPy \\
+        Validity $\cup$ Generation & \textit{n.d.}\tnote{3} & \textit{n.d.}\tnote{3} & \textit{n.d.}\tnote{3} & \textit{n.d.}\tnote{3} & \textit{n.d.}\tnote{4} \\
+        \bottomrule
+    \end{tabular}
+    \begin{tablenotes}
+        \item[3] Unable to produce any inputs.
+        \item[4] Process self-aborted before producing any inputs.
+    \end{tablenotes}
+    \end{threeparttable}
+\end{table}
 ```
 
-You may execute TODO in TODO to retrieve the corresponding variables to fill this table.
+These macros are generated automatically by running our compiler evaluation script from the `case-study` directory.
+To see the macros, inspect the generated files in `compiler-testing-results` (the folder is re-generated each time the script is run).
+
+To run the experiment:
+
+```
+cd case-study
+./compiler_experiment.sh
+```
+
+To see the results and see the results to fill the table:
+
+- `cat compiler-testing-results/c_lang_unconstrained_results.txt` for the unconstrained fandango-rs experiment;
+- `cat compiler-testing-results/c_lang_validity_only_results.txt` for the fandango-rs experiment with validity constraints;
+- `cat compiler-testing-results/c_lang_validity_and_size_results.txt` for the fandango-rs experiment with generation goals and validity constraints;
+- `cat compiler-testing-results/c_lang_unconstrained_results_python.txt` for the unconstrained experiment with original fandango;
+- `cat compiler-testing-results/c_lang_validity_only_results_python.txt` for the validity constrained experiment with original fandango.
 
 ## Navigating this repository
 

@@ -93,7 +93,7 @@ macro_rules! field_iter {
     };
 
     ($node:ty $(=> $from:tt)?, $field:tt) => {
-        ::core::iter::once((&$($from.)? $field)).map(::core::convert::From::from)
+        ::core::iter::once(&$($from.)? $field).map(::core::convert::From::from)
     };
 
     ($node:ty $(=> $from:tt)?, $field:tt, $($fields:tt),+) => {{

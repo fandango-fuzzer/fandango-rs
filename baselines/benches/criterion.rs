@@ -1,6 +1,7 @@
 //! The actual benchmarks against csv, rest, scriptsizec, and xml.
 
 #![expect(deprecated)]
+#![expect(missing_docs)]
 
 use common::{BenchmarkSuite, StdGenerator, StdSampler};
 use criterion::{
@@ -330,7 +331,6 @@ where
     }
 }
 
-#[expect(missing_docs)]
 criterion_group!(
     benches,
     perform_benchmark::<csv::Benchmark>,
