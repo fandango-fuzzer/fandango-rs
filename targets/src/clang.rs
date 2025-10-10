@@ -3333,9 +3333,9 @@ mod test {
     use fandango::typing::Structured;
     use fandango::visitor::write::WriteVisitor;
     use fandango::visitor::{Visitor, VisitorMut};
-    use fandango_runtime::measurement::Violations;
+    
     use fandango_runtime::operators::DepthLimiter;
-    use num_rational::Ratio;
+    
     use rand::SeedableRng;
     use rand::rngs::StdRng;
 
