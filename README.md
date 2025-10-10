@@ -22,18 +22,18 @@ The table presented in section 5 is as follows:
         \toprule
          & \multicolumn{5}{c}{\tool{}} \\
           \cmidrule(l{0.25em}r{0.25em}){2-6}
-        Objectives & \# Prog. Gen. & $k$-path ($k=5$) & Gen. Time & {\tt gcc} Time & Total Time \\
+        Objectives & \# Valid Prog. & $k$-path ($k=5$) & Gen. Time & {\tt gcc} Time & Total Time \\
         \midrule
-        $\varnothing$ & \unconstrainedTotalAvgRs & \unconstrainedKPathCoverageAvgRs & \unconstrainedGenTimeAvgRs & \unconstrainedCompileTimeAvgRs & \unconstrainedTotalTimeAvgRs \\
-        Validity & \validConstrainedCompileAvgRs & \validConstrainedKPathCoverageAvgRs & \validConstrainedGenTimeAvgRs & \validConstrainedCompileTimeAvgRs & \validConstrainedTotalTimeAvgRs \\
-        Validity $\cup$ Generation & \validAndSizedConstrainedCompileAvgRs & \validAndSizedConstrainedKPathCoverageAvgRs & \validAndSizedConstrainedGenTimeAvgRs & \validAndSizedConstrainedCompileTimeAvgRs & \validAndSizedConstrainedTotalTimeAvgRs \\
+        $\varnothing$ & \unconstrainedCompileAvgRs/\unconstrainedTotalAvgRs & \unconstrainedKPathCoverageAvgRs & \unconstrainedGenTimeAvgRs & \unconstrainedCompileTimeAvgRs & \unconstrainedTotalTimeAvgRs \\
+        Validity & \validConstrainedCompileAvgRs/\validConstrainedTotalAvgRs & \validConstrainedKPathCoverageAvgRs & \validConstrainedGenTimeAvgRs & \validConstrainedCompileTimeAvgRs & \validConstrainedTotalTimeAvgRs \\
+        Validity $\cup$ Generation & \validAndSizedConstrainedCompileAvgRs/\validAndSizedConstrainedTotalAvgRs & \validAndSizedConstrainedKPathCoverageAvgRs & \validAndSizedConstrainedGenTimeAvgRs & \validAndSizedConstrainedCompileTimeAvgRs & \validAndSizedConstrainedTotalTimeAvgRs \\
         \midrule
          & \multicolumn{5}{c}{\fandango{}} \\
           \cmidrule(l{0.25em}r{0.25em}){2-6}
-        Objectives & \# Prog. Gen. & $k$-path ($k=5$) & Gen. Time & {\tt gcc} Time & Total Time \\
+        Objectives & \# Valid Prog. & $k$-path ($k=5$) & Gen. Time & {\tt gcc} Time & Total Time \\
         \midrule
-        $\varnothing$ & \unconstrainedTotalAvgPy & \unconstrainedKPathCoverageAvgPy & \unconstrainedGenTimeAvgPy & \unconstrainedCompileTimeAvgPy & \unconstrainedTotalTimeAvgPy \\
-        Validity & \validConstrainedCompileAvgPy & \validConstrainedKPathCoverageAvgPy & \validConstrainedGenTimeAvgPy & \validConstrainedCompileTimeAvgPy & \validConstrainedTotalTimeAvgPy \\
+        $\varnothing$ & \unconstrainedCompileAvgPy/\unconstrainedTotalAvgPy & \unconstrainedKPathCoverageAvgPy & \unconstrainedGenTimeAvgPy & \unconstrainedCompileTimeAvgPy & \unconstrainedTotalTimeAvgPy \\
+        Validity & \validConstrainedCompileAvgPy/\validConstrainedTotalAvgPy & \validConstrainedKPathCoverageAvgPy & \validConstrainedGenTimeAvgPy & \validConstrainedCompileTimeAvgPy & \validConstrainedTotalTimeAvgPy \\
         Validity $\cup$ Generation & \textit{n.d.}\tnote{3} & \textit{n.d.}\tnote{3} & \textit{n.d.}\tnote{3} & \textit{n.d.}\tnote{3} & \textit{n.d.}\tnote{4} \\
         \bottomrule
     \end{tabular}
