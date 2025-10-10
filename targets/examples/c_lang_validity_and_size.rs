@@ -14,7 +14,9 @@ use fandango_runtime::measurement::HasMeasurement;
 use fandango_runtime::measurement::{FitnessMeasurer, HasFitness, ViolationFitness};
 use fandango_runtime::operators::{DepthLimiter, NodeScan};
 use fandango_runtime::population::Individual;
-use fandango_targets::clang::{self, TypeMut, nonterminal_start};
+use fandango_targets::clang::{
+    self, CombinedConstraintFitnessMeasurer, MediantSum, TypeMut, nonterminal_start,
+};
 use num_rational::Ratio;
 use rand::SeedableRng;
 use rand::rngs::StdRng;
@@ -74,6 +76,7 @@ where
         ))
     }
 }
+
 struct StmtGoal {
     n: usize,
 }
@@ -106,8 +109,6 @@ fn run_once(
     print_successful_compile: bool,
     print_unsuccessful_compile: bool,
 ) -> Result<(i32, i32, i32, f32, f32), Error> {
-    let fitness = ViolationFitness::<clang::CombinedConstraintVisitor>::new();
-
     let structs = StructGoal { n: 1 };
     let fns = FnGoal { n: 1 };
     let stmts = StmtGoal { n: 5 };
@@ -115,9 +116,7 @@ fn run_once(
     let fixer = ();
     let hook = KPathDiversityHook::new(fixer, NonZeroUsize::new(10).unwrap());
     let mut runtime = Nsga2Evolver::new::<clang::nonterminal_start>(
-        tuple_list!(
-            fitness, structs, fns, stmts, /* var_access, nodes, fields, exprs */
-        ),
+        (structs, (fns, (stmts, CombinedConstraintFitnessMeasurer))),
         hook,
         100,
         1000,
@@ -141,8 +140,8 @@ fn run_once(
     for i in 0..100 {
         let fitness = population
             .iter()
-            .map(|i| i.measurement().fitness())
-            .fold(0.0f64, |v, r| v + *r.0.numer() as f64 / *r.0.denom() as f64)
+            .map(|i| i.measurement().fitness().1.1.1.mediant())
+            .fold(0.0f64, |v, r| v + *r.numer() as f64 / *r.denom() as f64)
             / population.len() as f64;
         if fitness == 1.0 {
             println!("saturated fitness at generation {i}");
@@ -174,9 +173,8 @@ fn run_once(
         // If gcc returns 0, it means the program is valid.
         // If gcc returns non-zero, it means the program is invalid.
         // First, check fitness ratio to see if it's 1.0
-        if *candidate.measurement().fitness().0.numer()
-            == *candidate.measurement().fitness().0.denom()
-        {
+        let constraint_fitness = candidate.measurement().fitness().1.1.1.mediant();
+        if *constraint_fitness.numer() == *constraint_fitness.denom() {
             number_of_programs_with_fitness_1 += 1;
         } else {
             if fine_print {

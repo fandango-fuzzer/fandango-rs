@@ -18,7 +18,7 @@ mod defs {
 
 #[cfg(feature = "static_defs")]
 mod defs {
-    use alloc::collections::VecDeque;
+    use alloc::collections::{BTreeMap, VecDeque};
     use alloc::vec;
     use alloc::vec::Vec;
     use anyhow::Error;
@@ -36,7 +36,9 @@ mod defs {
     use fandango_core::lang::FandangoNode;
 
     // For the experiments
+    use fandango::tuple_list::tuple_list_type;
     use fandango_runtime::evolvers::basic::BasicHook;
+    use fandango_runtime::evolvers::multi::{FitnessMeasurerTuple, MeasurementsCombined};
     use fandango_runtime::measurement::Violations;
     use fandango_runtime::operators::Checker;
     use num_rational::Ratio;
@@ -57,12 +59,10 @@ mod defs {
 
     // TODO: These could easily be consolidated.
     // Now, a sort of symbol table to track variable definitions.
-    type VarSymbolTable =
-        alloc::collections::BTreeMap<(nonterminal_var_name, ScopeTrace), nonterminal_type>;
+    type VarSymbolTable = BTreeMap<(nonterminal_var_name, ScopeTrace), nonterminal_type>;
 
     // Also for function definitions, mapping (fn_name, scope_trace) -> Vec<nonterminal_type> (parameter types + return type)
-    type FuncSymbolTable =
-        alloc::collections::BTreeMap<(nonterminal_fn_name, ScopeTrace), Vec<nonterminal_type>>;
+    type FuncSymbolTable = BTreeMap<(nonterminal_fn_name, ScopeTrace), Vec<nonterminal_type>>;
 
     // A helper function which gets the function name and type given a scope trace.
     // Should find the innermost function definition that matches the scope trace.
@@ -234,19 +234,16 @@ mod defs {
         /// The set of currently defined variables, (var_name, scope) -> var_type
         pub var_defs: VarSymbolTable,
         /// The set of currently defined functions. (fn_name, scope) -> Vec<param_type>
-        pub func_defs:
-            alloc::collections::BTreeMap<(nonterminal_fn_name, ScopeTrace), Vec<nonterminal_type>>,
+        pub func_defs: BTreeMap<(nonterminal_fn_name, ScopeTrace), Vec<nonterminal_type>>,
         /// The set of currently defined structs. struct_name -> Vec<(field_name, field_type)>
-        pub struct_defs: alloc::collections::BTreeMap<
-            nonterminal_struct_name,
-            Vec<(nonterminal_field_name, nonterminal_type)>,
-        >,
+        pub struct_defs:
+            BTreeMap<nonterminal_struct_name, Vec<(nonterminal_field_name, nonterminal_type)>>,
         /// The set of variable uses: (var_name, scope_trace) -> usize
-        pub var_uses: alloc::collections::BTreeMap<(nonterminal_var_name, ScopeTrace), usize>,
+        pub var_uses: BTreeMap<(nonterminal_var_name, ScopeTrace), usize>,
         /// Violations for re-declarations in the same scope.
         pub violations: Vec<VecDeque<usize>>,
         /// Paths that passed checks, for ratio calculation.
-        pub paths_to_passed_checks: Vec<VecDeque<usize>>,
+        pub passed_checks: usize,
     }
 
     impl<T> Visitor<T> for DeclarationCollector
@@ -348,7 +345,7 @@ mod defs {
                 {
                     self.violations.push(self.path.clone());
                 } else {
-                    self.paths_to_passed_checks.push(self.path.clone());
+                    self.passed_checks += 1;
                 }
                 // Save the function definition using the node as key.
                 self.func_defs
@@ -392,13 +389,13 @@ mod defs {
                 //     // Violation: re-declaration in the same scope.
                 //     self.violations.push(self.path.clone());
                 // } else {
-                //     self.paths_to_passed_checks.push(self.path.clone());
+                //     self.passed_checks += 1;
                 // }
                 // For simplicity, actually just see if this is a re-declaration at all.
                 if get_var_definition(&self.var_defs, &var_decl_name, &self.scope_trace).is_some() {
                     self.violations.push(self.path.clone());
                 } else {
-                    self.paths_to_passed_checks.push(self.path.clone());
+                    self.passed_checks += 1;
                 }
                 self.var_defs
                     .insert((var_decl_name, self.scope_trace.clone()), var_decl_type);
@@ -493,7 +490,7 @@ mod defs {
                 if self.struct_defs.contains_key(&struct_name) {
                     self.violations.push(self.path.clone());
                 } else {
-                    self.paths_to_passed_checks.push(self.path.clone());
+                    self.passed_checks += 1;
                 }
                 self.struct_defs.insert(struct_name, fields);
             } else if let Some(var_access) = visited.downcast::<nonterminal_var_access>() {
@@ -529,15 +526,12 @@ mod defs {
         /// The set of currently defined variables, (var_name, scope) -> var_type
         pub var_defs: VarSymbolTable,
         /// The set of currently defined functions. (fn_name, scope) -> Vec<param_type>
-        pub func_defs:
-            alloc::collections::BTreeMap<(nonterminal_fn_name, ScopeTrace), Vec<nonterminal_type>>,
+        pub func_defs: BTreeMap<(nonterminal_fn_name, ScopeTrace), Vec<nonterminal_type>>,
         /// The set of currently defined structs. struct_name -> Vec<(field_name, field_type)>
-        pub struct_defs: alloc::collections::BTreeMap<
-            nonterminal_struct_name,
-            Vec<(nonterminal_field_name, nonterminal_type)>,
-        >,
+        pub struct_defs:
+            BTreeMap<nonterminal_struct_name, Vec<(nonterminal_field_name, nonterminal_type)>>,
         /// The set of variable uses: (var_name, scope_trace) -> usize
-        pub var_uses: alloc::collections::BTreeMap<(nonterminal_var_name, ScopeTrace), usize>,
+        pub var_uses: BTreeMap<(nonterminal_var_name, ScopeTrace), usize>,
     }
 
     impl<'a, S, G> DeclarationCollectorAndFixer<'a, S, G> {
@@ -552,9 +546,9 @@ mod defs {
                 scope_trace: Vec::new(),
                 function_scopes: Vec::new(),
                 var_defs: VarSymbolTable::new(),
-                func_defs: alloc::collections::BTreeMap::new(),
-                struct_defs: alloc::collections::BTreeMap::new(),
-                var_uses: alloc::collections::BTreeMap::new(),
+                func_defs: BTreeMap::new(),
+                struct_defs: BTreeMap::new(),
+                var_uses: BTreeMap::new(),
             }
         }
     }
@@ -687,7 +681,7 @@ mod defs {
                 //     // Violation: re-declaration in the same scope.
                 //     self.violations.push(self.path.clone());
                 // } else {
-                //     self.paths_to_passed_checks.push(self.path.clone());
+                //     self.passed_checks += 1;
                 // }
                 // For simplicity, actually just see if this is a re-declaration at all.
                 if get_var_definition(&self.var_defs, var_decl_name, &self.scope_trace).is_some() {
@@ -802,14 +796,12 @@ mod defs {
         /// The set of currently defined functions. (fn_name, scope) -> Vec<param_type>
         pub defined_fns: &'a FuncSymbolTable,
         /// The set of currently defined structs. struct_name -> Vec<(field_name, field_type)>
-        pub defined_structs: &'a alloc::collections::BTreeMap<
-            nonterminal_struct_name,
-            Vec<(nonterminal_field_name, nonterminal_type)>,
-        >,
+        pub defined_structs:
+            &'a BTreeMap<nonterminal_struct_name, Vec<(nonterminal_field_name, nonterminal_type)>>,
         /// The list of violations found so far.
         pub violations: Vec<VecDeque<usize>>,
         /// The list of places where violations _could_ have occurred, for computing the violation ratio.
-        pub paths_to_passed_checks: Vec<VecDeque<usize>>,
+        pub passed_checks: usize,
     }
 
     impl<'a> ConstraintVisitorDefUse<'a> {
@@ -817,7 +809,7 @@ mod defs {
         pub fn new(
             defined_vars: &'a VarSymbolTable,
             defined_fns: &'a FuncSymbolTable,
-            defined_structs: &'a alloc::collections::BTreeMap<
+            defined_structs: &'a BTreeMap<
                 nonterminal_struct_name,
                 Vec<(nonterminal_field_name, nonterminal_type)>,
             >,
@@ -828,7 +820,7 @@ mod defs {
                 function_scopes: Vec::new(),
                 scope_id: 0,
                 violations: Vec::new(),
-                paths_to_passed_checks: Vec::new(),
+                passed_checks: 0,
                 defined_vars,
                 defined_fns,
                 defined_structs,
@@ -890,7 +882,7 @@ mod defs {
                         self.violations.push(self.path.clone());
                     } else {
                         // Struct type defined, passed check.
-                        self.paths_to_passed_checks.push(self.path.clone());
+                        self.passed_checks += 1;
                     }
                 }
             } else if let Some(tree) = visited.downcast::<nonterminal_var_access>() {
@@ -901,7 +893,7 @@ mod defs {
                     self.violations.push(self.path.clone());
                 } else {
                     // It is defined, so this is a passed check.
-                    self.paths_to_passed_checks.push(self.path.clone());
+                    self.passed_checks += 1;
                 }
             } else if let Some(_decl_tree) = visited.downcast::<nonterminal_decl>() {
                 // Deal with scoping.
@@ -914,7 +906,7 @@ mod defs {
                     self.violations.push(self.path.clone());
                 } else {
                     // It is defined, so this is a passed check.
-                    self.paths_to_passed_checks.push(self.path.clone());
+                    self.passed_checks += 1;
                 }
             } else if let Some(_tree) = visited.downcast::<nonterminal_struct_def>() {
                 // Adjust scope for new declaration.
@@ -942,7 +934,7 @@ mod defs {
         /// The list of violations found so far.
         pub violations: Vec<VecDeque<usize>>,
         /// The list of places where violations _could_ have occurred, for computing the violation ratio.
-        pub paths_to_passed_checks: Vec<VecDeque<usize>>,
+        pub passed_checks: usize,
     }
 
     // Visitor that checks for violations.
@@ -968,7 +960,7 @@ mod defs {
                     self.violations.push(self.path.clone());
                 } else {
                     // Valid return statement, but still counts as a place where a violation could have occurred.
-                    self.paths_to_passed_checks.push(self.path.clone());
+                    self.passed_checks += 1;
                 }
             } else if let Some(_tree) = visited.downcast::<nonterminal_fn_def>() {
                 self.func_depth += 1;
@@ -997,15 +989,13 @@ mod defs {
         /// The list of violations found so far.
         pub violations: Vec<VecDeque<usize>>,
         /// The list of places where violations did not occur, for computing the violation ratio.
-        pub paths_to_passed_checks: Vec<VecDeque<usize>>,
+        pub passed_checks: usize,
         /// The current scope level.
         pub scope_depth: usize,
         /// The current struct definitions, mapping struct names to their field names and types.
         /// This should be initialized by a prior pass of DeclarationCollector.
-        pub struct_defs: &'a alloc::collections::BTreeMap<
-            nonterminal_struct_name,
-            Vec<(nonterminal_field_name, nonterminal_type)>,
-        >,
+        pub struct_defs:
+            &'a BTreeMap<nonterminal_struct_name, Vec<(nonterminal_field_name, nonterminal_type)>>,
         /// The current variable definitions, mapping variable names to their types.
         pub var_defs: &'a VarSymbolTable,
     }
@@ -1013,7 +1003,7 @@ mod defs {
     impl<'a> ConstraintVisitorStructAccess<'a> {
         /// Create a new ConstraintVisitorStructAccess with the given struct and variable definitions.
         pub fn new(
-            struct_defs: &'a alloc::collections::BTreeMap<
+            struct_defs: &'a BTreeMap<
                 nonterminal_struct_name,
                 Vec<(nonterminal_field_name, nonterminal_type)>,
             >,
@@ -1023,7 +1013,7 @@ mod defs {
                 path: VecDeque::new(),
                 scope_depth: 0,
                 violations: Vec::new(),
-                paths_to_passed_checks: Vec::new(),
+                passed_checks: 0,
                 var_defs,
                 struct_defs,
             }
@@ -1089,7 +1079,7 @@ mod defs {
                                     self.violations.push(self.path.clone());
                                 } else {
                                     // Field found, no violation.
-                                    self.paths_to_passed_checks.push(self.path.clone());
+                                    self.passed_checks += 1;
                                 }
                             } else {
                                 // Struct not found, violation. But this should be caught by def-before-use.
@@ -1131,8 +1121,7 @@ mod defs {
         pub base: nonterminal_type,
         /// If this is a struct type, we need to store the field names and types.
         /// This will be None if the type is not a struct.
-        pub struct_fields:
-            Option<alloc::collections::BTreeMap<nonterminal_field_name, nonterminal_type>>,
+        pub struct_fields: Option<BTreeMap<nonterminal_field_name, nonterminal_type>>,
         /// Alternatively, positional fields could be used.
         pub struct_fields_positional: Option<Vec<NonterminalTypeExtended>>,
     }
@@ -1287,18 +1276,12 @@ mod defs {
     // Returns a vec of booleans, true indicating fine, false indicating issue.
     fn collect_all_issues_in_struct(
         expr: &nonterminal_struct_expr,
-        struct_defs: &alloc::collections::BTreeMap<
+        struct_defs: &BTreeMap<
             nonterminal_struct_name,
             Vec<(nonterminal_field_name, nonterminal_type)>,
         >,
-        var_defs: &alloc::collections::BTreeMap<
-            (nonterminal_var_name, Vec<usize>),
-            nonterminal_type,
-        >,
-        fun_defs: &alloc::collections::BTreeMap<
-            (nonterminal_fn_name, Vec<usize>),
-            Vec<nonterminal_type>,
-        >,
+        var_defs: &BTreeMap<(nonterminal_var_name, Vec<usize>), nonterminal_type>,
+        fun_defs: &BTreeMap<(nonterminal_fn_name, Vec<usize>), Vec<nonterminal_type>>,
         scope_trace: &Vec<usize>,
     ) -> Vec<bool> {
         // Specifically:
@@ -1354,15 +1337,9 @@ mod defs {
 
     fn infer_expr_unit_type(
         expr: &nonterminal_expr_unit,
-        var_defs: &alloc::collections::BTreeMap<
-            (nonterminal_var_name, Vec<usize>),
-            nonterminal_type,
-        >,
-        func_defs: &alloc::collections::BTreeMap<
-            (nonterminal_fn_name, Vec<usize>),
-            Vec<nonterminal_type>,
-        >,
-        struct_defs: &alloc::collections::BTreeMap<
+        var_defs: &BTreeMap<(nonterminal_var_name, Vec<usize>), nonterminal_type>,
+        func_defs: &BTreeMap<(nonterminal_fn_name, Vec<usize>), Vec<nonterminal_type>>,
+        struct_defs: &BTreeMap<
             nonterminal_struct_name,
             Vec<(nonterminal_field_name, nonterminal_type)>,
         >,
@@ -1577,15 +1554,9 @@ mod defs {
     // A helper function to infer the type of an expression.
     fn infer_expr_type(
         expr: &nonterminal_expr,
-        var_defs: &alloc::collections::BTreeMap<
-            (nonterminal_var_name, Vec<usize>),
-            nonterminal_type,
-        >,
-        func_defs: &alloc::collections::BTreeMap<
-            (nonterminal_fn_name, Vec<usize>),
-            Vec<nonterminal_type>,
-        >,
-        struct_defs: &alloc::collections::BTreeMap<
+        var_defs: &BTreeMap<(nonterminal_var_name, Vec<usize>), nonterminal_type>,
+        func_defs: &BTreeMap<(nonterminal_fn_name, Vec<usize>), Vec<nonterminal_type>>,
+        struct_defs: &BTreeMap<
             nonterminal_struct_name,
             Vec<(nonterminal_field_name, nonterminal_type)>,
         >,
@@ -1692,7 +1663,7 @@ mod defs {
         /// The list of violations found so far.
         pub violations: Vec<VecDeque<usize>>,
         /// The list of places where violations did not occur, for computing the violation ratio.
-        pub paths_to_passed_checks: Vec<VecDeque<usize>>,
+        pub passed_checks: usize,
     }
 
     impl<T> Visitor<T> for ConstraintVisitorNoVoidDecls
@@ -1725,7 +1696,7 @@ mod defs {
                         self.violations.push(self.path.clone());
                     } else {
                         // Valid declaration type.
-                        self.paths_to_passed_checks.push(self.path.clone());
+                        self.passed_checks += 1;
                     }
                 }
             } else if let Some(_tree) = visited.downcast::<nonterminal_param>() {
@@ -1737,7 +1708,7 @@ mod defs {
                         self.violations.push(self.path.clone());
                     } else {
                         // Valid parameter type.
-                        self.paths_to_passed_checks.push(self.path.clone());
+                        self.passed_checks += 1;
                     }
                 }
             } else if let Some(_tree) = visited.downcast::<nonterminal_field_def_list>() {
@@ -1757,7 +1728,7 @@ mod defs {
                                     self.violations.push(self.path.clone());
                                 } else {
                                     // Valid field type.
-                                    self.paths_to_passed_checks.push(self.path.clone());
+                                    self.passed_checks += 1;
                                 }
                             }
                             current = None;
@@ -1775,7 +1746,7 @@ mod defs {
                                     self.violations.push(self.path.clone());
                                 } else {
                                     // Valid field type.
-                                    self.paths_to_passed_checks.push(self.path.clone());
+                                    self.passed_checks += 1;
                                 }
                             }
                             current = Some(rest);
@@ -1804,18 +1775,12 @@ mod defs {
         /// The current path, to be used by the visitor when saving violations.
         pub path: VecDeque<usize>,
         /// The variable definitions in scope, to be used for type inference.
-        pub var_defs:
-            &'a alloc::collections::BTreeMap<(nonterminal_var_name, Vec<usize>), nonterminal_type>,
+        pub var_defs: &'a BTreeMap<(nonterminal_var_name, Vec<usize>), nonterminal_type>,
         /// The function definitions in scope, to be used for type inference.
-        pub fun_defs: &'a alloc::collections::BTreeMap<
-            (nonterminal_fn_name, Vec<usize>),
-            Vec<nonterminal_type>,
-        >,
+        pub fun_defs: &'a BTreeMap<(nonterminal_fn_name, Vec<usize>), Vec<nonterminal_type>>,
         /// The struct definitions in scope, to be used for type inference.
-        pub struct_defs: &'a alloc::collections::BTreeMap<
-            nonterminal_struct_name,
-            Vec<(nonterminal_field_name, nonterminal_type)>,
-        >,
+        pub struct_defs:
+            &'a BTreeMap<nonterminal_struct_name, Vec<(nonterminal_field_name, nonterminal_type)>>,
         /// The current scope trace, to be used for looking up variable and function definitions.
         pub scope_trace: &'a mut Vec<usize>,
         /// Function scopes, to help manage definitions.
@@ -2099,7 +2064,7 @@ mod defs {
         /// The list of violations found so far.
         pub violations: Vec<VecDeque<usize>>,
         /// The list of places where violations did not occur, for computing the violation ratio.
-        pub paths_to_passed_checks: Vec<VecDeque<usize>>,
+        pub passed_checks: usize,
         /// Are we currently inside a struct decl?
         pub inside_struct_decl: bool,
     }
@@ -2150,7 +2115,7 @@ mod defs {
                     self.violations.push(self.path.clone());
                 } else {
                     // Valid usage.
-                    self.paths_to_passed_checks.push(self.path.clone());
+                    self.passed_checks += 1;
                 }
             }
 
@@ -2171,7 +2136,7 @@ mod defs {
         /// The list of violations found so far.
         pub violations: Vec<VecDeque<usize>>,
         /// The list of places where violations did not occur, for computing the violation ratio.
-        pub paths_to_passed_checks: Vec<VecDeque<usize>>,
+        pub passed_checks: usize,
     }
 
     impl<T> Visitor<T> for ConstraintVisitorNoEmptyStructs
@@ -2203,7 +2168,7 @@ mod defs {
                     }
                     nonterminal_field_def_list_e_0::variant_0(_) => {
                         // Non-empty field list, valid.
-                        self.paths_to_passed_checks.push(self.path.clone());
+                        self.passed_checks += 1;
                     }
                 }
             }
@@ -2220,7 +2185,7 @@ mod defs {
                     }
                     nonterminal_expr_list_e_0::variant_0(_) => {
                         // Non-empty expr list, valid.
-                        self.paths_to_passed_checks.push(self.path.clone());
+                        self.passed_checks += 1;
                     }
                 }
             }
@@ -2241,7 +2206,7 @@ mod defs {
         /// The list of violations found so far.
         pub violations: Vec<VecDeque<usize>>,
         /// The list of places where violations did not occur, for computing the violation ratio.
-        pub paths_to_passed_checks: Vec<VecDeque<usize>>,
+        pub passed_checks: usize,
     }
 
     impl<T> Visitor<T> for ConstraintVisitorNoDuplicateStructFields
@@ -2311,7 +2276,7 @@ mod defs {
                 if has_duplicates {
                     self.violations.push(self.path.clone());
                 } else {
-                    self.paths_to_passed_checks.push(self.path.clone());
+                    self.passed_checks += 1;
                 }
             }
             let mut result = visited.visit_each(self);
@@ -2335,7 +2300,7 @@ mod defs {
         /// The list of violations found so far.
         pub violations: Vec<VecDeque<usize>>,
         /// The list of locations where violations could have occurred.
-        pub paths_to_passed_checks: Vec<VecDeque<usize>>,
+        pub passed_checks: usize,
         /// The current variable definitions, mapping variable names and scopes to their types.
         /// This should be initialized by a prior pass of DeclarationCollector.
         pub var_defs: &'a VarSymbolTable,
@@ -2344,10 +2309,8 @@ mod defs {
         pub func_defs: &'a FuncSymbolTable,
         /// The current struct definitions, mapping struct names to their field names and types.
         /// This should be initialized by a prior pass of DeclarationCollector.
-        pub struct_defs: &'a alloc::collections::BTreeMap<
-            nonterminal_struct_name,
-            Vec<(nonterminal_field_name, nonterminal_type)>,
-        >,
+        pub struct_defs:
+            &'a BTreeMap<nonterminal_struct_name, Vec<(nonterminal_field_name, nonterminal_type)>>,
     }
 
     impl<'a> ConstraintVisitorTypeCheck<'a> {
@@ -2355,7 +2318,7 @@ mod defs {
         pub fn new(
             var_defs: &'a VarSymbolTable,
             func_defs: &'a FuncSymbolTable,
-            struct_defs: &'a alloc::collections::BTreeMap<
+            struct_defs: &'a BTreeMap<
                 nonterminal_struct_name,
                 Vec<(nonterminal_field_name, nonterminal_type)>,
             >,
@@ -2365,7 +2328,7 @@ mod defs {
                 scope_trace: Vec::new(),
                 scope_id: 0,
                 violations: Vec::new(),
-                paths_to_passed_checks: Vec::new(),
+                passed_checks: 0,
                 var_defs,
                 func_defs,
                 struct_defs,
@@ -2467,7 +2430,7 @@ mod defs {
                             self.violations.push(self.path.clone());
                         } else if fn_return_type_is_void && return_statements.is_empty() {
                             // Function is void and has no return statements, all good.
-                            self.paths_to_passed_checks.push(self.path.clone());
+                            self.passed_checks += 1;
                         } else if !fn_return_type_is_void && !return_statements.is_empty() {
                             // Function is not void and has return statements.
                             // Go through all return statements and check their types.
@@ -2496,7 +2459,7 @@ mod defs {
                                                 self.violations.push(self.path.clone());
                                             } else {
                                                 // Types match, all good.
-                                                self.paths_to_passed_checks.push(self.path.clone());
+                                                self.passed_checks += 1;
                                             }
                                         } else {
                                             // Could not infer expression type, consider it a violation.
@@ -2523,7 +2486,7 @@ mod defs {
                             }
                             if all_void_returns {
                                 // All returns are void, all good.
-                                self.paths_to_passed_checks.push(self.path.clone());
+                                self.passed_checks += 1;
                             }
                         }
                     }
@@ -2534,7 +2497,7 @@ mod defs {
                             self.violations.push(self.path.clone());
                         } else {
                             // Function is void and has no body, all good.
-                            self.paths_to_passed_checks.push(self.path.clone());
+                            self.passed_checks += 1;
                         }
                     }
                 }
@@ -2569,7 +2532,7 @@ mod defs {
                         } else {
                             // Types match, all good.
                             // Add this as a valid use.
-                            self.paths_to_passed_checks.push(self.path.clone());
+                            self.passed_checks += 1;
                         }
                     } else {
                         // Could not infer expression type, consider it a violation.
@@ -2603,7 +2566,7 @@ mod defs {
                     } else {
                         // Types match, all good.
                         // Add this as a valid use.
-                        self.paths_to_passed_checks.push(self.path.clone());
+                        self.passed_checks += 1;
                     }
                 } else {
                     // Either variable or expression type could not be determined, consider it a violation.
@@ -2651,7 +2614,7 @@ mod defs {
                                         // <basic_type> ::= "int" | "float" | "double" | "bool" | "char" | "void" ;
                                         nonterminal_basic_type_0::variant_5(_) => {
                                             // Basic type is void. All good.
-                                            self.paths_to_passed_checks.push(self.path.clone());
+                                            self.passed_checks += 1;
                                         }
                                         _ => {
                                             // Basic type is not void. Violation.
@@ -2692,7 +2655,7 @@ mod defs {
                             if let Some(et) = expr_type {
                                 if types_compatible(&fn_return_type.clone().into(), &et) {
                                     // Types match, all good.
-                                    self.paths_to_passed_checks.push(self.path.clone());
+                                    self.passed_checks += 1;
                                 } else {
                                     // Types do not match, violation.
                                     self.violations.push(self.path.clone());
@@ -2729,7 +2692,7 @@ mod defs {
                             self.violations.push(self.path.clone());
                         } else {
                             // Field found, all good.
-                            self.paths_to_passed_checks.push(self.path.clone());
+                            self.passed_checks += 1;
                         }
                     }
                 }
@@ -2755,7 +2718,7 @@ mod defs {
                             self.violations.push(self.path.clone());
                         } else {
                             // No parameters, all good.
-                            self.paths_to_passed_checks.push(self.path.clone());
+                            self.passed_checks += 1;
                         }
                     } else {
                         // In this case, we know it's arg_list.
@@ -2774,7 +2737,7 @@ mod defs {
                                     ) {
                                         arg_types.push(at);
                                         // Successfully inferred argument type, a passed check.
-                                        self.paths_to_passed_checks.push(self.path.clone());
+                                        self.passed_checks += 1;
                                     } else {
                                         // Could not infer argument type, consider it a violation.
                                         self.violations.push(self.path.clone());
@@ -2794,7 +2757,7 @@ mod defs {
                                     ) {
                                         arg_types.push(at);
                                         // Successfully inferred argument type, a passed check.
-                                        self.paths_to_passed_checks.push(self.path.clone());
+                                        self.passed_checks += 1;
                                     } else {
                                         // Could not infer argument type, consider it a violation.
                                         self.violations.push(self.path.clone());
@@ -2825,7 +2788,7 @@ mod defs {
                             }
                             // If we reach here, all argument types match.
                             if !mismatch_found {
-                                self.paths_to_passed_checks.push(self.path.clone());
+                                self.passed_checks += 1;
                             }
                         }
                     } else {
@@ -2834,7 +2797,7 @@ mod defs {
                             self.violations.push(self.path.clone());
                         } else {
                             // No arguments, all good.
-                            self.paths_to_passed_checks.push(self.path.clone());
+                            self.passed_checks += 1;
                         }
                     }
                 } else {
@@ -2859,7 +2822,7 @@ mod defs {
                 .is_some()
                 {
                     // Type could be inferred, all good.
-                    self.paths_to_passed_checks.push(self.path.clone());
+                    self.passed_checks += 1;
                 } else {
                     // Could not infer type, consider it a violation.
                     self.violations.push(self.path.clone());
@@ -2880,7 +2843,7 @@ mod defs {
                         self.violations.push(self.path.clone());
                     } else {
                         // No issue, all good.
-                        self.paths_to_passed_checks.push(self.path.clone());
+                        self.passed_checks += 1;
                     }
                 }
             }
@@ -2948,45 +2911,53 @@ mod defs {
         }
     }
 
+    type CombinedConstraintResult = tuple_list_type!(
+        Ratio<usize>,
+        Ratio<usize>,
+        Ratio<usize>,
+        Ratio<usize>,
+        Ratio<usize>,
+        Ratio<usize>,
+        Ratio<usize>,
+        Ratio<usize>
+    );
+
+    /// Computes the mediant over a tuple of ratios
+    pub trait MediantSum {
+        /// Compute the mediant!
+        fn mediant(self) -> Ratio<usize>;
+    }
+
+    impl MediantSum for (Ratio<usize>, ()) {
+        fn mediant(self) -> Ratio<usize> {
+            self.0
+        }
+    }
+
+    impl<T> MediantSum for (Ratio<usize>, T)
+    where
+        T: MediantSum,
+    {
+        fn mediant(self) -> Ratio<usize> {
+            let inner = self.1.mediant();
+            Ratio::new_raw(
+                *self.0.numer() + *inner.numer(),
+                *self.0.denom() + *inner.denom(),
+            )
+        }
+    }
+
     // Ok, now let's make one ConstraintVisitor that combines all the previous ones.
     /// Combined constraint visitor that checks for return-in-fn,
     /// struct-access, def-use, and type-checking constraints.
     #[derive(Debug, Default)]
     pub struct CombinedConstraintVisitor {
-        /// The collected violations.
-        pub violation_list: Vec<VecDeque<usize>>,
-        /// The collected non-violations.
-        pub paths_to_passed_checks: Vec<VecDeque<usize>>,
-    }
-
-    impl Checker for CombinedConstraintVisitor {
-        fn violations(self) -> Violations {
-            Violations::new(
-                // A bit of a verbose calculation, condense.
-                if self.violation_list.is_empty() && self.paths_to_passed_checks.is_empty() {
-                    // No checks were performed, return default ratio.
-                    Default::default()
-                } else if !self.violation_list.is_empty() && self.paths_to_passed_checks.is_empty()
-                {
-                    // All checks failed.
-                    Ratio::new(0, self.violation_list.len())
-                } else if self.violation_list.is_empty() && !self.paths_to_passed_checks.is_empty()
-                {
-                    // All checks passed.
-                    Ratio::new(
-                        self.paths_to_passed_checks.len(),
-                        self.paths_to_passed_checks.len(),
-                    )
-                } else {
-                    // Some checks passed, some failed.
-                    Ratio::new(
-                        self.paths_to_passed_checks.len(),
-                        self.violation_list.len() + self.paths_to_passed_checks.len(),
-                    )
-                },
-                self.violation_list,
-            )
-        }
+        /// The combined measurement
+        combined: CombinedConstraintResult,
+        /// All the violations
+        violations: Vec<VecDeque<usize>>,
+        /// Attempts
+        passed_checks: usize,
     }
 
     impl<T> Visitor<T> for CombinedConstraintVisitor
@@ -3035,6 +3006,14 @@ mod defs {
         {
             let visited = node.opaque();
             if let Some(_tree) = visited.downcast::<nonterminal_start>() {
+                let result_combinator = |passed: usize, violations_len: usize| {
+                    if passed + violations_len == 0 {
+                        Ratio::new_raw(1, 1) // vacuous truth
+                    } else {
+                        Ratio::new(passed, passed + violations_len)
+                    }
+                };
+
                 // First, collect declarations.
                 let Ok(ControlFlow::Continue(decl_collector)) =
                     DeclarationCollector::default().visit(node, idx);
@@ -3043,59 +3022,109 @@ mod defs {
                 let func_defs = &decl_collector.func_defs;
                 let struct_defs = &decl_collector.struct_defs;
                 // DeclarationCollector now computes re-declaration violations; so, include those.
-                self.violation_list.extend(decl_collector.violations);
-                self.paths_to_passed_checks
-                    .extend(decl_collector.paths_to_passed_checks);
+                let results = (
+                    result_combinator(
+                        decl_collector.passed_checks,
+                        decl_collector.violations.len(),
+                    ),
+                    (),
+                );
+                self.violations.extend(decl_collector.violations);
+                self.passed_checks += decl_collector.passed_checks;
 
                 // No empty struct visitor.
                 let Ok(ControlFlow::Continue(empty_struct_visitor)) =
                     ConstraintVisitorNoEmptyStructs::default().visit(node, idx);
-                self.violation_list.extend(empty_struct_visitor.violations);
-                self.paths_to_passed_checks
-                    .extend(empty_struct_visitor.paths_to_passed_checks);
+                let results = (
+                    result_combinator(
+                        empty_struct_visitor.passed_checks,
+                        empty_struct_visitor.violations.len(),
+                    ),
+                    results,
+                );
+                self.violations.extend(empty_struct_visitor.violations);
+                self.passed_checks += empty_struct_visitor.passed_checks;
 
                 // No void decls or params visitor. This one has Default implemented.
                 let Ok(ControlFlow::Continue(void_decl_visitor)) =
                     ConstraintVisitorNoVoidDecls::default().visit(node, idx);
-                self.violation_list.extend(void_decl_visitor.violations);
-                self.paths_to_passed_checks
-                    .extend(void_decl_visitor.paths_to_passed_checks);
+                let results = (
+                    result_combinator(
+                        void_decl_visitor.passed_checks,
+                        void_decl_visitor.violations.len(),
+                    ),
+                    results,
+                );
+                self.violations.extend(void_decl_visitor.violations);
+                self.passed_checks += void_decl_visitor.passed_checks;
 
                 // Return-in-fn constraint visitor. This one has Default implemented.
                 let Ok(ControlFlow::Continue(ret_in_fn_visitor)) =
                     ConstraintVisitorReturnInFunc::default().visit(node, idx);
-                self.violation_list.extend(ret_in_fn_visitor.violations);
-                self.paths_to_passed_checks
-                    .extend(ret_in_fn_visitor.paths_to_passed_checks);
+                let results = (
+                    result_combinator(
+                        ret_in_fn_visitor.passed_checks,
+                        ret_in_fn_visitor.violations.len(),
+                    ),
+                    results,
+                );
+                self.violations.extend(ret_in_fn_visitor.violations);
+                self.passed_checks += ret_in_fn_visitor.passed_checks;
 
                 // Struct-access constraint visitor. This one needs struct_defs and var_defs.
                 let Ok(ControlFlow::Continue(struct_access_visitor)) =
                     ConstraintVisitorStructAccess::new(struct_defs, var_defs).visit(node, idx);
-                self.violation_list.extend(struct_access_visitor.violations);
-                self.paths_to_passed_checks
-                    .extend(struct_access_visitor.paths_to_passed_checks);
+                let results = (
+                    result_combinator(
+                        struct_access_visitor.passed_checks,
+                        struct_access_visitor.violations.len(),
+                    ),
+                    results,
+                );
+                self.violations.extend(struct_access_visitor.violations);
+                self.passed_checks += struct_access_visitor.passed_checks;
 
                 // Def-use constraint visitor. This one needs var_defs, func_defs, struct_defs.
                 let Ok(ControlFlow::Continue(def_use_visitor)) =
                     ConstraintVisitorDefUse::new(var_defs, func_defs, struct_defs).visit(node, idx);
-                self.violation_list.extend(def_use_visitor.violations);
-                self.paths_to_passed_checks
-                    .extend(def_use_visitor.paths_to_passed_checks);
+                let results = (
+                    result_combinator(
+                        def_use_visitor.passed_checks,
+                        def_use_visitor.violations.len(),
+                    ),
+                    results,
+                );
+                self.violations.extend(def_use_visitor.violations);
+                self.passed_checks += def_use_visitor.passed_checks;
 
                 // Limit usage of struct expressions.
                 let Ok(ControlFlow::Continue(struct_expr_visitor)) =
                     ConstraintVisitorStructExprRHSOfDecl::default().visit(node, idx);
-                self.violation_list.extend(struct_expr_visitor.violations);
-                self.paths_to_passed_checks
-                    .extend(struct_expr_visitor.paths_to_passed_checks);
+                let results = (
+                    result_combinator(
+                        struct_expr_visitor.passed_checks,
+                        struct_expr_visitor.violations.len(),
+                    ),
+                    results,
+                );
+                self.violations.extend(struct_expr_visitor.violations);
+                self.passed_checks += struct_expr_visitor.passed_checks;
 
                 // Type-checking constraint visitor. This one needs var_defs, func_defs, struct_defs.
                 let Ok(ControlFlow::Continue(type_check_visitor)) =
                     ConstraintVisitorTypeCheck::new(var_defs, func_defs, struct_defs)
                         .visit(node, idx);
-                self.violation_list.extend(type_check_visitor.violations);
-                self.paths_to_passed_checks
-                    .extend(type_check_visitor.paths_to_passed_checks);
+                let results = (
+                    result_combinator(
+                        type_check_visitor.passed_checks,
+                        type_check_visitor.violations.len(),
+                    ),
+                    results,
+                );
+                self.violations.extend(type_check_visitor.violations);
+                self.passed_checks += type_check_visitor.passed_checks;
+
+                self.combined = results;
 
                 // KeepReasonableStructVisitor
                 // let Ok(ControlFlow::Continue(keep_structs_reasonable_visitor)) = KeepReasonableStructVisitor::default().visit(node, idx);
@@ -3104,6 +3133,57 @@ mod defs {
             }
             // There's no reason to continue, that should be the only node we visit.
             Ok(ControlFlow::Continue(self))
+        }
+    }
+
+    impl Checker for CombinedConstraintVisitor {
+        fn violations(self) -> Violations {
+            let mediant = self.combined.mediant();
+            if *mediant.denom() == 0 {
+                Violations::default()
+            } else {
+                Violations::new(mediant, self.violations)
+            }
+        }
+    }
+
+    /// Fitness measurer which shims out the multi-objective behavior
+    ///
+    /// TODO: make this cleaner in the future, so people don't have to newtype this
+    pub struct CombinedConstraintFitnessMeasurer;
+
+    impl MeasurementsCombined for CombinedConstraintVisitor {
+        type Fitnesses = CombinedConstraintResult;
+
+        fn combine_step(self) -> (Self::Fitnesses, Ratio<usize>, Vec<VecDeque<usize>>) {
+            let pass_rate = if self.passed_checks + self.violations.len() > 0 {
+                Ratio::new(
+                    self.violations.len(),
+                    self.passed_checks + self.violations.len(),
+                )
+            } else {
+                Ratio::default()
+            };
+            (self.combined, pass_rate, self.violations)
+        }
+    }
+
+    impl<'a, N, E> FitnessMeasurerTuple<'a, N, E> for CombinedConstraintFitnessMeasurer
+    where
+        N: Node<Type<'a> = Type<'a>> + 'a,
+        // we constrained Type<'a>, which causes Rust to "forget" trait impls
+        // see: https://github.com/rust-lang/rust/issues/102939
+        Type<'a>: From<&'a N> + AsNodeRef<N>,
+    {
+        type Measurements = CombinedConstraintVisitor;
+
+        fn evaluate(&mut self, node: &'a N) -> Result<Self::Measurements, E> {
+            let visitor = CombinedConstraintVisitor::default()
+                .visit(node, 0)
+                .unwrap()
+                .continue_value()
+                .unwrap();
+            Ok(visitor)
         }
     }
 
@@ -3188,9 +3268,9 @@ mod defs {
                     scope_trace: Vec::new(),
                     function_scopes: Vec::new(),
                     var_defs: VarSymbolTable::new(),
-                    func_defs: alloc::collections::BTreeMap::new(),
-                    struct_defs: alloc::collections::BTreeMap::new(),
-                    var_uses: alloc::collections::BTreeMap::new(),
+                    func_defs: BTreeMap::new(),
+                    struct_defs: BTreeMap::new(),
+                    var_uses: BTreeMap::new(),
                 }
                 .visit_mut(_tree, idx);
 
@@ -3790,14 +3870,14 @@ mod test {
             std::println!("==============================");
             let combined_constraint_visitor = lang::CombinedConstraintVisitor::default();
             let Ok(ControlFlow::Continue(lang::CombinedConstraintVisitor {
-                violation_list,
-                paths_to_passed_checks,
+                violations,
+                passed_checks,
                 ..
             })) = combined_constraint_visitor.visit(&tree, 0);
             std::println!(
                 "Program {i} has {} violations and {} passed checks.",
-                violation_list.len(),
-                paths_to_passed_checks.len()
+                violations.len(),
+                passed_checks
             );
             // Print the program.
             std::println!(
@@ -3813,27 +3893,14 @@ mod test {
                 .unwrap()
             );
 
+            let pass_rate = if passed_checks + violations.len() > 0 {
+                Ratio::new(violations.len(), passed_checks + violations.len())
+            } else {
+                Ratio::default()
+            };
             // Also print the violations returned by the Checker impl.
             // Just copy the implementation here to check.
-            let violations = Violations::new(
-                if violation_list.is_empty() && paths_to_passed_checks.is_empty() {
-                    // No checks were performed, return default ratio.
-                    Default::default()
-                } else if !violation_list.is_empty() && paths_to_passed_checks.is_empty() {
-                    // All checks failed.
-                    Ratio::new(0, violation_list.len())
-                } else if violation_list.is_empty() && !paths_to_passed_checks.is_empty() {
-                    // All checks passed.
-                    Ratio::new(paths_to_passed_checks.len(), paths_to_passed_checks.len())
-                } else {
-                    // Some checks passed, some failed.
-                    Ratio::new(
-                        paths_to_passed_checks.len(),
-                        violation_list.len() + paths_to_passed_checks.len(),
-                    )
-                },
-                violation_list,
-            );
+            let violations = Violations::new(pass_rate, violations);
             std::println!(
                 "Checker reports violations with ratio {:?}.",
                 violations.pass_rate()

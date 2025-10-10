@@ -9,11 +9,13 @@ use fandango::visitor::write::WriteVisitor;
 use fandango_core::visitor::kpath::{KPathUpdate, KPaths};
 use fandango_runtime::evolvers::Evolver;
 use fandango_runtime::evolvers::multi::{KPathDiversityHook, Nsga2Evolver};
+use fandango_runtime::measurement::HasFitness;
 use fandango_runtime::measurement::HasMeasurement;
-use fandango_runtime::measurement::{HasFitness, ViolationFitness};
 use fandango_runtime::operators::DepthLimiter;
 use fandango_runtime::population::Individual;
-use fandango_targets::clang::{self, TypeMut, nonterminal_start};
+use fandango_targets::clang::{
+    self, CombinedConstraintFitnessMeasurer, MediantSum, TypeMut, nonterminal_start,
+};
 use num_rational::Ratio;
 use rand::SeedableRng;
 use rand::rngs::StdRng;
@@ -25,11 +27,10 @@ fn run_once(
     fine_print: bool,
     print_successful_compile: bool,
 ) -> Result<(i32, i32, i32, f32, f32), Error> {
-    let fitness = ViolationFitness::<clang::CombinedConstraintVisitor>::new();
     let fixer = ();
     let hook = KPathDiversityHook::new(fixer, NonZeroUsize::new(10).unwrap());
     let mut runtime = Nsga2Evolver::new::<nonterminal_start>(
-        tuple_list!(fitness),
+        CombinedConstraintFitnessMeasurer,
         hook,
         100,
         1000,
@@ -53,8 +54,8 @@ fn run_once(
     for i in 0..100 {
         let fitness = population
             .iter()
-            .map(|i| i.measurement().fitness())
-            .fold(0.0f64, |v, r| v + *r.0.numer() as f64 / *r.0.denom() as f64)
+            .map(|i| i.measurement().fitness().mediant())
+            .fold(0.0f64, |v, r| v + *r.numer() as f64 / *r.denom() as f64)
             / population.len() as f64;
         if fitness == 1.0 {
             println!("saturated fitness at generation {i}");
@@ -86,9 +87,8 @@ fn run_once(
         // If gcc returns 0, it means the program is valid.
         // If gcc returns non-zero, it means the program is invalid.
         // First, check fitness ratio to see if it's 1.0
-        if *candidate.measurement().fitness().0.numer()
-            == *candidate.measurement().fitness().0.denom()
-        {
+        let fitness = candidate.measurement().fitness().mediant();
+        if *fitness.numer() == *fitness.denom() {
             number_of_programs_with_fitness_1 += 1;
         } else {
             if fine_print {
@@ -233,7 +233,7 @@ fn main() -> Result<(), Error> {
     let mut total_elapsed_gen_and_compile = 0.0;
     loop {
         let (generated, fitness_1, accepted, elapsed_gen, elapsed_compile) =
-            run_once(&mut all_programs, true, true)?;
+            run_once(&mut all_programs, false, false)?;
         total_programs_generated += generated;
         total_programs_with_fitness_1 += fitness_1;
         total_programs_accepted_by_gcc += accepted;
