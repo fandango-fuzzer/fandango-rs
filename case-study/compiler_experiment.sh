@@ -1,5 +1,7 @@
 #!/bin/bash
 
+export RUSTFLAGS="-Znext-solver"
+
 # Remove compiler-testing-results if it exists
 rm -rf compiler-testing-results
 

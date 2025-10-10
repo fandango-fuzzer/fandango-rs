@@ -1,5 +1,7 @@
 #!/bin/bash
 
+export RUSTFLAGS="-Znext-solver"
+
 set -e
 set -m
 
