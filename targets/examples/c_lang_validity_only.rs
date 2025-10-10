@@ -265,17 +265,18 @@ fn main_repl() -> Result<(f32, i32, i32, i32, f32, f32), Error> {
 
     println!("Completed a run.");
 
-    Ok((covered_percentage,
+    Ok((
+        covered_percentage,
         total_programs_generated,
         total_programs_with_fitness_1,
         total_programs_accepted_by_gcc,
         total_elapsed_gen,
-        total_elapsed_compile))
+        total_elapsed_compile,
+    ))
 }
 
 #[allow(deprecated)]
 fn main() -> Result<(), Error> {
-
     let mut total_covered_percentage = 0.0;
     let mut total_programs_generated = 0;
     let mut total_programs_with_fitness_1 = 0;
@@ -287,12 +288,14 @@ fn main() -> Result<(), Error> {
 
     for run in 1..=num_runs {
         println!("Starting run {}/{}...", run, num_runs);
-        let (run_covered_percentage,
+        let (
+            run_covered_percentage,
             run_programs_generated,
             run_programs_with_fitness_1,
             run_programs_accepted_by_gcc,
             run_elapsed_gen,
-            run_elapsed_compile) = main_repl()?;
+            run_elapsed_compile,
+        ) = main_repl()?;
         total_covered_percentage += run_covered_percentage;
         total_programs_generated += run_programs_generated;
         total_programs_with_fitness_1 += run_programs_with_fitness_1;

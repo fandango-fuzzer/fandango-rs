@@ -339,8 +339,7 @@ mod defs {
                 let mut param_type_list = param_type_list;
                 param_type_list.push(return_type);
                 // [Violations] Check if function already defined.
-                if get_func_definition(&self.func_defs, &fn_name, &self.scope_trace).is_some()
-                {
+                if get_func_definition(&self.func_defs, &fn_name, &self.scope_trace).is_some() {
                     self.violations.push(self.path.clone());
                 } else {
                     self.passed_checks += 1;
