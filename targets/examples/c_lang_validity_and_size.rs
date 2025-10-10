@@ -321,7 +321,7 @@ fn run_once(
 }
 
 #[allow(deprecated)]
-fn main() -> Result<(), Error> {
+fn main_repl() -> Result<(f32, i32, i32, i32, f32, f32), Error> {
     // Run for 10 minutes
 
     // Get ready for statistics for whole run
@@ -343,7 +343,7 @@ fn main() -> Result<(), Error> {
     let (mut _zero, _total) = updater.kpaths().k_paths();
 
     // Collect all generated programs by passing this into the run_once calls
-    let mut all_programs: Vec<nonterminal_start> = Vec::new();
+    let mut all_compiling_programs: Vec<nonterminal_start> = Vec::new();
 
     // Target time to run experiment
     let target_time_seconds = 60;
@@ -351,7 +351,7 @@ fn main() -> Result<(), Error> {
 
     loop {
         let (generated, fitness_1, accepted, elapsed_gen, elapsed_compile) =
-            run_once(&mut all_programs, false, false, true)?;
+            run_once(&mut all_compiling_programs, false, false, true)?;
         total_programs_generated += generated;
         total_programs_with_fitness_1 += fitness_1;
         total_programs_accepted_by_gcc += accepted;
@@ -365,7 +365,7 @@ fn main() -> Result<(), Error> {
     }
 
     // Once all is said and done, compute KPaths
-    for gprog in all_programs {
+    for gprog in all_compiling_programs {
         updater = updater.visit(&gprog, 0).unwrap().continue_value().unwrap();
     }
 
@@ -381,30 +381,111 @@ fn main() -> Result<(), Error> {
         (total - uncovered) as f32 / total as f32 * 100.0
     };
 
+    Ok((covered_percentage,
+        total_programs_generated,
+        total_programs_with_fitness_1,
+        total_programs_accepted_by_gcc,
+        total_elapsed_gen,
+        total_elapsed_compile))
+}
+
+#[allow(deprecated)]
+fn main() -> Result<(), Error> {
+
+    let mut total_covered_percentage = 0.0;
+    let mut total_programs_generated = 0;
+    let mut total_programs_with_fitness_1 = 0;
+    let mut total_programs_accepted_by_gcc = 0;
+    let mut total_elapsed_gen = 0.0;
+    let mut total_elapsed_compile = 0.0;
+
+    let num_runs = 5;
+
+    for run in 1..=num_runs {
+        println!("Starting run {}/{}...", run, num_runs);
+        let (run_covered_percentage,
+            run_programs_generated,
+            run_programs_with_fitness_1,
+            run_programs_accepted_by_gcc,
+            run_elapsed_gen,
+            run_elapsed_compile) = main_repl()?;
+        total_covered_percentage += run_covered_percentage;
+        total_programs_generated += run_programs_generated;
+        total_programs_with_fitness_1 += run_programs_with_fitness_1;
+        total_programs_accepted_by_gcc += run_programs_accepted_by_gcc;
+        total_elapsed_gen += run_elapsed_gen;
+        total_elapsed_compile += run_elapsed_compile;
+        println!("Finished run {}/{}.", run, num_runs);
+    }
+
+    // Summarize runs
+    let average_covered_percentage = if num_runs == 0 {
+        0.0
+    } else {
+        total_covered_percentage / num_runs as f32
+    };
+
+    let average_programs_generated = if num_runs == 0 {
+        0
+    } else {
+        total_programs_generated / num_runs
+    };
+
+    let average_programs_with_fitness_1 = if num_runs == 0 {
+        0
+    } else {
+        total_programs_with_fitness_1 / num_runs
+    };
+
+    let average_programs_accepted_by_gcc = if num_runs == 0 {
+        0
+    } else {
+        total_programs_accepted_by_gcc / num_runs
+    };
+
+    let average_elapsed_gen = if num_runs == 0 {
+        0.0
+    } else {
+        total_elapsed_gen / num_runs as f32
+    };
+
+    let average_elapsed_compile = if num_runs == 0 {
+        0.0
+    } else {
+        total_elapsed_compile / num_runs as f32
+    };
+
+    println!("Averages over {} runs:", num_runs);
+
     println!(
-        "\\newcommand{{\\validAndSizedConstrainedKPathCoverageRs}}{{{:.2}\\%\\xspace}}",
-        covered_percentage
+        "\\newcommand{{\\validAndSizedConstrainedKPathCoverageAvgRs}}{{{:.2}\\%\\xspace}}",
+        average_covered_percentage
     );
 
     println!(
-        "\\newcommand{{\\validAndSizedConstrainedTotalRs}}{{{}\\xspace}}",
-        total_programs_generated
+        "\\newcommand{{\\validAndSizedConstrainedTotalAvgRs}}{{{:.2}\\xspace}}",
+        average_programs_generated
     );
+
     println!(
-        "\\newcommand{{\\validAndSizedConstrainedFitOneRs}}{{{}\\xspace}}",
-        total_programs_with_fitness_1
+        "\\newcommand{{\\validAndSizedConstrainedFitOneAvgRs}}{{{:.2}\\xspace}}",
+        average_programs_with_fitness_1
     );
+
     println!(
-        "\\newcommand{{\\validAndSizedConstrainedCompileRs}}{{{}\\xspace}}",
-        total_programs_accepted_by_gcc
+        "\\newcommand{{\\validAndSizedConstrainedCompileAvgRs}}{{{:.2}\\xspace}}",
+        average_programs_accepted_by_gcc
     );
+
     println!(
-        "\\newcommand{{\\validAndSizedConstrainedGenTimeRs}}{{{}s\\xspace}}",
-        total_elapsed_gen
+        "\\newcommand{{\\validAndSizedConstrainedGenTimeAvgRs}}{{{:.2}s\\xspace}}",
+        average_elapsed_gen
     );
+
     println!(
-        "\\newcommand{{\\validAndSizedConstrainedCompileTimeRs}}{{{}s\\xspace}}",
-        total_elapsed_compile
+        "\\newcommand{{\\validAndSizedConstrainedCompileTimeAvgRs}}{{{:.2}s\\xspace}}",
+        average_elapsed_compile
     );
+
     Ok(())
 }

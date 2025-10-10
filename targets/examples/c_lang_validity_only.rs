@@ -202,7 +202,7 @@ fn run_once(
 }
 
 #[allow(deprecated)]
-fn main() -> Result<(), Error> {
+fn main_repl() -> Result<(f32, i32, i32, i32, f32, f32), Error> {
     // Run for 10 minutes
 
     // Get ready for statistics for whole run
@@ -263,30 +263,113 @@ fn main() -> Result<(), Error> {
         (total - uncovered) as f32 / total as f32 * 100.0
     };
 
+    println!("Completed a run.");
+
+    Ok((covered_percentage,
+        total_programs_generated,
+        total_programs_with_fitness_1,
+        total_programs_accepted_by_gcc,
+        total_elapsed_gen,
+        total_elapsed_compile))
+}
+
+#[allow(deprecated)]
+fn main() -> Result<(), Error> {
+
+    let mut total_covered_percentage = 0.0;
+    let mut total_programs_generated = 0;
+    let mut total_programs_with_fitness_1 = 0;
+    let mut total_programs_accepted_by_gcc = 0;
+    let mut total_elapsed_gen = 0.0;
+    let mut total_elapsed_compile = 0.0;
+
+    let num_runs = 5;
+
+    for run in 1..=num_runs {
+        println!("Starting run {}/{}...", run, num_runs);
+        let (run_covered_percentage,
+            run_programs_generated,
+            run_programs_with_fitness_1,
+            run_programs_accepted_by_gcc,
+            run_elapsed_gen,
+            run_elapsed_compile) = main_repl()?;
+        total_covered_percentage += run_covered_percentage;
+        total_programs_generated += run_programs_generated;
+        total_programs_with_fitness_1 += run_programs_with_fitness_1;
+        total_programs_accepted_by_gcc += run_programs_accepted_by_gcc;
+        total_elapsed_gen += run_elapsed_gen;
+        total_elapsed_compile += run_elapsed_compile;
+        println!("Finished run {}/{}.", run, num_runs);
+    }
+
+    // Summarize runs
+    let average_covered_percentage = if num_runs == 0 {
+        0.0
+    } else {
+        total_covered_percentage / num_runs as f32
+    };
+
+    let average_programs_generated = if num_runs == 0 {
+        0
+    } else {
+        total_programs_generated / num_runs
+    };
+
+    let average_programs_with_fitness_1 = if num_runs == 0 {
+        0
+    } else {
+        total_programs_with_fitness_1 / num_runs
+    };
+
+    let average_programs_accepted_by_gcc = if num_runs == 0 {
+        0
+    } else {
+        total_programs_accepted_by_gcc / num_runs
+    };
+
+    let average_elapsed_gen = if num_runs == 0 {
+        0.0
+    } else {
+        total_elapsed_gen / num_runs as f32
+    };
+
+    let average_elapsed_compile = if num_runs == 0 {
+        0.0
+    } else {
+        total_elapsed_compile / num_runs as f32
+    };
+
+    println!("Averages over {} runs:", num_runs);
+
     println!(
-        "\\newcommand{{\\validConstrainedKPathCoverageRs}}{{{:.2}\\%\\xspace}}",
-        covered_percentage
+        "\\newcommand{{\\validConstrainedKPathCoverageAvgRs}}{{{:.2}\\%\\xspace}}",
+        average_covered_percentage
     );
 
     println!(
-        "\\newcommand{{\\validConstrainedTotalRs}}{{{}\\xspace}}",
-        total_programs_generated
+        "\\newcommand{{\\validConstrainedTotalAvgRs}}{{{:.2}\\xspace}}",
+        average_programs_generated
     );
+
     println!(
-        "\\newcommand{{\\validConstrainedFitOneRs}}{{{}\\xspace}}",
-        total_programs_with_fitness_1
+        "\\newcommand{{\\validConstrainedFitOneAvgRs}}{{{:.2}\\xspace}}",
+        average_programs_with_fitness_1
     );
+
     println!(
-        "\\newcommand{{\\validConstrainedCompileRs}}{{{}\\xspace}}",
-        total_programs_accepted_by_gcc
+        "\\newcommand{{\\validConstrainedCompileAvgRs}}{{{:.2}\\xspace}}",
+        average_programs_accepted_by_gcc
     );
+
     println!(
-        "\\newcommand{{\\validConstrainedGenTimeRs}}{{{}s\\xspace}}",
-        total_elapsed_gen
+        "\\newcommand{{\\validConstrainedGenTimeAvgRs}}{{{:.2}s\\xspace}}",
+        average_elapsed_gen
     );
+
     println!(
-        "\\newcommand{{\\validConstrainedCompileTimeRs}}{{{}s\\xspace}}",
-        total_elapsed_compile
+        "\\newcommand{{\\validConstrainedCompileTimeAvgRs}}{{{:.2}s\\xspace}}",
+        average_elapsed_compile
     );
+
     Ok(())
 }

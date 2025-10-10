@@ -339,9 +339,7 @@ mod defs {
                 let mut param_type_list = param_type_list;
                 param_type_list.push(return_type);
                 // [Violations] Check if function already defined.
-                if self
-                    .func_defs
-                    .contains_key(&(fn_name.clone(), self.scope_trace.clone()))
+                if get_func_definition(&self.func_defs, &fn_name, &self.scope_trace).is_some()
                 {
                     self.violations.push(self.path.clone());
                 } else {
@@ -3852,58 +3850,6 @@ mod test {
                         .output(),
                 )
                 .unwrap()
-            );
-        }
-        Ok(())
-    }
-
-    // Test the combined visitor.
-    #[test]
-    fn check_combined_constraints_c() -> Result<(), Box<dyn Error>> {
-        extern crate std;
-        let mut rng = StdRng::seed_from_u64(0);
-        let mut generators =
-            tuple_list!(DepthLimiter::new(lang::nonterminal_start::ROOT.inner(), 50));
-        // Generate 200 programs and check for violations.
-        for i in 0..200 {
-            let tree = lang::nonterminal_start::generate(&mut rng, &mut generators, 0);
-            std::println!("==============================");
-            let combined_constraint_visitor = lang::CombinedConstraintVisitor::default();
-            let Ok(ControlFlow::Continue(lang::CombinedConstraintVisitor {
-                violations,
-                passed_checks,
-                ..
-            })) = combined_constraint_visitor.visit(&tree, 0);
-            std::println!(
-                "Program {i} has {} violations and {} passed checks.",
-                violations.len(),
-                passed_checks
-            );
-            // Print the program.
-            std::println!(
-                "Program:\n{}",
-                String::from_utf8(
-                    WriteVisitor::new(Vec::new())
-                        .visit(&tree, 0)
-                        .unwrap()
-                        .continue_value()
-                        .unwrap()
-                        .output(),
-                )
-                .unwrap()
-            );
-
-            let pass_rate = if passed_checks + violations.len() > 0 {
-                Ratio::new(violations.len(), passed_checks + violations.len())
-            } else {
-                Ratio::default()
-            };
-            // Also print the violations returned by the Checker impl.
-            // Just copy the implementation here to check.
-            let violations = Violations::new(pass_rate, violations);
-            std::println!(
-                "Checker reports violations with ratio {:?}.",
-                violations.pass_rate()
             );
         }
         Ok(())

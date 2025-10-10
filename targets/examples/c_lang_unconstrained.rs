@@ -16,7 +16,7 @@ use std::num::NonZeroUsize;
 use std::process::{Command, Stdio};
 
 fn run_once(
-    all_population: &mut Vec<nonterminal_start>,
+    all_that_compile: &mut Vec<nonterminal_start>,
     fine_print: bool,
     print_successful_compile: bool,
 ) -> Result<(i32, i32, i32, f32, f32), Error> {
@@ -36,7 +36,6 @@ fn run_once(
     for _i in 0..100 {
         let the_input = clang::nonterminal_start::generate(&mut sampler, &mut generators, 0);
         population.push_back(the_input.clone());
-        all_population.push(the_input);
     }
 
     let elapsed_gen = start_time.elapsed();
@@ -105,6 +104,7 @@ fn run_once(
             .expect("Failed to read gcc output");
 
         if output.status.success() {
+            all_that_compile.push(candidate.clone());
             if fine_print {
                 println!("GCC accepted the program.");
             }
@@ -178,7 +178,7 @@ fn main() -> Result<(), Error> {
     let (mut _zero, _total) = updater.kpaths().k_paths();
 
     // Collect all generated programs by passing this into the run_once calls
-    let mut all_programs: Vec<nonterminal_start> = Vec::new();
+    let mut all_that_compile: Vec<nonterminal_start> = Vec::new();
 
     // let start = std::time::Instant::now();
     // Actually, just run for 1 minute for testing
@@ -187,7 +187,7 @@ fn main() -> Result<(), Error> {
     let mut total_elapsed_gen_and_compile = 0.0;
     loop {
         let (generated, fitness_1, accepted, elapsed_gen, elapsed_compile) =
-            run_once(&mut all_programs, false, false)?;
+            run_once(&mut all_that_compile, false, false)?;
         total_programs_generated += generated;
         total_programs_with_fitness_1 += fitness_1;
         total_programs_accepted_by_gcc += accepted;
@@ -201,7 +201,7 @@ fn main() -> Result<(), Error> {
     }
 
     // Once all is said and done, compute KPaths
-    for gprog in all_programs {
+    for gprog in all_that_compile {
         updater = updater.visit(&gprog, 0).unwrap().continue_value().unwrap();
     }
 
