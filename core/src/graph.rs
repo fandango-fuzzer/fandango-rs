@@ -35,8 +35,8 @@ pub trait GraphTraverse<'program>: Sized {
     {
         self.traverse(|n1, n2, w| {
             consumer(n1, n2, w);
-            n2.traverse(&mut consumer)
-        })
+            n2.traverse(&mut consumer);
+        });
     }
 
     /// Traverse a single level from this node. The `consumer` function should accept two nodes, the
@@ -394,20 +394,20 @@ impl<'program, 'source: 'program> GraphTraverse<'program> for &'program Selector
         F: FnMut(Self::Node, Self::Node, Span<'program>),
     {
         #![allow(unused_imports)]
-        use Selector::*;
+        use Selector::{ChildSelector, PathSelector, Basic};
         match self {
             ChildSelector(basic, child) => traverse_children(
                 self,
                 iter::once(basic)
                     .map(From::from)
-                    .chain(iter::once(child.deref()).map(From::from)),
+                    .chain(iter::once(&**child).map(From::from)),
                 consumer,
             ),
             PathSelector(basic, descendent) => traverse_children(
                 self,
                 iter::once(basic)
                     .map(From::from)
-                    .chain(iter::once(descendent.deref()).map(From::from)),
+                    .chain(iter::once(&**descendent).map(From::from)),
                 consumer,
             ),
             Basic(basic) => traverse_children(self, iter::once(basic).map(From::from), consumer),
@@ -422,13 +422,13 @@ impl<'program, 'source: 'program> GraphTraverse<'program> for &'program BaseSele
         F: FnMut(Self::Node, Self::Node, Span<'program>),
     {
         #![allow(unused_imports)]
-        use BaseSelection::*;
+        use BaseSelection::{Nonterminal, Selector};
         match self {
             Nonterminal(nonterminal) => {
-                traverse_children(self, iter::once(nonterminal).map(From::from), consumer)
+                traverse_children(self, iter::once(nonterminal).map(From::from), consumer);
             }
             Selector(selector) => {
-                traverse_children(self, iter::once(selector.deref()).map(From::from), consumer)
+                traverse_children(self, iter::once(&**selector).map(From::from), consumer);
             }
         }
     }
@@ -566,20 +566,20 @@ where
                     work.push_back((prod.nonterminal().into(), n2, w));
                 }
                 FandangoNode::Alternative(alt) if alt.concatenations().len() == 1 => {
-                    n2.traverse(|n1, n2, w| work.push_back((n1, n2, w)))
+                    n2.traverse(|n1, n2, w| work.push_back((n1, n2, w)));
                 }
                 FandangoNode::Concatenation(concats) if concats.operators().len() == 1 => {
-                    n2.traverse(|n1, n2, w| work.push_back((n1, n2, w)))
+                    n2.traverse(|n1, n2, w| work.push_back((n1, n2, w)));
                 }
                 FandangoNode::Nonterminal(_)
                 | FandangoNode::Alternative(_)
                 | FandangoNode::Concatenation(_)
                 | FandangoNode::Operator(_) => match n2 {
                     FandangoNode::Alternative(alt) if alt.concatenations().len() == 1 => {
-                        n2.traverse(|_, n2, w| work.push_back((n1, n2, w)))
+                        n2.traverse(|_, n2, w| work.push_back((n1, n2, w)));
                     }
                     FandangoNode::Concatenation(concats) if concats.operators().len() == 1 => {
-                        n2.traverse(|_, n2, w| work.push_back((n1, n2, w)))
+                        n2.traverse(|_, n2, w| work.push_back((n1, n2, w)));
                     }
                     FandangoNode::Alternative(_)
                     | FandangoNode::Concatenation(_)
@@ -591,7 +591,7 @@ where
                             let n2 = idx(&mut graph, n2);
                             graph.add_edge(n1, n2, w);
                         }
-                        n2.traverse(|n1, n2, w| work.push_back((n1, n2, w)))
+                        n2.traverse(|n1, n2, w| work.push_back((n1, n2, w)));
                     }
                     FandangoNode::Nonterminal(_) | FandangoNode::String(_) => {
                         let n1 = idx(&mut graph, n1);
@@ -619,6 +619,7 @@ pub trait IntoNode {
 
 /// Computes the shortest derivation trees available from each alternation, returning the variants
 /// with the minimum possible path.
+#[must_use] 
 pub fn shortest_path<'program, 'source>(
     graph: &DiGraph<FandangoNode<'program, 'source>, Span<'source>>,
 ) -> HashMap<FandangoNode<'program, 'source>, Vec<usize>> {

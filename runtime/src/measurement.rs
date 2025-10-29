@@ -31,6 +31,7 @@ where
     type Error;
 
     /// Performs the measurement
+
     fn evaluate(&mut self, node: &'a N) -> Result<Self::Measurement, Self::Error>;
 }
 
@@ -92,6 +93,7 @@ impl Default for Violations {
 
 impl Violations {
     /// Create a list of violations, deduplicating the violations by path prefix
+    #[must_use]
     pub fn new(pass_rate: Ratio<usize>, mut violations: Vec<VecDeque<usize>>) -> Self {
         let _removed = Self::simplify(&mut violations);
         Self {
@@ -101,11 +103,13 @@ impl Violations {
     }
 
     /// The list of violations
+    #[must_use]
     pub fn violations(&self) -> &[VecDeque<usize>] {
         &self.violations
     }
 
     /// Consume this list of violations and turn it into its components
+    #[must_use]
     pub fn into_raw(self) -> (Ratio<usize>, Vec<VecDeque<usize>>) {
         (self.pass_rate, self.violations)
     }
@@ -119,6 +123,7 @@ impl Violations {
     }
 
     /// The pass rate associated with this list of violations
+    #[must_use]
     pub fn pass_rate(&self) -> Ratio<usize> {
         self.pass_rate
     }
@@ -219,9 +224,8 @@ where
                 if let Some(next) = self.rest.next() {
                     self.curr = next;
                     break; // by violation properties, this is guaranteed to succeed
-                } else {
-                    return Ok(ControlFlow::Break(self.inner));
                 }
+                return Ok(ControlFlow::Break(self.inner));
             }
         }
         self.stack.pop();
@@ -242,6 +246,7 @@ impl<V> Default for ViolationFitness<V> {
 
 impl<V> ViolationFitness<V> {
     /// Create the fitness measurer
+    #[must_use]
     pub fn new() -> Self {
         Self {
             phantom: PhantomData,

@@ -45,7 +45,7 @@ where
     }
 
     fn reseed(&mut self, seed: u64) {
-        *self = R::seed_from_u64(seed)
+        *self = R::seed_from_u64(seed);
     }
 }
 

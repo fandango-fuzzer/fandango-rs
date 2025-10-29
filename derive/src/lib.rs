@@ -9,7 +9,7 @@ use syn::parse_macro_input;
 #[proc_macro_derive(Fandango, attributes(fandango))]
 pub fn derive_fandango(item: TokenStream) -> TokenStream {
     let source = parse_macro_input!(item as FandangoDerivation);
-    match derive_fandango_or_emit_error(source) {
+    match derive_fandango_or_emit_error(&source) {
         Ok(s) | Err(s) => s.into(),
     }
 }

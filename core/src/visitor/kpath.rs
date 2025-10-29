@@ -1,6 +1,6 @@
 //! Utilities associated with computing the k-path coverage of a grammar.
 //!
-//! See: https://publications.cispa.saarland/3572/1/tosem-codeine-arxiv.pdf
+//! See: <https://publications.cispa.saarland/3572/1/tosem-codeine-arxiv.pdf>
 
 use crate::lang::{FandangoNode, Operator, Program, Symbol};
 use crate::typing::{AsNodeRef, DiscriminantLookup, Node, Opaque};
@@ -135,13 +135,12 @@ impl KPaths {
                         FandangoNode::Concatenation(alt.concatenations()[0].inner()),
                         collected,
                     );
-                } else {
-                    children = alt
-                        .concatenations()
-                        .iter()
-                        .map(|c| FandangoNode::Concatenation(c.inner()))
-                        .collect();
                 }
+                children = alt
+                    .concatenations()
+                    .iter()
+                    .map(|c| FandangoNode::Concatenation(c.inner()))
+                    .collect();
             }
             FandangoNode::Concatenation(concat) => {
                 if concat.operators().len() == 1 {
@@ -149,13 +148,12 @@ impl KPaths {
                         FandangoNode::Operator(concat.operators()[0].inner()),
                         collected,
                     );
-                } else {
-                    children = concat
-                        .operators()
-                        .iter()
-                        .map(|c| FandangoNode::Operator(c.inner()))
-                        .collect();
                 }
+                children = concat
+                    .operators()
+                    .iter()
+                    .map(|c| FandangoNode::Operator(c.inner()))
+                    .collect();
             }
             FandangoNode::Operator(op) => {
                 // TODO: is there another way we should be computing k-path here?
@@ -202,6 +200,7 @@ impl KPaths {
     ///
     /// You need to specify `T` here. If you're using a dynamic implementation, use
     /// `::<DynamicNode>`, otherwise specify the `Type` or `TypeMut` of your static grammar.
+    #[must_use] 
     pub fn new<T>(k: NonZeroUsize, program: &'static Program) -> KPaths
     where
         T: DiscriminantLookup,
@@ -219,6 +218,7 @@ impl KPaths {
     }
 
     /// Get the current k-paths totals expressed as `(#uncovered, #total)`.
+    #[must_use] 
     pub fn k_paths(&self) -> (usize, usize) {
         (
             self.lookup.values().filter(|v| **v == 0).count(),
@@ -227,11 +227,13 @@ impl KPaths {
     }
 
     /// The `k` of k-path.
+    #[must_use] 
     pub fn k(&self) -> NonZeroUsize {
         self.k
     }
 
     /// Get the lookup table, which maps a particular path to a number of observations of that path.
+    #[must_use] 
     pub fn lookup(&self) -> &HashMap<Mrc<[usize]>, usize> {
         &self.lookup
     }
@@ -259,6 +261,7 @@ impl<'a, const INSERT: bool> KPathUpdate<'a, INSERT> {
     }
 
     /// The [`KPaths`] contained by this visitor. Useful for multiple usages.
+    #[must_use] 
     pub fn kpaths(&self) -> &KPaths {
         &*self.kpaths
     }
@@ -299,7 +302,7 @@ where
                 *count += 1;
             } else {
                 *count = count.checked_sub(1).unwrap(); // sanity
-            };
+            }
         }
         let mut visitor = node
             .opaque()

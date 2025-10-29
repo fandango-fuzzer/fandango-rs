@@ -44,6 +44,7 @@ pub enum DynamicNodeVariant {
 
 impl DynamicNodeVariant {
     /// An immutable iterator over the nodes contained by the [`DynamicNode`].
+    #[must_use] 
     pub fn iter(&self) -> impl DoubleEndedIterator<Item = (&DynamicNode, usize)> {
         match self {
             DynamicNodeVariant::Terminal => [].iter().zip(0..usize::MAX),
@@ -249,7 +250,7 @@ where
     }
 
     fn reseed(&mut self, seed: u64) {
-        self.inner.reseed(seed)
+        self.inner.reseed(seed);
     }
 }
 
@@ -353,7 +354,7 @@ where
                 let (count, sym) = match op {
                     Operator::Kleene(kl) => (sampler.sample_kleene(), kl),
                     Operator::Plus(pl) => (sampler.sample_plus(), pl),
-                    Operator::Option(opt) => (if sampler.sample_optional() { 1 } else { 0 }, opt),
+                    Operator::Option(opt) => (usize::from(sampler.sample_optional()), opt),
                     Operator::Repeat(rpt, lower, upper) => {
                         (sampler.sample_repetition(*lower, *upper), rpt)
                     }

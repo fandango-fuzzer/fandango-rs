@@ -162,7 +162,7 @@ where
     }
 
     fn reseed(&mut self, seed: u64) {
-        self.sampler.reseed(seed)
+        self.sampler.reseed(seed);
     }
 }
 

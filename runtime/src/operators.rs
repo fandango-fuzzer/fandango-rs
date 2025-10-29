@@ -24,7 +24,6 @@ use fandango::lang::{FandangoNode, Program};
 use fandango::typing::{
     AsNodeMut, AsNodeRef, AssignFrom, Discriminable, Node, Opaque, StaticDiscriminable,
 };
-use fandango::visitor::error::InvalidPath;
 use fandango::visitor::navigation::{Advance, CountNodes};
 use fandango::visitor::{
     VisitMutResult, VisitResult, VisitableChildren, VisitableChildrenMut, Visitor, VisitorMut,
@@ -47,6 +46,7 @@ where
     'program: 'source,
 {
     /// Produce a new depth limiter for the given opaque type.
+    #[must_use]
     pub fn new(program: &'program Program<'source>, max_depth: usize) -> Self {
         let (_nonterminals, graph) = program.into_graph();
 
@@ -92,7 +92,7 @@ where
     }
 
     fn reseed(&mut self, seed: u64) {
-        self.inner.reseed(seed)
+        self.inner.reseed(seed);
     }
 }
 
@@ -156,7 +156,6 @@ where
     for<'a> T: Node<Type<'a> = N::Type<'a>> + StaticDiscriminable + 'a,
     Tail: ShortestPath<N, S>,
 {
-    #[inline(always)]
     fn shortest_path(&self, sampler: &mut S) -> Option<usize> {
         if N::DISCRIMINANT == T::DISCRIMINANT {
             let options = &self.0.1;
@@ -175,7 +174,6 @@ impl<N, S> ShortestPath<N, S> for HashMap<FandangoNode<'static, 'static>, Vec<us
 where
     S: Sampler<N> + DefinitionOf<N>,
 {
-    #[inline(always)]
     fn shortest_path(&self, sampler: &mut S) -> Option<usize> {
         if let Some(options) = self.get(&sampler.definition_of()) {
             return options.get(sampler.sample() % options.len()).copied();
@@ -192,6 +190,7 @@ pub struct NodeScan<T, const PATHS: bool> {
 
 impl<T> NodeScan<T, false> {
     /// Create a new scanner for the given node.
+    #[must_use]
     pub fn new(discriminant: usize) -> Self {
         Self {
             discriminant,
@@ -200,6 +199,7 @@ impl<T> NodeScan<T, false> {
     }
 
     /// Acquire the paths resulting from the search.
+    #[must_use]
     pub fn matches(self) -> Vec<T> {
         self.matches
     }
@@ -207,6 +207,7 @@ impl<T> NodeScan<T, false> {
 
 impl NodeScan<Vec<usize>, true> {
     /// Create a new scanner for the given node.
+    #[must_use]
     pub fn new_paths(discriminant: usize) -> Self {
         Self {
             discriminant,
@@ -215,6 +216,7 @@ impl NodeScan<Vec<usize>, true> {
     }
 
     /// Acquire the paths resulting from the search.
+    #[must_use]
     pub fn matches(mut self) -> Vec<Vec<usize>> {
         self.matches.truncate(self.matches.len().saturating_sub(1));
         self.matches
@@ -317,17 +319,14 @@ where
 }
 
 /// Crossover operator, which selects a random (matching) subtree from `base` into `node`
-pub fn crossover<'a, N, S>(
-    node: &mut N::TypeMut<'a>,
-    base: &'a N,
-    sampler: &mut S,
-) -> Result<bool, InvalidPath>
+pub fn crossover<'a, N, S>(node: &mut N::TypeMut<'a>, base: &'a N, sampler: &mut S) -> bool
 where
     N: Node,
     S: RawSampler,
 {
     let discriminant = node.discriminant();
 
+    #[allow(clippy::missing_panics_doc)]
     let base_choices = NodeScan::new(discriminant)
         .visit(base, 0)
         .unwrap()
@@ -335,13 +334,13 @@ where
         .unwrap()
         .matches();
     if base_choices.is_empty() {
-        return Ok(false);
+        return false;
     }
 
     let success = node.assign_from(base_choices[sampler.sample() % base_choices.len()]);
     debug_assert!(success);
 
-    Ok(true)
+    true
 }
 
 /// A simple visitor which counts nonterminals, for use in benchmarking against FANDANGO.
@@ -352,6 +351,7 @@ pub struct NonterminalVisitor {
 
 impl NonterminalVisitor {
     /// Collect the count associated with this visitor.
+    #[must_use]
     pub fn count(self) -> usize {
         self.count
     }

@@ -15,6 +15,7 @@ pub trait Evolver<G, S> {
     ///
     /// Note that you do not need to use the same generators or sampler as on the [`Evolver::step`]
     /// function.
+
     fn initial(
         &mut self,
         generators: &mut G,
@@ -25,6 +26,7 @@ pub trait Evolver<G, S> {
     ///
     /// Note that it is also not necessary to use the same generator and sampler every time, but
     /// changing them may have unexpected impacts on the evolution strategy.
+
     fn step(
         &mut self,
         generators: &mut G,

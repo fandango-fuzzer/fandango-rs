@@ -72,12 +72,11 @@ where
         .iter()
         .map(|f| Vec::with_capacity(f.len()))
         .collect::<Vec<_>>();
-    let mut extracted = BinaryHeap::from_iter(
-        fronts
-            .into_iter()
-            .enumerate()
-            .flat_map(|(idx, front)| front.into_iter().map(move |i| (i, idx))),
-    );
+    let mut extracted = fronts
+        .into_iter()
+        .enumerate()
+        .flat_map(|(idx, front)| front.into_iter().map(move |i| (i, idx)))
+        .collect::<BinaryHeap<_>>();
     while let Some((extracted, front)) = extracted.pop() {
         returned[front].push(population.swap_remove(extracted));
     }
@@ -210,7 +209,7 @@ where
             };
             if sampler.sample() % *self.crossover_rate.denom() < *self.crossover_rate.numer() {
                 let mate = &population[sampler.sample() % population.len()];
-                crossover(&mut mutated, mate.node(), sampler)?;
+                crossover(&mut mutated, mate.node(), sampler);
                 drop(mutated);
             } else {
                 let mutator = MutatorVisitor::new(sampler, generators);
@@ -286,19 +285,6 @@ where
     for<'a> <I::Node as Node>::Type<'a>: NodeLookup,
 {
     fn diversity_sort(&mut self, individuals: &mut [I]) {
-        let FandangoNode::Program(program) = individuals[0].node().root() else {
-            panic!("The root node wasn't a program node!")
-        };
-        let mut kpaths = KPaths::new::<<I::Node as Node>::Type<'_>>(self.k, program);
-        let mut update = KPathUpdate::inserting(&mut kpaths);
-        for individual in individuals.iter() {
-            update = update
-                .visit(individual.node(), 0)
-                .unwrap()
-                .continue_value()
-                .unwrap();
-        }
-
         struct MinObserved<T> {
             fewest: usize,
             phantom: PhantomData<T>,
@@ -338,6 +324,19 @@ where
             fn value(self) -> Self::Value {
                 self.fewest
             }
+        }
+
+        let FandangoNode::Program(program) = individuals[0].node().root() else {
+            panic!("The root node wasn't a program node!")
+        };
+        let mut kpaths = KPaths::new::<<I::Node as Node>::Type<'_>>(self.k, program);
+        let mut update = KPathUpdate::inserting(&mut kpaths);
+        for individual in individuals.iter() {
+            update = update
+                .visit(individual.node(), 0)
+                .unwrap()
+                .continue_value()
+                .unwrap();
         }
 
         individuals.sort_by_cached_key(|individual| {

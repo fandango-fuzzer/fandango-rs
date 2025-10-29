@@ -172,7 +172,9 @@ where
             let individual = BasicIndividual::new(node, measurement);
             population.push(individual);
         }
-        let population = Vec::from_iter(iter::from_fn(move || population.pop()).take(self.size));
+        let population = iter::from_fn(move || population.pop())
+            .take(self.size)
+            .collect::<Vec<_>>();
         Ok(population)
     }
 
@@ -207,7 +209,7 @@ where
             };
             if sampler.sample() % *self.crossover_rate.denom() < *self.crossover_rate.numer() {
                 let mate = &population[sampler.sample() % population.len()];
-                crossover(&mut mutated, mate.node(), sampler)?;
+                crossover(&mut mutated, mate.node(), sampler);
                 drop(mutated);
             } else {
                 let mutator = MutatorVisitor::new(sampler, generators);
@@ -238,6 +240,7 @@ pub trait BasicHook<N, G, S> {
     /// Hook which is executed immediately after an individual is created, but before it is
     /// evaluated
     #[allow(unused)]
+
     fn individual_created(
         &mut self,
         node: &mut N,

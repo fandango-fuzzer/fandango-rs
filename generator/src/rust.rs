@@ -110,9 +110,8 @@ where
                     self.edge_endpoints(e).and_then(|(n1, _)| {
                         (!matches!(
                             self.node_weight(n1).unwrap(),
-                            FandangoNode::Operator(Operator::Kleene(_))
-                                | FandangoNode::Operator(Operator::Plus(_))
-                                | FandangoNode::Operator(Operator::Repeat(_, _, _))
+                            FandangoNode::Operator(Operator::Kleene(_) | Operator::Plus(_) |
+Operator::Repeat(_, _, _))
                         ))
                         .then_some(*w)
                     })
@@ -1305,7 +1304,7 @@ impl<'program, 'source> IntoRustSource<FandangoGenContext<'_, '_, 'program, 'sou
                 line.as_ptr() as usize - last_nonterminal.as_str().as_ptr() as usize;
             let line_end_offset = line_start_offset + line.len();
             if end_offset <= line_start_offset || start_offset >= line_end_offset {
-                lines.push(format!("`{}`", line.replace("`", "\\`")));
+                lines.push(format!("`{}`", line.replace('`', "\\`")));
                 continue;
             }
             let start = line_start_offset.max(start_offset) - line_start_offset;
@@ -1313,11 +1312,11 @@ impl<'program, 'source> IntoRustSource<FandangoGenContext<'_, '_, 'program, 'sou
 
             let mut composed = String::new();
             if start != 0 {
-                composed.extend(format!("`{}`", line[..start].replace("`", "\\`")).chars());
+                composed.extend(format!("`{}`", line[..start].replace('`', "\\`")).chars());
             }
-            composed.extend(format!("<u>`{}`</u>", line[start..end].replace("`", "\\`")).chars());
+            composed.extend(format!("<u>`{}`</u>", line[start..end].replace('`', "\\`")).chars());
             if end != line.len() {
-                composed.extend(format!("`{}`", line[end..].replace("`", "\\`")).chars());
+                composed.extend(format!("`{}`", line[end..].replace('`', "\\`")).chars());
             }
             lines.push(composed);
         }

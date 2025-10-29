@@ -47,6 +47,7 @@ members = [
     "baselines/rest",
     "baselines/scriptsizec",
     "baselines/xml",
+    "libafl",
 ]
 default-members = [
     ".", "core", "derive", "targets", "generator", "runtime"
@@ -65,6 +66,8 @@ either = { version = "1.13", default-features = false }
 embedded-io = { version = "0.6.1", features = ["alloc"] }
 foldhash = { version = "0.2.0", default-features = false }
 hashbrown = "0.16.0"
+libafl = { version = "0.15.3", default-features = false }
+libafl_bolts = { version = "0.15.3", default-features = false }
 linfa = "0.7.1"
 linfa-linear = "0.7.1"
 mappable-rc = { version = "0.1.1", default-features = false }
@@ -93,3 +96,6 @@ missing_docs = "warn"
 # allows for non-optimal indirection
 # hidden as CFG because there is no use case for this
 unexpected_cfgs = { level = "warn", check-cfg = ['cfg(no_opt_indirect)'] }
+
+[workspace.lints.clippy]
+pedantic = "warn"

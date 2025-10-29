@@ -223,8 +223,17 @@ impl Parse for FandangoDerivation {
 }
 
 /// Perform the derivation, or emit a compiler error with a (potentially useful) warning.
+///
+/// # Errors
+///
+/// Returns a [`TokenStream`] containing a user-readable error regarding a faulty grammar.
+///
+/// # Panics
+///
+/// Panics if the canonicalized paths to the grammar files are not UTF-8 compatible.
+
 pub fn derive_fandango_or_emit_error(
-    source: FandangoDerivation,
+    source: &FandangoDerivation,
 ) -> Result<TokenStream, TokenStream> {
     let parsed = Program::try_from(&source.merged).map_err(|e| source.to_compile_error(e))?;
     let files = source.offsets.values().map(|f| {

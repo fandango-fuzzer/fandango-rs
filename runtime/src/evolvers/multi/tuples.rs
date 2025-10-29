@@ -104,7 +104,6 @@ struct DomReducer;
 impl Reducer<ControlFlow<(), Ordering>, Option<Ordering>> for DomReducer {
     type Output = ControlFlow<(), Ordering>;
 
-    #[inline(always)]
     fn apply(&self, v1: ControlFlow<(), Ordering>, v2: Option<Ordering>) -> Self::Output {
         match v1 {
             ControlFlow::Continue(mut v1) => {
@@ -112,7 +111,7 @@ impl Reducer<ControlFlow<(), Ordering>, Option<Ordering>> for DomReducer {
                     None => v1, // no way to compare on v2, so we just keep going
                     Some(mut v2) => {
                         if v2 < v1 {
-                            mem::swap(&mut v1, &mut v2)
+                            mem::swap(&mut v1, &mut v2);
                         }
                         match (v1, v2) {
                             (Ordering::Less, Ordering::Greater) => return ControlFlow::Break(()),
@@ -127,7 +126,7 @@ impl Reducer<ControlFlow<(), Ordering>, Option<Ordering>> for DomReducer {
                 };
                 ControlFlow::Continue(ordering)
             }
-            b => b,
+            b @ ControlFlow::Break(_) => b,
         }
     }
 }
@@ -157,7 +156,7 @@ where
     T: Dom<T>,
 {
     fn dominates(&self, other: &Reverse<T>) -> Option<Ordering> {
-        self.0.dominates(&other.0).map(|o| o.reverse())
+        self.0.dominates(&other.0).map(core::cmp::Ordering::reverse)
     }
 }
 
@@ -336,6 +335,7 @@ pub trait FitnessMeasurerTuple<'a, N, E> {
     type Measurements;
 
     /// Perform the evaluation over all measurers
+
     fn evaluate(&mut self, node: &'a N) -> Result<Self::Measurements, E>;
 }
 

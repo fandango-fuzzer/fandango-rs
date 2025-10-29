@@ -175,6 +175,7 @@ impl<const FORWARD: bool, const REF: bool> Advance<FORWARD, REF> {
 
 impl Advance<true, false> {
     /// Advance forwards within the tree and return a path.
+    #[must_use] 
     pub fn forward(target: usize) -> Self {
         Self::new(target)
     }
@@ -182,6 +183,7 @@ impl Advance<true, false> {
 
 impl Advance<true, true> {
     /// Advance forwards within the tree and return a reference.
+    #[must_use] 
     pub fn forward_ref(target: usize) -> Self {
         Self::new(target)
     }
@@ -189,6 +191,7 @@ impl Advance<true, true> {
 
 impl Advance<false, false> {
     /// Advance backwards within the tree and return a path.
+    #[must_use] 
     pub fn backwards(target: usize) -> Self {
         Self::new(target)
     }
@@ -196,6 +199,7 @@ impl Advance<false, false> {
 
 impl Advance<false, true> {
     /// Advance backwards within the tree and return a tree.
+    #[must_use] 
     pub fn backwards_ref(target: usize) -> Self {
         Self::new(target)
     }
@@ -296,12 +300,13 @@ pub struct GoToVisitor<'a> {
 impl<'a> GoToVisitor<'a> {
     /// Create the visitor with the intended destination (not including the start node; see
     /// [`VisitFrom`] and [`crate::visitor_chain`] for details.
+    #[must_use] 
     pub fn new(to: &'a [usize]) -> Self {
         Self { to }
     }
 }
 
-impl<'a, T> Visitor<T> for GoToVisitor<'a>
+impl<T> Visitor<T> for GoToVisitor<'_>
 where
     T: VisitableChildren<T>,
 {
@@ -405,11 +410,13 @@ pub struct NodeCountVisitor {
 
 impl NodeCountVisitor {
     /// Create a new counter.
+    #[must_use] 
     pub fn new() -> Self {
         Self { count: 0 }
     }
 
     /// Consume the visitor and acquire the final count.
+    #[must_use] 
     pub fn count(self) -> usize {
         self.count
     }
@@ -484,11 +491,13 @@ pub struct ByteCountVisitor {
 
 impl ByteCountVisitor {
     /// Create a new counter.
+    #[must_use] 
     pub fn new() -> Self {
         Self { count: 0 }
     }
 
     /// Consume the visitor and acquire the final count.
+    #[must_use] 
     pub fn count(self) -> usize {
         self.count
     }
@@ -580,7 +589,7 @@ pub struct VisitFrom<'a, V> {
     visitor: V,
 }
 
-impl<'a, V> VisitFrom<'a, V> {
+impl<V> VisitFrom<'_, V> {
     /// Retrieve the contained visitor
     pub fn inner(self) -> V {
         self.visitor

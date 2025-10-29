@@ -8,7 +8,7 @@ use quote::{format_ident, quote};
 pub(crate) fn tokenize_metadata<'p, 's>(
     node: &FandangoNode<'p, 's>,
     span: Span<'s>,
-    accessor: TokenStream,
+    accessor: &TokenStream,
     named: &mut HashMap<FandangoNode<'p, 's>, Ident>,
     arrays: &mut Vec<TokenStream>,
     referenced: &mut Vec<TokenStream>,
@@ -84,8 +84,7 @@ pub(crate) fn tokenize_metadata<'p, 's>(
                         )
                     }
                 }
-                Statement::Constraint(_) => unreachable!(),
-                Statement::Python => unreachable!(),
+                Statement::Constraint(_) | Statement::Python => unreachable!(),
             },
         ),
         FandangoNode::Production(p) => {
@@ -230,60 +229,57 @@ pub(crate) fn tokenize_metadata<'p, 's>(
                 quote! {
                     ::fandango::lang::Operator<'static>
                 },
-                match o {
-                    Operator::Repeat(_, start, end) => {
-                        let child = tokenize_metadata(
-                            &node,
-                            span,
-                            quote! {
-                                ({
-                                    match #accessor.inner() {
-                                         ::fandango::lang::Operator::Repeat(c, _) => c,
-                                        _ => unreachable!(),
-                                    }
-                                })
-                            },
-                            named,
-                            arrays,
-                            referenced,
-                        );
+                if let Operator::Repeat(_, start, end) = o {
+                    let child = tokenize_metadata(
+                        &node,
+                        span,
                         quote! {
-                            ::fandango::lang::Operator::Repeat(
-                                #child,
-                                #start,
-                                #end
-                            )
-                        }
+                            ({
+                                match #accessor.inner() {
+                                     ::fandango::lang::Operator::Repeat(c, _) => c,
+                                    _ => unreachable!(),
+                                }
+                            })
+                        },
+                        named,
+                        arrays,
+                        referenced,
+                    );
+                    quote! {
+                        ::fandango::lang::Operator::Repeat(
+                            #child,
+                            #start,
+                            #end
+                        )
                     }
-                    _ => {
-                        let matcher = match o {
-                            Operator::Kleene(_) => quote! { ::fandango::lang::Operator::Kleene },
-                            Operator::Plus(_) => quote! { ::fandango::lang::Operator::Plus },
-                            Operator::Option(_) => quote! { ::fandango::lang::Operator::Option },
-                            Operator::Symbol(_) => quote! { ::fandango::lang::Operator::Symbol },
-                            _ => unreachable!(),
-                        };
+                } else {
+                    let matcher = match o {
+                        Operator::Kleene(_) => quote! { ::fandango::lang::Operator::Kleene },
+                        Operator::Plus(_) => quote! { ::fandango::lang::Operator::Plus },
+                        Operator::Option(_) => quote! { ::fandango::lang::Operator::Option },
+                        Operator::Symbol(_) => quote! { ::fandango::lang::Operator::Symbol },
+                        Operator::Repeat(..) => unreachable!(),
+                    };
 
-                        let child = tokenize_metadata(
-                            &node,
-                            span,
-                            quote! {
-                                ({
-                                    match #accessor.inner() {
-                                         #matcher(c) => c,
-                                        _ => unreachable!(),
-                                    }
-                                })
-                            },
-                            named,
-                            arrays,
-                            referenced,
-                        );
+                    let child = tokenize_metadata(
+                        &node,
+                        span,
                         quote! {
-                            #matcher(
-                                #child
-                            )
-                        }
+                            ({
+                                match #accessor.inner() {
+                                     #matcher(c) => c,
+                                    _ => unreachable!(),
+                                }
+                            })
+                        },
+                        named,
+                        arrays,
+                        referenced,
+                    );
+                    quote! {
+                        #matcher(
+                            #child
+                        )
                     }
                 },
             )
@@ -356,7 +352,7 @@ pub(crate) fn tokenize_metadata<'p, 's>(
                 const ROOT: &'static ::fandango::lang::Tagged<'static, ::fandango::lang::Program<'static>> = STRUCTURE;
             }
         });
-    };
+    }
 
     let start = span.start();
     let end = span.end();
