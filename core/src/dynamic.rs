@@ -44,7 +44,7 @@ pub enum DynamicNodeVariant {
 
 impl DynamicNodeVariant {
     /// An immutable iterator over the nodes contained by the [`DynamicNode`].
-    #[must_use] 
+    #[must_use]
     pub fn iter(&self) -> impl DoubleEndedIterator<Item = (&DynamicNode, usize)> {
         match self {
             DynamicNodeVariant::Terminal => [].iter().zip(0..usize::MAX),

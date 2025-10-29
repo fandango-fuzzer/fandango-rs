@@ -110,8 +110,9 @@ where
                     self.edge_endpoints(e).and_then(|(n1, _)| {
                         (!matches!(
                             self.node_weight(n1).unwrap(),
-                            FandangoNode::Operator(Operator::Kleene(_) | Operator::Plus(_) |
-Operator::Repeat(_, _, _))
+                            FandangoNode::Operator(
+                                Operator::Kleene(_) | Operator::Plus(_) | Operator::Repeat(_, _, _)
+                            )
                         ))
                         .then_some(*w)
                     })

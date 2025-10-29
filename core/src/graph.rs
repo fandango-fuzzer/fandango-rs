@@ -394,7 +394,7 @@ impl<'program, 'source: 'program> GraphTraverse<'program> for &'program Selector
         F: FnMut(Self::Node, Self::Node, Span<'program>),
     {
         #![allow(unused_imports)]
-        use Selector::{ChildSelector, PathSelector, Basic};
+        use Selector::{Basic, ChildSelector, PathSelector};
         match self {
             ChildSelector(basic, child) => traverse_children(
                 self,
@@ -619,7 +619,7 @@ pub trait IntoNode {
 
 /// Computes the shortest derivation trees available from each alternation, returning the variants
 /// with the minimum possible path.
-#[must_use] 
+#[must_use]
 pub fn shortest_path<'program, 'source>(
     graph: &DiGraph<FandangoNode<'program, 'source>, Span<'source>>,
 ) -> HashMap<FandangoNode<'program, 'source>, Vec<usize>> {

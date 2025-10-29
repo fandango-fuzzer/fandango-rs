@@ -70,7 +70,7 @@ where
 /// Pre-compute the hash for a given [`Tagged`] instance. Only to be used for known hashes during
 /// generation; your mileage may vary.
 #[allow(deprecated)]
-#[must_use] 
+#[must_use]
 pub fn compute_tag_hash(span: &Span<'_>) -> u64 {
     let mut hasher = SipHasher::new_with_keys(0, 0);
     span.as_str().hash(&mut hasher);
@@ -186,7 +186,7 @@ pub struct Program<'a> {
 
 impl<'a> Program<'a> {
     /// The [`Statement`]s contained within this program.
-    #[must_use] 
+    #[must_use]
     pub const fn statements(&self) -> &Cow<'a, [Tagged<'a, Statement<'a>>]> {
         &self.statements
     }
@@ -194,7 +194,7 @@ impl<'a> Program<'a> {
 
 impl Program<'static> {
     /// Construct a known [`Program`] at compile-time -- for use in generated code only.
-    #[must_use] 
+    #[must_use]
     pub const fn known(statements: &'static [Tagged<'static, Statement<'static>>]) -> Self {
         Self {
             statements: Cow::Borrowed(statements),
@@ -204,7 +204,7 @@ impl Program<'static> {
 
 impl Program<'static> {
     /// Construct a known [`Program`] at compile-time -- for use in generated code only.
-    #[must_use] 
+    #[must_use]
     pub fn nonterminals(
         &'static self,
     ) -> HashMap<FandangoNode<'static, 'static>, FandangoNode<'static, 'static>> {
@@ -300,13 +300,13 @@ pub struct Production<'a> {
 
 impl<'a> Production<'a> {
     /// Access the [`Nonterminal`] associated with this production.
-    #[must_use] 
+    #[must_use]
     pub const fn nonterminal(&self) -> &Tagged<'a, Nonterminal<'a>> {
         &self.nonterminal
     }
 
     /// Access the [`Alternative`] which defines the associated [`Nonterminal`].
-    #[must_use] 
+    #[must_use]
     pub const fn alternative(&self) -> &Tagged<'a, Alternative<'a>> {
         &self.alternative
     }
@@ -314,7 +314,7 @@ impl<'a> Production<'a> {
 
 impl Production<'static> {
     /// Construct a known [`Production`] at compile-time -- for use in generated code only.
-    #[must_use] 
+    #[must_use]
     pub const fn known(
         nonterminal: Tagged<'static, Nonterminal<'static>>,
         alternative: Tagged<'static, Alternative<'static>>,
@@ -351,13 +351,13 @@ pub struct Nonterminal<'a> {
 
 impl<'a> Nonterminal<'a> {
     /// Create a non-terminal (useful for testing and referring to non-terminals directly).
-    #[must_use] 
+    #[must_use]
     pub const fn new(name: &'a str) -> Self {
         Self { name }
     }
 
     /// Get the name of this non-terminal (not including the angle brackets).
-    #[must_use] 
+    #[must_use]
     pub const fn name(&self) -> &'a str {
         self.name
     }
@@ -386,7 +386,7 @@ pub struct Alternative<'a> {
 
 impl<'a> Alternative<'a> {
     /// The [`Concatenation`]s, of which exactly one will be instantiated as child 0.
-    #[must_use] 
+    #[must_use]
     pub const fn concatenations(&self) -> &Cow<'a, [Tagged<'a, Concatenation<'a>>]> {
         &self.concatenations
     }
@@ -394,7 +394,7 @@ impl<'a> Alternative<'a> {
 
 impl Alternative<'static> {
     /// Construct a known [`Alternative`] at compile-time -- for use with generated code only.
-    #[must_use] 
+    #[must_use]
     pub const fn known(concatenations: &'static [Tagged<'static, Concatenation<'static>>]) -> Self {
         Self {
             concatenations: Cow::Borrowed(concatenations),
@@ -426,7 +426,7 @@ pub struct Concatenation<'a> {
 
 impl<'a> Concatenation<'a> {
     /// The [`Operator`]s which are concatenated.
-    #[must_use] 
+    #[must_use]
     pub const fn operators(&self) -> &Cow<'a, [Tagged<'a, Operator<'a>>]> {
         &self.operators
     }
@@ -434,7 +434,7 @@ impl<'a> Concatenation<'a> {
 
 impl Concatenation<'static> {
     /// Construct a known [`Concatenation`] at compile-time -- for use with generated code only.
-    #[must_use] 
+    #[must_use]
     pub const fn known(operators: &'static [Tagged<'static, Operator<'static>>]) -> Self {
         Self {
             operators: Cow::Borrowed(operators),
@@ -1124,8 +1124,9 @@ impl Display for FandangoNode<'_, '_> {
             FandangoNode::SelectorLength(SelectorLength::WithLength(_)) => f.write_str("COUNT"),
             FandangoNode::SelectorLength(SelectorLength::NoLength(_)) => f.write_str("SELECT"),
             FandangoNode::Selector(_) => f.write_str("SELECTOR"),
-            FandangoNode::Selection(Selection::OverSlices(_, _) |
-Selection::OverPairs(_, _)) => f.write_str("OVER"),
+            FandangoNode::Selection(Selection::OverSlices(_, _) | Selection::OverPairs(_, _)) => {
+                f.write_str("OVER")
+            }
             FandangoNode::Selection(Selection::Basic(_)) => f.write_str("DIRECT"),
             FandangoNode::BaseSelection(BaseSelection::Nonterminal(_)) => f.write_str("EXACT"),
             FandangoNode::BaseSelection(BaseSelection::Selector(_)) => f.write_str("SELECTED"),

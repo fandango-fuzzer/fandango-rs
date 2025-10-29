@@ -289,7 +289,7 @@ pub fn derive_fandango_or_emit_error(
     let metadata = tokenize_metadata(
         &FandangoNode::from(&parsed),
         Span::new(&source.merged, 0, source.merged.len()).unwrap(),
-        quote! { STRUCTURE },
+        &quote! { STRUCTURE },
         &mut mapped_names,
         &mut arrays,
         &mut referenced,

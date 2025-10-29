@@ -29,7 +29,7 @@ pub(crate) fn tokenize_metadata<'p, 's>(
                     tokenize_metadata(
                         &FandangoNode::Statement(c.inner()),
                         c.span(),
-                        quote! {
+                        &quote! {
                             ({
                                 match #accessor.inner().statements() {
                                     ::alloc::borrow::Cow::Borrowed(inner) => &inner[#i],
@@ -66,7 +66,7 @@ pub(crate) fn tokenize_metadata<'p, 's>(
                     let inner = tokenize_metadata(
                         &FandangoNode::Production(c.inner()),
                         c.span(),
-                        quote! {
+                        &quote! {
                             ({
                                 match #accessor.inner() {
                                     ::fandango::lang::Statement::Production(c) => c,
@@ -93,7 +93,7 @@ pub(crate) fn tokenize_metadata<'p, 's>(
                 tokenize_metadata(
                     &FandangoNode::Nonterminal(c.inner()),
                     c.span(),
-                    quote! {
+                    &quote! {
                         #accessor.inner().nonterminal()
                     },
                     named,
@@ -106,7 +106,7 @@ pub(crate) fn tokenize_metadata<'p, 's>(
                 tokenize_metadata(
                     &FandangoNode::Alternative(c.inner()),
                     c.span(),
-                    quote! {
+                    &quote! {
                         #accessor.inner().alternative()
                     },
                     named,
@@ -148,7 +148,7 @@ pub(crate) fn tokenize_metadata<'p, 's>(
                     tokenize_metadata(
                         &FandangoNode::Concatenation(c.inner()),
                         c.span(),
-                        quote! {
+                        &quote! {
                             ({
                                 match #accessor.inner().concatenations() {
                                     ::alloc::borrow::Cow::Borrowed(inner) => &inner[#i],
@@ -188,7 +188,7 @@ pub(crate) fn tokenize_metadata<'p, 's>(
                     tokenize_metadata(
                         &FandangoNode::Operator(c.inner()),
                         c.span(),
-                        quote! {
+                        &quote! {
                             ({
                                 match #accessor.inner().operators() {
                                     ::alloc::borrow::Cow::Borrowed(inner) => &inner[#i],
@@ -233,7 +233,7 @@ pub(crate) fn tokenize_metadata<'p, 's>(
                     let child = tokenize_metadata(
                         &node,
                         span,
-                        quote! {
+                        &quote! {
                             ({
                                 match #accessor.inner() {
                                      ::fandango::lang::Operator::Repeat(c, _) => c,
@@ -264,7 +264,7 @@ pub(crate) fn tokenize_metadata<'p, 's>(
                     let child = tokenize_metadata(
                         &node,
                         span,
-                        quote! {
+                        &quote! {
                             ({
                                 match #accessor.inner() {
                                      #matcher(c) => c,
@@ -310,7 +310,7 @@ pub(crate) fn tokenize_metadata<'p, 's>(
                     let child = tokenize_metadata(
                         &node,
                         span,
-                        quote! {
+                        &quote! {
                             ({
                                 match #accessor.inner() {
                                      #matcher(c) => c,
