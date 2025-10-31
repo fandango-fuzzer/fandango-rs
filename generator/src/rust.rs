@@ -134,7 +134,6 @@ where
             unimplemented!("Can only transforms non-terminals into source code.")
         };
 
-        let pest_name = format_ident!("{}", nt.name());
         let name = format_ident!("nonterminal_{}", nt.name());
 
         let derives = if serde {
@@ -158,7 +157,6 @@ where
         start_node.emit_rust(
             (
                 name,
-                pest_name,
                 node_weight,
                 decl,
                 definition,
@@ -176,7 +174,6 @@ where
 }
 
 type FandangoGenContext<'names, 'graph, 'program, 'source> = (
-    Ident,
     Ident,
     FandangoNode<'program, 'source>,
     Span<'source>,
@@ -206,7 +203,6 @@ impl<'program, 'source> IntoRustSource<FandangoGenContext<'_, '_, 'program, 'sou
         #[allow(unused_assignments)]
         let (
             name,
-            pest_name,
             node_weight,
             mut span,
             mut last_nonterminal,
@@ -241,17 +237,6 @@ impl<'program, 'source> IntoRustSource<FandangoGenContext<'_, '_, 'program, 'sou
             })
             .collect::<Vec<_>>();
         children.sort_by_key(|(_, _, _, w)| w.start());
-        let pest_child_names = children
-            .iter()
-            .enumerate()
-            .map(|(i, (_, _, child, _))| {
-                if let FandangoNode::Nonterminal(nt) = child {
-                    format_ident!("{}", nt.name())
-                } else {
-                    format_ident!("{pest_name}_{i}")
-                }
-            })
-            .collect::<Vec<_>>();
         let child_types = children
             .iter()
             .enumerate()
@@ -683,14 +668,14 @@ impl<'program, 'source> IntoRustSource<FandangoGenContext<'_, '_, 'program, 'sou
                             type Error = ParseError;
 
                             fn try_from(value: ::pest::iterators::Pair<'_, Rule>) -> Result<Self, Self::Error> {
-                                debug_assert_eq!(value.as_rule(), Rule::#pest_name);
+                                debug_assert_eq!(value.as_rule(), Rule::#name);
 
                                 let mut children = value.into_inner();
                                 let child_0 = children.next().expect("Expected exactly one descendant.");
                                 debug_assert!(children.next().is_none(), "Expected exactly one descendant.");
 
                                 Ok(match child_0.as_rule() {
-                                    #(Rule::#pest_child_names => #name::#child_variants(
+                                    #(Rule::#child_types => #name::#child_variants(
                                         #child_types::try_from(child_0)?.into()
                                     )),*,
                                     _ => unimplemented!("Not a child of this alternative.")
@@ -1014,11 +999,11 @@ impl<'program, 'source> IntoRustSource<FandangoGenContext<'_, '_, 'program, 'sou
                             type Error = ParseError;
 
                             fn try_from(value: ::pest::iterators::Pair<'_, Rule>) -> Result<Self, Self::Error> {
-                                debug_assert_eq!(value.as_rule(), Rule::#pest_name);
+                                debug_assert_eq!(value.as_rule(), Rule::#name);
 
                                 let span = value.as_span();
                                 let child_0 = value.into_inner().map(|value| {
-                                    debug_assert_eq!(value.as_rule(), #(Rule::#pest_child_names),*);
+                                    debug_assert_eq!(value.as_rule(), #(Rule::#child_types),*);
 
                                     Ok(#(#child_types::try_from(value)?.into()),*)
                                 }).collect::<Result<_, Self::Error>>()?;
@@ -1280,10 +1265,10 @@ impl<'program, 'source> IntoRustSource<FandangoGenContext<'_, '_, 'program, 'sou
                             type Error = ParseError;
 
                             fn try_from(value: ::pest::iterators::Pair<'_, Rule>) -> Result<Self, Self::Error> {
-                                debug_assert_eq!(value.as_rule(), Rule::#pest_name);
+                                debug_assert_eq!(value.as_rule(), Rule::#name);
 
                                 let span = value.as_span();
-                                let (#(#child_names),*,#underscore) = ::fandango::parse_pairs_as!(value.into_inner(), (#(#pest_child_names),*,#eoi));
+                                let (#(#child_names),*,#underscore) = ::fandango::parse_pairs_as!(value.into_inner(), (#(#child_names),*,#eoi));
 
                                 Ok(Self {
                                     #(#child_names: #child_types::try_from(#child_names)?.into()),*,
@@ -1327,13 +1312,10 @@ impl<'program, 'source> IntoRustSource<FandangoGenContext<'_, '_, 'program, 'sou
         });
         output.extend(local_output);
 
-        for (((_, child, child_weight, span), name), pest_name) in
-            children.into_iter().zip(child_types).zip(pest_child_names)
-        {
+        for ((_, child, child_weight, span), name) in children.into_iter().zip(child_types) {
             child.emit_rust(
                 (
                     name,
-                    pest_name,
                     child_weight,
                     span,
                     last_nonterminal,

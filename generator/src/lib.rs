@@ -343,7 +343,7 @@ pub fn derive_fandango_or_emit_error(
                 ) -> ::core::result::Result<nonterminal_start, ParseError> {
                     use ::pest::Parser;
 
-                    let (grammar,) = ::fandango::parse_pairs_as!(#ident::parse(Rule::start, source)?, (Rule::start,));
+                    let (grammar,) = ::fandango::parse_pairs_as!(#ident::parse(Rule::nonterminal_start, source)?, (Rule::nonterminal_start,));
 
                     nonterminal_start::try_from(grammar)
                 }

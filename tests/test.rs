@@ -356,8 +356,11 @@ mod pest_renamed {
     fn pest_name_sanity() -> Result<(), ParseError> {
         const SAMPLE: &str = "hello!";
 
-        let (start,) = parse_pairs_as!(PestRenamed::parse(Rule::start, SAMPLE)?, (Rule::start,));
-        let (actual, _) = parse_pairs_as!(start.into_inner(), (Rule::pest, Rule::EOI));
+        let (start,) = parse_pairs_as!(
+            PestRenamed::parse(Rule::nonterminal_start, SAMPLE)?,
+            (Rule::nonterminal_start,)
+        );
+        let (actual, _) = parse_pairs_as!(start.into_inner(), (Rule::nonterminal_pest, Rule::EOI));
         assert_eq!(actual.as_span().as_str(), SAMPLE);
 
         let start = PestRenamed::extract(SAMPLE)?;
