@@ -45,7 +45,7 @@ impl<'source> IntoPestSource<()> for DiGraph<FandangoNode<'_, 'source>, Span<'so
             }
         }
 
-        let pest_name = "start";
+        let pest_name = "nonterminal_start";
         let start = self
             .node_indices()
             .find(|&n| matches!(self.node_weight(n).unwrap(), FandangoNode::Nonterminal(nt) if nt.name() == "start"))
@@ -63,7 +63,7 @@ impl<'source> IntoPestSource<()> for DiGraph<FandangoNode<'_, 'source>, Span<'so
         let child_weight = self.node_weight(child).copied().unwrap();
 
         let pest_child_name = if let FandangoNode::Nonterminal(nt) = child_weight {
-            Cow::Borrowed(nt.name())
+            Cow::Owned(format!("nonterminal_{}", nt.name()))
         } else {
             Cow::Owned(format!("{pest_name}_0"))
         };
@@ -108,7 +108,7 @@ impl<'program, 'source> IntoPestSource<PestContext<'_, 'program, 'source>> for N
             .enumerate()
             .map(|(i, (_, child, _))| {
                 if let FandangoNode::Nonterminal(nt) = child {
-                    Cow::Borrowed(nt.name())
+                    Cow::Owned(format!("nonterminal_{}", nt.name()))
                 } else {
                     Cow::Owned(format!("{pest_name}_{i}"))
                 }
