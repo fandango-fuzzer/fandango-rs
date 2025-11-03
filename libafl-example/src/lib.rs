@@ -71,8 +71,6 @@ pub extern "C" fn libafl_main() {
 
         let corpus_dir = opt.corpus_dir.clone();
 
-        // Create an observation channel using the coverage map
-        // TODO: This will break soon, fix me! See https://github.com/AFLplusplus/LibAFL/issues/2786
         #[allow(static_mut_refs)] // only a problem on nightly
         let edges_observer = unsafe {
             HitcountsMapObserver::new(StdMapObserver::from_mut_ptr(
@@ -83,46 +81,24 @@ pub extern "C" fn libafl_main() {
             .track_indices()
         };
 
-        // Create an observation channel to keep track of the execution time
         let time_observer = TimeObserver::new("time");
-
         let map_feedback = MaxMapFeedback::new(&edges_observer);
         let calibration = CalibrationStage::new(&map_feedback);
 
-        // Feedback to rate the interestingness of an input
-        // This one is composed by two Feedbacks in OR
-        let mut feedback = feedback_or!(
-            // New maximization map feedback linked to the edges observer and the feedback state
-            map_feedback,
-            // Time feedback, this one does not need a feedback state
-            TimeFeedback::new(&time_observer)
-        );
+        let mut feedback = feedback_or!(map_feedback, TimeFeedback::new(&time_observer));
 
-        // A feedback to choose if an input is a solution or not
         let mut objective = feedback_or_fast!(CrashFeedback::new(), TimeoutFeedback::new());
 
-        // If not restarting, create a State from scratch
         let mut state = state.unwrap_or_else(|| {
             StdState::new(
-                // RNG
                 StdRand::new(),
-                // Corpus that will be evolved, we keep it in memory for performance
                 InMemoryCorpus::new(),
-                // Corpus in which we store solutions (crashes in this example),
-                // on disk so the user can get them after stopping the fuzzer
                 OnDiskCorpus::new(objective_dir).unwrap(),
-                // States of the feedbacks.
-                // The feedbacks can report the data that should persist in the State.
                 &mut feedback,
-                // Same for objective feedbacks
                 &mut objective,
             )
             .unwrap()
         });
-
-        println!("We're a client, let's fuzz :)");
-
-        // Setup a basic mutator with a mutational stage
 
         let mutator = HavocScheduledMutator::new(havoc_mutations());
 
@@ -131,7 +107,6 @@ pub extern "C" fn libafl_main() {
 
         let mut stages = tuple_list!(calibration, power);
 
-        // A minimization+queue policy to get testcasess from the corpus
         let scheduler = IndexesLenTimeMinimizerScheduler::new(
             &edges_observer,
             StdWeightedScheduler::with_schedule(
@@ -141,10 +116,8 @@ pub extern "C" fn libafl_main() {
             ),
         );
 
-        // A fuzzer with feedbacks and a corpus scheduler
         let mut fuzzer = StdFuzzer::new(scheduler, feedback, objective);
 
-        // The wrapped harness function, calling out to the LLVM-style harness
         let mut harness = |input: &BytesInput| {
             let target = input.target_bytes();
             let buf = target.as_slice();
@@ -163,16 +136,12 @@ pub extern "C" fn libafl_main() {
             &mut restarting_mgr,
             Duration::new(10, 0),
         )?;
-        // 10 seconds timeout
 
-        // The actual target run starts here.
-        // Call LLVMFUzzerInitialize() if present.
         let args: Vec<String> = env::args().collect();
         if unsafe { libfuzzer_initialize(&args) } == -1 {
             println!("Warning: LLVMFuzzerInitialize failed with -1");
         }
 
-        // In case the corpus is empty (on first run), reset
         if state.must_load_initial_inputs() {
             state
                 .load_initial_inputs(
@@ -190,10 +159,6 @@ pub extern "C" fn libafl_main() {
             println!("We imported {} inputs from disk.", state.corpus().count());
         }
 
-        // This fuzzer restarts after 1 mio `fuzz_one` executions.
-        // Each fuzz_one will internally do many executions of the target.
-        // If your target is very instable, setting a low count here may help.
-        // However, you will lose a lot of performance that way.
         let iters = 1_000_000;
         fuzzer.fuzz_loop_for(
             &mut stages,
@@ -203,8 +168,6 @@ pub extern "C" fn libafl_main() {
             iters,
         )?;
 
-        // It's important, that we store the state before restarting!
-        // Else, the parent will not respawn a new child and quit.
         restarting_mgr.on_restart(&mut state)?;
 
         Ok(())
