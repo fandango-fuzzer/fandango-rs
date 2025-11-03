@@ -6,3 +6,4 @@ pub mod feedbacks;
 pub mod inputs;
 pub mod mutators;
 pub mod schedulers;
+pub mod generator;
