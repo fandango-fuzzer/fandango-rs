@@ -36,8 +36,8 @@ lib: source fuzzer_lib
     make -j$(nproc) \
     CC="$(realpath ../{{CC_WRAPPER}})" \
     CXX="$(realpath ../{{CXX_WRAPPER}})" \
-    CFLAGS="-DFUZZING_BUILD_MODE_UNSAFE_FOR_PRODUCTION" \
-    LDFLAGS="-Wl,-U,___sanitizer_cov_trace_pc_guard -Wl,-U,___sanitizer_cov_trace_pc_guard_init"
+    CFLAGS="-DFUZZING_BUILD_MODE_UNSAFE_FOR_PRODUCTION -fno-pie -fno-PIE" \
+    LDFLAGS="-no-pie"
 
 [unix]
 fuzzer: lib
