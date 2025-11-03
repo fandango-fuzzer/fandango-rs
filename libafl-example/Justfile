@@ -49,8 +49,8 @@ fuzzer: lib
       -o target/release/fuzzer
 
 [unix]
-run: fuzzer
-    target/release/fuzzer
+run *args: fuzzer
+    target/release/fuzzer {{args}}
 
 clean:
     rm -rf libxml2 target ../target

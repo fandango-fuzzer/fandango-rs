@@ -4,41 +4,48 @@ use core::time::Duration;
 use std::{env, path::PathBuf};
 
 use clap::Parser;
+use fandango::{
+    Fandango,
+    visitor::{Visitor as _, write::WriteVisitor},
+};
 use libafl::{
     Error,
-    corpus::{Corpus, InMemoryCorpus, OnDiskCorpus},
+    corpus::{InMemoryCorpus, OnDiskCorpus},
     events::{EventConfig, EventRestarter, Launcher, LlmpRestartingEventManager},
     executors::{ExitKind, inprocess::InProcessExecutor},
     feedback_or, feedback_or_fast,
     feedbacks::{CrashFeedback, MaxMapFeedback, TimeFeedback, TimeoutFeedback},
     fuzzer::{Fuzzer, StdFuzzer},
-    inputs::{BytesInput, HasTargetBytes},
     monitors::{MultiMonitor, OnDiskJsonMonitor},
-    mutators::{havoc_mutations::havoc_mutations, scheduled::HavocScheduledMutator},
     observers::{CanTrack, HitcountsMapObserver, StdMapObserver, TimeObserver},
-    schedulers::{
-        IndexesLenTimeMinimizerScheduler, StdWeightedScheduler, powersched::PowerSchedule,
-    },
-    stages::{calibrate::CalibrationStage, power::StdPowerMutationalStage},
-    state::{HasCorpus, StdState},
+    schedulers::StdScheduler,
+    stages::{StdMutationalStage, calibrate::CalibrationStage},
+    state::{HasRand, StdState},
 };
 use libafl_bolts::{
-    AsSlice,
     core_affinity::Cores,
     rands::StdRand,
     shmem::{ShMemProvider as _, StdShMemProvider},
     tuples::tuple_list,
 };
+use libafl_fandango::{
+    generator::FandangoGenerator, inputs::DerivationTree, mutators::AdvanceMutator,
+};
 use libafl_targets::{EDGES_MAP, MAX_EDGES_FOUND, libfuzzer_initialize, libfuzzer_test_one_input};
 use mimalloc::MiMalloc;
+use rand::{RngCore, SeedableRng as _, rngs::StdRng};
 
 #[global_allocator]
 static GLOBAL: MiMalloc = MiMalloc;
 
+extern crate alloc;
+#[derive(Fandango)]
+#[fandango(grammar = "../targets/grammars/xml.fan", parse = false, serde = true)]
+#[allow(dead_code)]
+struct XMLGrammar;
+
 #[derive(Parser)]
 struct Opt {
-    #[arg(short, long, default_value = "./corpus")]
-    corpus_dir: PathBuf,
     #[arg(short, long, default_value = "./crashes")]
     objective_dir: PathBuf,
     #[arg(short, long, default_value = "./fuzzer_stats.json")]
@@ -69,8 +76,6 @@ pub extern "C" fn libafl_main() {
                           _client_description| {
         let objective_dir = opt.objective_dir.clone();
 
-        let corpus_dir = opt.corpus_dir.clone();
-
         #[allow(static_mut_refs)] // only a problem on nightly
         let edges_observer = unsafe {
             HitcountsMapObserver::new(StdMapObserver::from_mut_ptr(
@@ -83,9 +88,14 @@ pub extern "C" fn libafl_main() {
 
         let time_observer = TimeObserver::new("time");
         let map_feedback = MaxMapFeedback::new(&edges_observer);
+        // let kpath_feedback = KPathFeedback::new(nonzero!(nonterminal_start::DISCRIMINANT));
         let calibration = CalibrationStage::new(&map_feedback);
 
-        let mut feedback = feedback_or!(map_feedback, TimeFeedback::new(&time_observer));
+        let mut feedback = feedback_or!(
+            map_feedback,
+            // kpath_feedback,
+            TimeFeedback::new(&time_observer)
+        );
 
         let mut objective = feedback_or_fast!(CrashFeedback::new(), TimeoutFeedback::new());
 
@@ -100,29 +110,30 @@ pub extern "C" fn libafl_main() {
             .unwrap()
         });
 
-        let mutator = HavocScheduledMutator::new(havoc_mutations());
-
-        let power: StdPowerMutationalStage<_, _, BytesInput, _, _, _> =
-            StdPowerMutationalStage::new(mutator);
-
-        let mut stages = tuple_list!(calibration, power);
-
-        let scheduler = IndexesLenTimeMinimizerScheduler::new(
-            &edges_observer,
-            StdWeightedScheduler::with_schedule(
-                &mut state,
-                &edges_observer,
-                Some(PowerSchedule::fast()),
-            ),
+        let mutator = AdvanceMutator::new(
+            StdRng::seed_from_u64(state.rand_mut().next_u64()),
+            (),
+            "AdvanceMutator",
         );
+
+        let mutational_stage = StdMutationalStage::new(mutator);
+
+        let mut stages = tuple_list!(calibration, mutational_stage);
+
+        let scheduler = StdScheduler::new();
 
         let mut fuzzer = StdFuzzer::new(scheduler, feedback, objective);
 
-        let mut harness = |input: &BytesInput| {
-            let target = input.target_bytes();
-            let buf = target.as_slice();
+        let mut harness = |input: &DerivationTree<nonterminal_start>| {
+            let linearized = WriteVisitor::new(Vec::new())
+                .visit(input.node(), 0)
+                .unwrap()
+                .continue_value()
+                .unwrap()
+                .output();
+
             unsafe {
-                libfuzzer_test_one_input(buf);
+                libfuzzer_test_one_input(&linearized);
             }
             ExitKind::Ok
         };
@@ -143,23 +154,18 @@ pub extern "C" fn libafl_main() {
         }
 
         if state.must_load_initial_inputs() {
-            state
-                .load_initial_inputs(
-                    &mut fuzzer,
-                    &mut executor,
-                    &mut restarting_mgr,
-                    std::slice::from_ref(&corpus_dir),
-                )
-                .unwrap_or_else(|_| {
-                    panic!(
-                        "Failed to load initial corpus at {:?}",
-                        &corpus_dir.display()
-                    )
-                });
-            println!("We imported {} inputs from disk.", state.corpus().count());
+            let sampler = StdRng::seed_from_u64(state.rand_mut().next_u64());
+            let mut generator = FandangoGenerator::new(sampler, ());
+            state.generate_initial_inputs(
+                &mut fuzzer,
+                &mut executor,
+                &mut generator,
+                &mut restarting_mgr,
+                10,
+            )?;
         }
 
-        let iters = 1_000_000;
+        let iters = 1_000_000_000_000;
         fuzzer.fuzz_loop_for(
             &mut stages,
             &mut executor,

@@ -20,12 +20,11 @@ libafl_targets = { workspace = true, features = [
     "libfuzzer",
     "sancov_pcguard_edges",
 ] }
+libafl_fandango = { path = "../libafl" }
 mappable-rc.workspace = true
 serde = { workspace = true, features = ["alloc", "derive"] }
 mimalloc = "0.1.48"
 clap = { version = "4.5.51", features = ["derive"] }
-
-[dev-dependencies]
 rand = { workspace = true, features = ["std_rng"] }
 
 [lints]
