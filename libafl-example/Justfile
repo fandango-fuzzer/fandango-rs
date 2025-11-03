@@ -12,12 +12,12 @@ CXX_WRAPPER := "target/release/libafl_cxx"
 
 [unix]
 source: cc cxx
-    if [[ ! -d libxml2 ]]; then \
+    if [ ! -f libxml2/Makefile ]; then \
         rm -rf libxml2 && \
         git clone https://gitlab.gnome.org/GNOME/libxml2.git && \
-        cd libxml2 && \
-        ./autogen.sh --without-python && \
-        ./configure --enable-static --disable-shared; \
+        ( cd libxml2 && \
+          ./autogen.sh --without-python && \
+          ./configure --enable-static --disable-shared ); \
     fi
 
 [unix]
