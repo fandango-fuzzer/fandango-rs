@@ -1,13 +1,12 @@
 //! A libafl example fuzzer
 
+extern crate alloc;
 use core::time::Duration;
 use std::{env, path::PathBuf};
 
 use clap::Parser;
-use fandango::{
-    Fandango,
-    visitor::{Visitor as _, write::WriteVisitor},
-};
+use fandango::visitor::{Visitor as _, write::WriteVisitor};
+use fandango_targets::xml::nonterminal_start;
 use libafl::{
     Error,
     corpus::{InMemoryCorpus, OnDiskCorpus},
@@ -37,12 +36,6 @@ use rand::{RngCore, SeedableRng as _, rngs::StdRng};
 
 #[global_allocator]
 static GLOBAL: MiMalloc = MiMalloc;
-
-extern crate alloc;
-#[derive(Fandango)]
-#[fandango(grammar = "../targets/grammars/xml.fan", parse = false, serde = true)]
-#[allow(dead_code)]
-struct XMLGrammar;
 
 #[derive(Parser)]
 struct Opt {
@@ -165,7 +158,7 @@ pub extern "C" fn libafl_main() {
             )?;
         }
 
-        let iters = 1_000_000_000_000;
+        let iters = 1_000_000;
         fuzzer.fuzz_loop_for(
             &mut stages,
             &mut executor,
@@ -191,7 +184,7 @@ pub extern "C" fn libafl_main() {
         .launch()
     {
         Ok(()) => (),
-        Err(Error::ShuttingDown) => println!("Fuzzing stopped by user. Good bye."),
+        Err(Error::ShuttingDown) => println!("Fuzzing stopped by user. Goodbye."),
         Err(err) => panic!("Failed to run launcher: {err:?}"),
     }
 }

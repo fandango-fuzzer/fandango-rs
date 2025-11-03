@@ -40,7 +40,14 @@ mod defs {
 
     /// Base for the ScriptSizeC grammar stored in ssc.fan.
     #[derive(Fandango)]
-    #[fandango(grammar = "grammars/scriptsizec.fan", parse = false)]
+    #[cfg_attr(
+        feature = "serde",
+        fandango(grammar = "grammars/scriptsizec.fan", parse = false, serde = true)
+    )]
+    #[cfg_attr(
+        not(feature = "serde"),
+        fandango(grammar = "grammars/scriptsizec.fan", parse = false, serde = false)
+    )]
     pub struct ScriptSizeC(Infallible);
 
     /// A visitor which collects the violations of the constraints in the ScriptSizeC grammar.

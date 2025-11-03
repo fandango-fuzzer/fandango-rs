@@ -1,9 +1,7 @@
-use crate::inputs::{DerivationTree, NodeCountMetadata};
+use crate::inputs::DerivationTree;
 use alloc::borrow::Cow;
-use alloc::boxed::Box;
 use alloc::fmt::Debug;
 use alloc::format;
-use core::num::NonZeroUsize;
 use core::ops::DerefMut;
 use fandango::generation::{InPlaceGenerated, Sampler};
 use fandango::typing::{AsNodeMut, Node};
@@ -54,12 +52,8 @@ where
         let seed = state.rand_mut().next();
         self.sampler.reseed(seed);
 
-        let metadata = state.metadata_map_mut().get_or_insert_with_boxed(|| {
-            Box::new(NodeCountMetadata::new(
-                NonZeroUsize::new(input.node_mut().count_nodes()).unwrap(),
-            ))
-        });
-        let position = self.sampler.sample() % metadata.count();
+        let count = input.node().count_nodes();
+        let position = self.sampler.sample() % count;
         let mut node = input.node_mut();
         let mut selected = Advance::forward_ref(position)
             .visit_mut(node.deref_mut(), 0)
@@ -71,9 +65,6 @@ where
 
         selected.generate_in_place(&mut self.sampler, &mut self.generator, 0);
         drop(selected);
-
-        let count = metadata.count_mut();
-        *count = NonZeroUsize::new(node.count_nodes()).unwrap();
 
         Ok(MutationResult::Mutated)
     }

@@ -48,7 +48,7 @@ members = [
     "baselines/scriptsizec",
     "baselines/xml",
     "libafl",
-    "libafl-example",
+    "demos/libafl-demo",
 ]
 default-members = [".", "core", "derive", "targets", "generator", "runtime"]
 resolver = "3"

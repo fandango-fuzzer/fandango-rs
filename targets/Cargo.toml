@@ -15,6 +15,7 @@ xml = []
 clang = []
 
 static_defs = []
+serde = ["dep:serde"]
 
 [dev-dependencies]
 num-rational.workspace = true
@@ -29,6 +30,7 @@ anyhow.workspace = true
 embedded-io.workspace = true
 hashbrown.workspace = true
 num-rational.workspace = true
+serde = { workspace = true, optional = true }
 
 [lints]
 workspace = true

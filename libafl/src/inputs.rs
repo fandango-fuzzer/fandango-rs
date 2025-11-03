@@ -2,11 +2,9 @@ use core::convert::Infallible;
 use core::fmt::Debug;
 use core::hash::{Hash, Hasher};
 use core::marker::PhantomData;
-use core::num::NonZeroUsize;
 use core::ops::ControlFlow;
 use fandango::visitor::kpath::KPathVisitor;
 use libafl::inputs::Input;
-use libafl_bolts::impl_serdeany;
 use libafl_bolts::simd::{MaxReducer, MinReducer, Reducer};
 use mappable_rc::Mrc;
 use serde::{Deserialize, Serialize};
@@ -43,27 +41,6 @@ impl<N> Input for DerivationTree<N> where
     N: Debug + Clone + Hash + Serialize + for<'a> Deserialize<'a>
 {
 }
-
-#[derive(Copy, Clone, Debug, Deserialize, Serialize)]
-pub struct NodeCountMetadata {
-    count: NonZeroUsize,
-}
-
-impl NodeCountMetadata {
-    pub fn count(&self) -> NonZeroUsize {
-        self.count
-    }
-
-    pub fn count_mut(&mut self) -> &mut NonZeroUsize {
-        &mut self.count
-    }
-
-    pub fn new(count: NonZeroUsize) -> Self {
-        Self { count }
-    }
-}
-
-impl_serdeany!(NodeCountMetadata);
 
 pub struct KPathReducer<R> {
     value: usize,

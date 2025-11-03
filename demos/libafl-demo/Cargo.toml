@@ -1,5 +1,5 @@
 [package]
-name = "libafl_example"
+name = "libafl-demo"
 version.workspace = true
 edition.workspace = true
 authors.workspace = true
@@ -9,7 +9,8 @@ default = ["std"]
 std = ["libafl/std", "libafl_bolts/std", "libafl_bolts/serdeany_autoreg"]
 
 [dependencies]
-fandango = { path = ".." }
+fandango = { path = "../.." }
+fandango-targets = { path = "../../targets", features = ["xml", "serde"] }
 
 libafl_cc = { workspace = true }
 libafl = { workspace = true, features = ["rand_trait"] }
@@ -20,7 +21,7 @@ libafl_targets = { workspace = true, features = [
     "libfuzzer",
     "sancov_pcguard_edges",
 ] }
-libafl_fandango = { path = "../libafl" }
+libafl_fandango = { path = "../../libafl" }
 mappable-rc.workspace = true
 serde = { workspace = true, features = ["alloc", "derive"] }
 mimalloc = "0.1.48"

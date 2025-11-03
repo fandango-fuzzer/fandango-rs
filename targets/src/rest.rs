@@ -51,7 +51,14 @@ mod defs {
 
     /// Base for the REST grammar stored in rest.fan.
     #[derive(Fandango)]
-    #[fandango(grammar = "grammars/rest.fan", parse = false)]
+    #[cfg_attr(
+        feature = "serde",
+        fandango(grammar = "grammars/rest.fan", parse = false, serde = true)
+    )]
+    #[cfg_attr(
+        not(feature = "serde"),
+        fandango(grammar = "grammars/rest.fan", parse = false, serde = false)
+    )]
     pub struct Rest(Infallible);
 
     /// A visitor which collects the violations of the constraints in the REST grammar.
