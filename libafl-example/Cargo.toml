@@ -1,0 +1,35 @@
+[package]
+name = "libafl_example"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+
+[features]
+default = ["std"]
+std = ["libafl/std", "libafl_bolts/std", "libafl_bolts/serdeany_autoreg"]
+
+[dependencies]
+fandango = { path = ".." }
+
+libafl_cc = { workspace = true }
+libafl = { workspace = true, features = ["rand_trait"] }
+libafl_bolts = { workspace = true, features = ["rand_trait"] }
+libafl_targets = { workspace = true, features = [
+    "coverage",
+    "common",
+    "libfuzzer",
+    "sancov_pcguard_edges",
+] }
+mappable-rc.workspace = true
+serde = { workspace = true, features = ["alloc", "derive"] }
+mimalloc = "0.1.48"
+
+[dev-dependencies]
+rand = { workspace = true, features = ["std_rng"] }
+
+[lints]
+workspace = true
+
+[lib]
+name = "libafl_example"
+crate-type = ["staticlib"]

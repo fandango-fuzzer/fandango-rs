@@ -1,0 +1,8 @@
+<notes>
+    <note>
+        <to>World</to>
+        <from>LibAFL</from>
+        <heading>Reminder</heading>
+        <body>This is a sample input for fuzzing.</body>
+    </note>
+</notes>
