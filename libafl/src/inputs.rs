@@ -4,6 +4,7 @@ use core::hash::{Hash, Hasher};
 use core::marker::PhantomData;
 use core::ops::ControlFlow;
 use fandango::visitor::kpath::KPathVisitor;
+use fandango_runtime::evolvers::basic::AsNodeRef;
 use libafl::inputs::Input;
 use libafl_bolts::simd::{MaxReducer, MinReducer, Reducer};
 use mappable_rc::Mrc;
@@ -40,6 +41,12 @@ impl<N> DerivationTree<N> {
 impl<N> Input for DerivationTree<N> where
     N: Debug + Clone + Hash + Serialize + for<'a> Deserialize<'a>
 {
+}
+
+impl<N> AsNodeRef<N> for DerivationTree<N> {
+    fn as_node_ref(&self) -> &N {
+        &self.node
+    }
 }
 
 pub struct KPathReducer<R> {

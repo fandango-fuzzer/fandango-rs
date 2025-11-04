@@ -1,6 +1,6 @@
 //! Basic evolution strategy implementation
 
-use crate::evolvers::Evolver;
+use crate::evolvers::{Evolver, PopulationEvaluator};
 use crate::measurement::{FitnessMeasurer, HasFitness, HasMeasurement, HasViolations};
 use crate::operators::{MutatorVisitor, crossover};
 use crate::population::Individual;
@@ -232,6 +232,38 @@ where
         // put into descending order
         population.sort_by(|n1, n2| n2.cmp(n1));
         Ok(population)
+    }
+}
+
+pub trait AsNodeRef<N> {
+    fn as_node_ref(&self) -> &N;
+}
+
+impl<G, H, M, N, S, I, V> PopulationEvaluator<G, S, I> for BasicEvolver<H, M, N>
+where
+    H: BasicHook<N, G, S>,
+    N: Node + Generated<S, G>,
+    for<'a, 'b, 'c> N::TypeMut<'a>: VisitWithMut<MutatorVisitor<'b, S, G>>
+        + InPlaceGenerated<S, G>
+        + VisitableChildrenMut<N::TypeMut<'a>>,
+    for<'a> M: FitnessMeasurer<'a, N, Error = Error, Measurement = V>,
+    V: HasFitness + HasViolations,
+    V::Fitness: Ord,
+    S: Sampler<N>,
+    I: AsNodeRef<N>,
+{
+    fn evaluate_population(&mut self, to_evaluate: &[I]) -> Result<Self::Population, Self::Error> {
+        let mut res = to_evaluate
+            .iter()
+            .map(|i| {
+                let node = i.as_node_ref();
+                let measurement = self.measurer.evaluate(node)?;
+                Ok(BasicIndividual::new(node.clone(), measurement))
+            })
+            .collect::<Result<Vec<_>, Self::Error>>()?;
+
+        res.sort_by(|n1, n2| n2.measurement.fitness().cmp(n1.measurement.fitness()));
+        Ok(res)
     }
 }
 

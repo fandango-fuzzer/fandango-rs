@@ -10,6 +10,7 @@ std = ["libafl/std", "libafl_bolts/std", "libafl_bolts/serdeany_autoreg"]
 
 [dependencies]
 fandango = { path = ".." }
+fandango-runtime = { path = "../runtime" }
 
 libafl = { workspace = true, features = ["rand_trait"] }
 libafl_bolts = { workspace = true, features = ["rand_trait"] }
@@ -18,6 +19,8 @@ serde = { workspace = true, features = ["alloc", "derive"] }
 
 [dev-dependencies]
 rand = { workspace = true, features = ["std_rng"] }
+fandango-targets = { path = "../targets", features = ["xml", "serde"] }
+num-rational = { workspace = true }
 
 [lints]
 workspace = true
