@@ -1,6 +1,6 @@
 # fandango-rs
 
-This commit represents the artifact for the OOPSLA submission.
+This commit represents the artifact for the arXiv submission.
 Thanks for checking it out!
 We're quite proud of it, and happy that you're working with our code.
 
