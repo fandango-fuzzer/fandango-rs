@@ -1,5 +1,5 @@
 [package]
-name = "libafl-demo"
+name = "libafl-demo-clang"
 version.workspace = true
 edition.workspace = true
 authors.workspace = true
@@ -10,7 +10,10 @@ std = ["libafl/std", "libafl_bolts/std", "libafl_bolts/serdeany_autoreg"]
 
 [dependencies]
 fandango = { path = "../.." }
-fandango-targets = { path = "../../targets", features = ["xml", "serde"] }
+fandango-targets = { path = "../../targets", features = [
+    "scriptsizec",
+    "serde",
+] }
 
 libafl_cc = { workspace = true }
 libafl = { workspace = true, features = ["rand_trait"] }
