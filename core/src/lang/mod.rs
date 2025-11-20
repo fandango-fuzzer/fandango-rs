@@ -202,12 +202,15 @@ impl Program<'static> {
     }
 }
 
-impl Program<'static> {
-    /// Construct a known [`Program`] at compile-time -- for use in generated code only.
+impl<'source> Program<'source> {
+    /// Extract the nonterminal definitions and their right-hand sides.
     #[must_use]
-    pub fn nonterminals(
-        &'static self,
-    ) -> HashMap<FandangoNode<'static, 'static>, FandangoNode<'static, 'static>> {
+    pub fn nonterminals<'program>(
+        &'program self,
+    ) -> HashMap<FandangoNode<'program, 'source>, FandangoNode<'program, 'source>>
+    where
+        'source: 'program,
+    {
         self.statements()
             .iter()
             .filter_map(|s| match s.inner() {
