@@ -48,10 +48,10 @@ members = [
     "baselines/scriptsizec",
     "baselines/xml",
     "libafl",
+    "demos/libafl-demo-xml",
+    "demos/libafl-demo-clang",
 ]
-default-members = [
-    ".", "core", "derive", "targets", "generator", "runtime"
-]
+default-members = [".", "core", "derive", "targets", "generator", "runtime"]
 resolver = "3"
 
 [workspace.package]
@@ -67,11 +67,13 @@ embedded-io = { version = "0.6.1", features = ["alloc"] }
 foldhash = { version = "0.2.0", default-features = false }
 hashbrown = "0.16.0"
 libafl = { version = "0.15.3", default-features = false }
+libafl_cc = { version = "0.15.3", default-features = false }
+libafl_targets = { version = "0.15.3", default-features = false }
 libafl_bolts = { version = "0.15.3", default-features = false }
 linfa = "0.7.1"
 linfa-linear = "0.7.1"
 mappable-rc = { version = "0.1.1", default-features = false }
-ndarray = "0.15.6" # based on what linfa supports
+ndarray = "0.15.6"                                                # based on what linfa supports
 num-integer = { version = "0.1.46", default-features = false }
 num-rational = { version = "0.4.2", default-features = false }
 num-traits = { version = "0.2.19", default-features = false }

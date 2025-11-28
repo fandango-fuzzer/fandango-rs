@@ -45,7 +45,14 @@ mod defs {
 
     /// Base for the XML grammar stored in xml.fan.
     #[derive(Fandango)]
-    #[fandango(grammar = "grammars/xml.fan", parse = false)]
+    #[cfg_attr(
+        feature = "serde",
+        fandango(grammar = "grammars/xml.fan", parse = false, serde = true)
+    )]
+    #[cfg_attr(
+        not(feature = "serde"),
+        fandango(grammar = "grammars/xml.fan", parse = false, serde = false)
+    )]
     pub struct Xml(Infallible);
 
     /// A visitor which collects the violations of the constraints in the XML grammar.

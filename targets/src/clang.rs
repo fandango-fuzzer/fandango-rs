@@ -45,7 +45,14 @@ mod defs {
 
     /// Base for the C language grammar stored in c_lang.fan.
     #[derive(Fandango)]
-    #[fandango(grammar = "grammars/c_lang.fan", parse = false)]
+    #[cfg_attr(
+        feature = "serde",
+        fandango(grammar = "grammars/c_lang.fan", parse = false, serde = true)
+    )]
+    #[cfg_attr(
+        not(feature = "serde"),
+        fandango(grammar = "grammars/c_lang.fan", parse = false, serde = false)
+    )]
     pub struct CLang(Infallible);
 
     // Helpful definitions.

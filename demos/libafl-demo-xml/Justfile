@@ -1,0 +1,56 @@
+[unix]
+cc:
+    cargo build --release --bin libafl_cc --target-dir target
+
+[unix]
+cxx:
+    cargo build --release --bin libafl_cxx --target-dir target
+
+CC_WRAPPER := "target/release/libafl_cc"
+CXX_WRAPPER := "target/release/libafl_cxx"
+ 
+
+[unix]
+source: cc cxx
+    if [ ! -f libxml2/Makefile ]; then \
+        rm -rf libxml2 && \
+        git clone https://gitlab.gnome.org/GNOME/libxml2.git && \
+        ( cd libxml2 && \
+          ./autogen.sh --without-python && \
+          ./configure --enable-static --disable-shared ); \
+    fi
+
+[unix]
+fuzzer_lib:
+    cargo build --release --target-dir target
+
+[unix]
+lib_clean:
+    cd libxml2 && \
+    make clean
+    
+
+[unix]
+lib: source fuzzer_lib
+    cd libxml2 && \
+    make -j$(nproc) \
+    CC="$(realpath ../{{CC_WRAPPER}})" \
+    CXX="$(realpath ../{{CXX_WRAPPER}})" \
+    CFLAGS="-DFUZZING_BUILD_MODE_UNSAFE_FOR_PRODUCTION -fno-pie -fno-PIE" \
+    LDFLAGS="-no-pie"
+
+[unix]
+fuzzer: lib
+    $(realpath {{CC_WRAPPER}}) -O2 -g -std=c11 \
+      -I libxml2/include \
+      libxml2/fuzz/xml.c libxml2/fuzz/fuzz.c \
+      libxml2/.libs/libxml2.a \
+      -lz -llzma -lpthread \
+      -o target/release/fuzzer
+
+[unix]
+run *args: fuzzer
+    target/release/fuzzer {{args}}
+
+clean:
+    rm -rf libxml2 target ../target

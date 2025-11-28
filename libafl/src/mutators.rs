@@ -1,7 +1,7 @@
-use crate::inputs::{DerivationTree, NodeCountMetadata};
+use crate::inputs::DerivationTree;
 use alloc::borrow::Cow;
-use alloc::boxed::Box;
-use core::num::NonZeroUsize;
+use alloc::fmt::Debug;
+use alloc::format;
 use core::ops::DerefMut;
 use fandango::generation::{InPlaceGenerated, Sampler};
 use fandango::typing::{AsNodeMut, Node};
@@ -38,7 +38,7 @@ impl<G, SM> Named for AdvanceMutator<SM, G> {
 
 impl<G, N, S, SM> Mutator<DerivationTree<N>, S> for AdvanceMutator<SM, G>
 where
-    N: Node,
+    N: Node + Debug,
     // boilerplate for CountNodes and Advance
     for<'a> N::TypeMut<'a>: InPlaceGenerated<SM, G>,
     SM: Sampler<N>,
@@ -52,24 +52,19 @@ where
         let seed = state.rand_mut().next();
         self.sampler.reseed(seed);
 
-        let metadata = state.metadata_map_mut().get_or_insert_with_boxed(|| {
-            Box::new(NodeCountMetadata::new(
-                NonZeroUsize::new(input.node_mut().count_nodes()).unwrap(),
-            ))
-        });
-        let position = self.sampler.sample() % metadata.count();
+        let count = input.node().count_nodes();
+        let position = self.sampler.sample() % count;
         let mut node = input.node_mut();
         let mut selected = Advance::forward_ref(position)
             .visit_mut(node.deref_mut(), 0)
             .unwrap()
             .break_value()
-            .unwrap();
+            .ok_or_else(|| {
+                Error::unknown(format!("Failed to advance node at position {position}"))
+            })?;
 
         selected.generate_in_place(&mut self.sampler, &mut self.generator, 0);
         drop(selected);
-
-        let count = metadata.count_mut();
-        *count = NonZeroUsize::new(node.count_nodes()).unwrap();
 
         Ok(MutationResult::Mutated)
     }
@@ -82,18 +77,19 @@ where
 
 #[cfg(test)]
 mod test {
+    use crate::generator::FandangoGenerator;
     use crate::inputs::DerivationTree;
     use crate::mutators::AdvanceMutator;
     use alloc::boxed::Box;
     use core::error::Error;
     use fandango::Fandango;
-    use fandango::generation::Generated;
     use libafl::corpus::NopCorpus;
+    use libafl::generators::Generator as _;
     use libafl::mutators::Mutator;
-    use libafl::state::StdState;
+    use libafl::state::{HasRand as _, StdState};
     use libafl_bolts::rands::StdRand;
-    use rand::SeedableRng;
     use rand::rngs::StdRng;
+    use rand::{RngCore as _, SeedableRng};
 
     #[derive(Fandango)]
     #[fandango(grammar = "../tests/grammars/simple.fan", parse = false, serde = true)]
@@ -110,14 +106,15 @@ mod test {
             &mut (),
         )?;
 
-        let mut rng = StdRng::seed_from_u64(0);
+        let sampler = StdRng::seed_from_u64(state.rand_mut().next_u64());
 
-        let input = nonterminal_start::generate(&mut rng, &mut (), 0);
-        let mut input = DerivationTree::new(input);
+        let mut generator = FandangoGenerator::new(sampler, ());
 
-        let mut mutator = AdvanceMutator::new(rng, (), "test");
+        let sampler = StdRng::seed_from_u64(state.rand_mut().next_u64());
+        let mut mutator = AdvanceMutator::new(sampler, (), "test");
 
         for _ in 0..10_000 {
+            let mut input: DerivationTree<nonterminal_start> = generator.generate(&mut state)?;
             mutator.mutate(&mut state, &mut input)?;
         }
 

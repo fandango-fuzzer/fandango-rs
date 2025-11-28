@@ -41,7 +41,14 @@ mod defs {
 
     /// Base for the CSV grammar stored in csv.fan.
     #[derive(Fandango)]
-    #[fandango(grammar = "grammars/csv.fan", parse = false)]
+    #[cfg_attr(
+        feature = "serde",
+        fandango(grammar = "grammars/csv.fan", parse = false, serde = true)
+    )]
+    #[cfg_attr(
+        not(feature = "serde"),
+        fandango(grammar = "grammars/csv.fan", parse = false, serde = false)
+    )]
     pub struct Csv(Infallible);
 
     /// A visitor which collects the violations of the constraints in the CSV grammar.

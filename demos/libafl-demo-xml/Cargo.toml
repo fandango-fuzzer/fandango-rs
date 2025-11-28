@@ -1,5 +1,5 @@
 [package]
-name = "libafl_fandango"
+name = "libafl-demo-xml"
 version.workspace = true
 edition.workspace = true
 authors.workspace = true
@@ -9,18 +9,28 @@ default = ["std"]
 std = ["libafl/std", "libafl_bolts/std", "libafl_bolts/serdeany_autoreg"]
 
 [dependencies]
-fandango = { path = ".." }
-fandango-runtime = { path = "../runtime" }
+fandango = { path = "../.." }
+fandango-targets = { path = "../../targets", features = ["xml", "serde"] }
 
+libafl_cc = { workspace = true }
 libafl = { workspace = true, features = ["rand_trait"] }
 libafl_bolts = { workspace = true, features = ["rand_trait"] }
+libafl_targets = { workspace = true, features = [
+    "coverage",
+    "common",
+    "libfuzzer",
+    "sancov_pcguard_edges",
+] }
+libafl_fandango = { path = "../../libafl" }
 mappable-rc.workspace = true
 serde = { workspace = true, features = ["alloc", "derive"] }
-
-[dev-dependencies]
+mimalloc = "0.1.48"
+clap = { version = "4.5.51", features = ["derive"] }
 rand = { workspace = true, features = ["std_rng"] }
-fandango-targets = { path = "../targets", features = ["xml", "serde"] }
-num-rational = { workspace = true }
 
 [lints]
 workspace = true
+
+[lib]
+name = "libafl_example"
+crate-type = ["staticlib"]

@@ -1,7 +1,7 @@
 use crate::feedbacks::GlobalKPathMetadata;
 use crate::inputs::{DerivationTree, KPathReducer};
 use alloc::collections::{BTreeMap, VecDeque};
-use core::ops::{Deref, DerefMut};
+use core::ops::Deref;
 use fandango::typing::Node;
 use fandango::visitor::Visitor;
 use fandango::visitor::kpath::KPathVisit;
