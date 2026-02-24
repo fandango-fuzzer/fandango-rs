@@ -425,8 +425,8 @@ fn run_once_validity_and_size_single(
             println!("saturated fitness at generation {i}");
             break;
         }
-        let fitness = 1.0f64 - fitness as f64 / population.len() as f64;
-        println!("average fitness at generation {i}: {fitness}");
+        let fitness = fitness as f64 / population.len() as f64;
+        println!("average violations at generation {i}: {fitness}");
         population = runtime.step(&mut generators, &mut sampler, population)?;
     }
 
@@ -840,8 +840,8 @@ fn run_once_validity_only_single(
             println!("saturated fitness at generation {i}");
             break;
         }
-        let fitness = 1.0f64 - fitness as f64 / population.len() as f64;
-        println!("average fitness at generation {i}: {fitness}");
+        let fitness = fitness as f64 / population.len() as f64;
+        println!("average violations at generation {i}: {fitness}");
         population = runtime.step(&mut generators, &mut sampler, population)?;
     }
 
