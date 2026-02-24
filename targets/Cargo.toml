@@ -44,16 +44,6 @@ path = "examples/xml_multiobjective.rs"
 required-features = ["xml", "static_defs"]
 
 [[example]]
-name = "c_lang_unconstrained"
-path = "examples/c_lang_unconstrained.rs"
-required-features = ["clang", "static_defs"]
-
-[[example]]
-name = "c_lang_validity_only"
-path = "examples/c_lang_validity_only.rs"
-required-features = ["clang", "static_defs"]
-
-[[example]]
-name = "c_lang_validity_and_size"
-path = "examples/c_lang_validity_and_size.rs"
+name = "c_lang"
+path = "examples/c_lang.rs"
 required-features = ["clang", "static_defs"]

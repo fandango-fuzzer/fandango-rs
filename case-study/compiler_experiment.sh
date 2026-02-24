@@ -42,16 +42,25 @@ deactivate
 #
 
 cd ../..
-cargo build --release --example c_lang_unconstrained --example c_lang_validity_only --example c_lang_validity_and_size --features clang,static_defs
+cargo build --release --example c_lang --features clang,static_defs
 
 # For unconstrained
-taskset -c 0 cargo run --release --example c_lang_unconstrained --features clang,static_defs
-mv ./c_lang_unconstrained_results.txt "${RESULTS}/c_lang_unconstrained_results.txt"
+# Technically, this will be the same result regardless of whether we use multi- or single-objective
+taskset -c 0 cargo run --release --example c_lang --features clang,static_defs -- single unconstrained
+mv ./c_lang.txt "${RESULTS}/c_lang_unconstrained_results.txt"
 
-# For validity only
-taskset -c 0 cargo run --release --example c_lang_validity_only --features clang,static_defs
-mv ./c_lang_validity_only_results.txt "${RESULTS}/c_lang_validity_only_results.txt"
+# For multi validity
+taskset -c 0 cargo run --release --example c_lang --features clang,static_defs -- multi validity
+mv ./c_lang.txt "${RESULTS}/c_lang_multi_valid_results.txt"
 
-# For validity + size
-taskset -c 0 cargo run --release --example c_lang_validity_and_size --features clang,static_defs
-mv ./c_lang_validity_and_size_results.txt "${RESULTS}/c_lang_validity_and_size_results.txt"
+# For single validity
+taskset -c 0 cargo run --release --example c_lang --features clang,static_defs -- single validity
+mv ./c_lang.txt "${RESULTS}/c_lang_single_valid_results.txt"
+
+# For multi validity and size
+taskset -c 0 cargo run --release --example c_lang --features clang,static_defs -- multi both
+mv ./c_lang.txt "${RESULTS}/c_lang_multi_both_results.txt"
+
+# For single validity and size
+taskset -c 0 cargo run --release --example c_lang --features clang,static_defs -- single both
+mv ./c_lang.txt "${RESULTS}/c_lang_single_both_results.txt"
