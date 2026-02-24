@@ -64,7 +64,7 @@ def get_current_function(func_symbol_table, scope_trace):
             if func_trace == sub_trace:
                 return func_name, (param_types, return_type)
     return None, None
-    
+
 def get_var_definition(var_symbol_table, var_name, scope_trace):
     for i in range(len(scope_trace), -1, -1):
         sub_trace = scope_trace[:i]
@@ -87,21 +87,21 @@ def flatten_param_list_e(node):
         return flatten_param_list(node)
     else:
         return []
-    
+
 def flatten_param_list(node):
     # <param_list> ::= <param> | <param> "," <sep> <param_list> ;
     if len(node.children) == 1:
         return [node.children[0]]  # Single param
     else:
         return [node.children[0]] + flatten_param_list(node.children[3])  # param + param_list
-    
+
 def flatten_field_def_list_e(node):
     # <field_def_list_e> ::= <field_def_list> | <e> ;
     if get_node_name(node) == 'field_def_list':
         return flatten_field_def_list(node)
     else:
         return []
-    
+
 def flatten_field_def_list(node):
     # <field_def_list> ::= <ttype> <sep> <field_name> ";" | <ttype> <sep> <field_name> ";" "\n" <field_def_list> ;
     if len(node.children) == 4:
@@ -115,8 +115,8 @@ def flatten_expr_list_e(node):
     if get_node_name(inner_node) == 'expr_list':
         return flatten_expr_list(inner_node)
     else:
-        return []   
-    
+        return []
+
 def flatten_expr_list(node):
     # <expr_list> ::= <expr> | <expr> "," "\n" <expr_list> ;
     if len(node.children) == 1:
@@ -131,7 +131,7 @@ def flatten_fn_body_e(node):
         return flatten_statements(node_inner)
     else:
         return []
-    
+
 def flatten_statements(node):
     # <statements> ::= <stmt> "\n" | <stmt> "\n" <statements> ;
     # node_inner = node.children[0]
@@ -221,7 +221,7 @@ class DeclarationCollector(DerivationTreeVisitor):
         param_list_node = node.children[6]  # Assuming <param_list_e> is the seventh child
         param_types = []
         param_names = []
-        
+
         # Extract parameters
         for param_node in flatten_param_list_e(param_list_node):
             param_type = param_node.children[0].value()  # <ttype>
@@ -233,7 +233,7 @@ class DeclarationCollector(DerivationTreeVisitor):
             param_names.append(param_name)
             # Define parameter in the current function scope
             self.var_symbol_table.define(param_name, tuple(self.current_scope + [self.current_scope_id + 1]), param_type)
-        
+
         # Check if function already defined
         if get_func_definition(self.func_symbol_table, fn_name, tuple(self.current_scope)) is not None:
             self.violations.append(f"redeclaration_func_{fn_name}")
@@ -435,12 +435,12 @@ class ConstraintVisitorNoEmptyStruct(DerivationTreeVisitor):
 class TypeWrapper:
     def __init__(self, type_name, struct_fields=None, struct_fields_positional=None):
         self.type_name = type_name
-        
+
         if struct_fields is not None:
             self.struct_fields = struct_fields  # dict of field_name -> field_type (TypeWrapper)
         else:
             self.struct_fields = dict()  # field_name -> field_type (TypeWrapper)
-        
+
         if struct_fields_positional is not None:
             self.struct_fields_positional = struct_fields_positional  # list of (field_name, field_type) in order
         else:
@@ -451,7 +451,7 @@ class TypeWrapper:
 
     def is_struct_positional(self):
         return len(self.struct_fields_positional) > 0
-    
+
     def is_struct_named(self):
         return len(self.struct_fields) > 0
 
@@ -466,12 +466,12 @@ def coercion_and_subtyping_possible(t1, t2):
     # if t1 and t2 are the same, return True
     if t1.type_name == t2.type_name:
         return True
-    
+
     # if both are numeric types, return True
     numeric_types = ["int", "float", "double", "bool"]
     if t1.type_name in numeric_types and t2.type_name in numeric_types:
         return True
-    
+
     # otherwise,
     return False
 
@@ -491,7 +491,7 @@ def types_compatible(t1, t2):
             if not types_compatible(field_type, t2.struct_fields[field_name]):
                 return False
         return True
-    
+
     # If both are positional structs, check field compatibility by position
     if t1.is_struct_positional() and t2.is_struct_positional():
         if len(t1.struct_fields_positional) != len(t2.struct_fields_positional):
@@ -500,7 +500,7 @@ def types_compatible(t1, t2):
             if not types_compatible(field_type1, field_type2):
                 return False
         return True
-    
+
     # it is possible that one is named and one is positional
     if t1.is_struct() and t2.is_struct():
         positional_type = t1 if t1.is_struct_positional() else t2
@@ -511,11 +511,11 @@ def types_compatible(t1, t2):
             if not types_compatible(field_type, named_field_type):
                 return False
         return True
-    
+
     return False
 
 def type_resulting_from_binop(op, t1, t2):
-    # current binops are: <binop_op> ::= "+" | "-" | "/" | "*" | "%" | "^" | "==" | "!=" | "<=" | ">=" | "<" | ">" | "&&" | "||" 
+    # current binops are: <binop_op> ::= "+" | "-" | "/" | "*" | "%" | "^" | "==" | "!=" | "<=" | ">=" | "<" | ">" | "&&" | "||"
     if op in ["+", "-", "/", "*"]:
         if t1.type_name in ["int", "float", "double"] and t2.type_name in ["int", "float", "double"]:
             # Result type is the more general of the two
@@ -624,7 +624,7 @@ def infer_expr_type_unit(node, var_symbol_table, func_symbol_table, struct_defin
             return None  # Field not found in struct
         return field_dict[field_name]
     else:
-        return None  # Unknown expr_unit type    
+        return None  # Unknown expr_unit type
 
 def infer_expr_type(node, var_symbol_table, func_symbol_table, struct_definitions, scope_trace):
     # <expr> ::= <arith_expr> | <expr_unit> ;
@@ -706,7 +706,7 @@ class ConstraintVisitorTypeCheck(DerivationTreeVisitor):
                         expected_return_type = TypeWrapper(return_type, struct_fields=field_dict, struct_fields_positional=fields)
                     if not types_compatible(expr_type, expected_return_type):
                         self.violations.append(f"return_type_mismatch: expected {expected_return_type}, got {expr_type}")
-        
+
         # handle case when no return statement in function with non-void return type
         if return_type != "void":
             has_return = any(get_node_name(stmt) == 'return_stmt' for stmt in flattened_body)
@@ -848,7 +848,7 @@ def num_violations_validity_only(tree, should_print = False):
 
     # no duplicate struct fields
     no_duplicate_struct_fields_visitor = ConstraintVisitorNoDuplicateStructFields()
-    no_duplicate_struct_fields_visitor.visit(tree)  
+    no_duplicate_struct_fields_visitor.visit(tree)
 
     if should_print:
         print("=== No Duplicate Struct Fields Visitor ===")
@@ -902,7 +902,7 @@ def num_violations_validity_only(tree, should_print = False):
         type_check_visitor.visit(tree)
     except Exception as e:
         # print the traceback
-        traceback.print_exc()   
+        traceback.print_exc()
 
     if should_print:
         print("=== Type Check Visitor ===")
@@ -938,15 +938,11 @@ class SizeConstraintVisitor(DerivationTreeVisitor):
     # <struct_def> ::= "struct" <sep> <struct_name> <sep> "{" "\n" <field_def_list_e> "\n" "}" ;
     def visit_struct_def(self, node):
         self.struct_count += 1
-        if self.struct_count > 1:
-            self.violations.append("too_many_structs")
         self.generic_visit(node)
 
     # <fn_def> ::= <ttype> <sep> <fn_kwd> <sep> <fn_name> "(" <param_list_e> ")" <sep> "{" <sep> <fn_body_e> <sep> "}" ;
     def visit_fn_def(self, node):
         self.function_count += 1
-        if self.function_count > 1:
-            self.violations.append("too_many_functions")
         self.generic_visit(node)
 
     # <stmt> ::= <decl> | <assignment> | <fn_call_stmt> | <return_stmt> | <expr_stmt> ;
@@ -974,6 +970,12 @@ def num_violations_size_and_validity(tree, should_print = False):
         print("Statement Count:", reasonable_size_visitor.statement_count)
         for var in reasonable_size_visitor.violations:
             print(f"Violation: {var}")
+
+    if reasonable_size_visitor.struct_count > 1:
+        reasonable_size_visitor.violations.append("too_many_structs")
+
+    if reasonable_size_visitor.function_count > 1:
+        reasonable_size_visitor.violations.append("too_many_functions")
 
     # If there aren't enough statements, register another violation
     if reasonable_size_visitor.statement_count < 5:
@@ -1073,7 +1075,7 @@ def num_violations_size_and_validity(tree, should_print = False):
         type_check_visitor.visit(tree)
     except Exception as e:
         # print the traceback
-        traceback.print_exc()   
+        traceback.print_exc()
 
     if should_print:
         print("=== Type Check Visitor ===")

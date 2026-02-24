@@ -240,7 +240,6 @@ pub trait BasicHook<N, G, S> {
     /// Hook which is executed immediately after an individual is created, but before it is
     /// evaluated
     #[allow(unused)]
-
     fn individual_created(
         &mut self,
         node: &mut N,
