@@ -15,7 +15,7 @@ use fandango_core::visitor::kpath::{KPathUpdate, KPaths};
 use fandango_runtime::evolvers::Evolver;
 use fandango_runtime::evolvers::basic::BasicEvolver;
 use fandango_runtime::evolvers::multi::{
-    FitnessMeasurerTuple, KPathDiversityHook, MeasurementsCombined, Nsga2Evolver,
+    FitnessMeasurerTuple, MeasurementsCombined, Nsga2Evolver,
 };
 use fandango_runtime::measurement::{FitnessMeasurer, HasFitness};
 use fandango_runtime::measurement::{HasMeasurement, HasViolations};
@@ -122,11 +122,9 @@ fn run_once_validity_and_size(
     let fns = FnGoal { n: 1 };
     let stmts = StmtGoal { n: 5 };
 
-    let fixer = ();
-    let hook = KPathDiversityHook::new(fixer, NonZeroUsize::new(10).unwrap());
     let mut runtime = Nsga2Evolver::new::<clang::nonterminal_start>(
         (structs, (fns, (stmts, CombinedConstraintFitnessMeasurer))),
-        hook,
+        (),
         100,
         1000,
         Ratio::new(80, 100),
@@ -604,11 +602,9 @@ fn run_once_validity_only(
     fine_print: bool,
     print_successful_compile: bool,
 ) -> Result<(i32, i32, i32, f32, f32), Error> {
-    let fixer = ();
-    let hook = KPathDiversityHook::new(fixer, NonZeroUsize::new(10).unwrap());
     let mut runtime = Nsga2Evolver::new::<nonterminal_start>(
         CombinedConstraintFitnessMeasurer,
-        hook,
+        (),
         100,
         1000,
         Ratio::new(80, 100),
