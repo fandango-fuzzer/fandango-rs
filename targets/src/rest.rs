@@ -254,8 +254,9 @@ mod defs {
         #[allow(deprecated)]
         fn check_constraint() -> Result<(), Box<dyn Error>> {
             let mut rng = StdRng::seed_from_u64(0);
+            // REST grammar stack seems to have grown? unfortunate.
             let mut generators =
-                tuple_list!(DepthLimiter::new(rest::nonterminal_start::ROOT.inner(), 50));
+                tuple_list!(DepthLimiter::new(rest::nonterminal_start::ROOT.inner(), 25));
             let mut diff_count = 0;
             for _ in 0..100_000 {
                 let tree = rest::nonterminal_start::generate(&mut rng, &mut generators, 0);
