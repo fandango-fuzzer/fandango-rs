@@ -768,11 +768,11 @@ impl<'program, 'source> IntoRustSource<FandangoGenContext<'_, '_, 'program, 'sou
                                     type ChildMut<'a> = #child_mut_types;
 
                                     fn child(&self) -> Self::Child<'_> {
-                                        #ref_visit_prefixes(self.child_0.get(N))
+                                        #ref_visit_prefixes(self.child_0.get())
                                     }
 
                                     fn child_mut(&mut self) -> Self::ChildMut<'_> {
-                                        #visit_prefixes(self.child_0.get_mut(N))
+                                        #visit_prefixes(self.child_0.get_mut())
                                     }
                                 }
                             )*

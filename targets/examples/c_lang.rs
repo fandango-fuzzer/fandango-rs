@@ -14,9 +14,7 @@ use fandango_core::generation::Generated;
 use fandango_core::visitor::kpath::{KPathUpdate, KPaths};
 use fandango_runtime::evolvers::Evolver;
 use fandango_runtime::evolvers::basic::BasicEvolver;
-use fandango_runtime::evolvers::multi::{
-    FitnessMeasurerTuple, MeasurementsCombined, Nsga2Evolver,
-};
+use fandango_runtime::evolvers::multi::{FitnessMeasurerTuple, MeasurementsCombined, Nsga2Evolver};
 use fandango_runtime::measurement::{FitnessMeasurer, HasFitness};
 use fandango_runtime::measurement::{HasMeasurement, HasViolations};
 use fandango_runtime::operators::{DepthLimiter, NodeScan};
