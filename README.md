@@ -1,6 +1,6 @@
 # fandango-rs
 
-This commit represents the artifact for the arXiv submission.
+This commit represents the artifact for the submission.
 Thanks for checking it out!
 We're quite proud of it, and happy that you're working with our code.
 
@@ -18,23 +18,25 @@ The table presented in section 5 is as follows:
     }
     \label{tab:compiler-test-summary}
     \begin{threeparttable}
-    \begin{tabular}{crrrrr}
+    \begin{tabular}{ccrrrrr}
         \toprule
-         & \multicolumn{5}{c}{\tool{}} \\
-          \cmidrule(l{0.25em}r{0.25em}){2-6}
-        Objectives & \# Valid Prog. & $k$-path ($k=5$) & Gen. Time & {\tt gcc} Time & Total Time \\
+         & \multicolumn{6}{c}{\tool{}} \\
+          \cmidrule(l{0.25em}r{0.25em}){2-7}
+        Objectives & Multi? & \# Valid & $5$-path & Gen. Time & {\tt gcc} Time & Total \\
         \midrule
-        $\varnothing$ & \unconstrainedCompileAvgRs/\unconstrainedTotalAvgRs & \unconstrainedKPathCoverageAvgRs & \unconstrainedGenTimeAvgRs & \unconstrainedCompileTimeAvgRs & \unconstrainedTotalTimeAvgRs \\
-        Validity & \validConstrainedCompileAvgRs/\validConstrainedTotalAvgRs & \validConstrainedKPathCoverageAvgRs & \validConstrainedGenTimeAvgRs & \validConstrainedCompileTimeAvgRs & \validConstrainedTotalTimeAvgRs \\
-        Validity $\cup$ Generation & \validAndSizedConstrainedCompileAvgRs/\validAndSizedConstrainedTotalAvgRs & \validAndSizedConstrainedKPathCoverageAvgRs & \validAndSizedConstrainedGenTimeAvgRs & \validAndSizedConstrainedCompileTimeAvgRs & \validAndSizedConstrainedTotalTimeAvgRs \\
+        $\varnothing$ & N/A & \unconstrainedCompileAvgRs/\unconstrainedTotalAvgRs & \unconstrainedKPathCoverageAvgRs & \unconstrainedGenTimeAvgRs & \unconstrainedCompileTimeAvgRs & \unconstrainedTotalTimeAvgRs \\
+        \multirow{2}*{Validity} & \xmark & \singleValidCompileAvgRs/\singleValidTotalAvgRs & \singleValidKPathCoverageAvgRs & \singleValidGenTimeAvgRs & \singleValidCompileTimeAvgRs & \singleValidTotalTimeAvgRs \\
+         & \cmark & \multiValidCompileAvgRs/\multiValidTotalAvgRs & \multiValidKPathCoverageAvgRs & \multiValidGenTimeAvgRs & \multiValidCompileTimeAvgRs & \multiValidTotalTimeAvgRs \\
+        \multirow{2}*{Validity $\cup$ Generation} & \xmark & \singleValidAndSizedCompileAvgRs/\singleValidAndSizedTotalAvgRs & \singleValidAndSizedKPathCoverageAvgRs & \singleValidAndSizedGenTimeAvgRs & \singleValidAndSizedCompileTimeAvgRs & \singleValidAndSizedTotalTimeAvgRs \\
+         & \cmark & \multiValidAndSizedCompileAvgRs/\multiValidAndSizedTotalAvgRs & \multiValidAndSizedKPathCoverageAvgRs & \multiValidAndSizedGenTimeAvgRs & \multiValidAndSizedCompileTimeAvgRs & \multiValidAndSizedTotalTimeAvgRs \\
         \midrule
-         & \multicolumn{5}{c}{\fandango{}} \\
-          \cmidrule(l{0.25em}r{0.25em}){2-6}
-        Objectives & \# Valid Prog. & $k$-path ($k=5$) & Gen. Time & {\tt gcc} Time & Total Time \\
+         & \multicolumn{6}{c}{\fandango{}} \\
+          \cmidrule(l{0.25em}r{0.25em}){2-7}
+        Objectives & Multi? & \# Valid & $5$-path & Gen. Time & {\tt gcc} Time & Total \\
         \midrule
-        $\varnothing$ & \unconstrainedCompileAvgPy/\unconstrainedTotalAvgPy & \unconstrainedKPathCoverageAvgPy & \unconstrainedGenTimeAvgPy & \unconstrainedCompileTimeAvgPy & \unconstrainedTotalTimeAvgPy \\
-        Validity & \validConstrainedCompileAvgPy/\validConstrainedTotalAvgPy & \validConstrainedKPathCoverageAvgPy & \validConstrainedGenTimeAvgPy & \validConstrainedCompileTimeAvgPy & \validConstrainedTotalTimeAvgPy \\
-        Validity $\cup$ Generation & \textit{n.d.}\tnote{3} & \textit{n.d.}\tnote{3} & \textit{n.d.}\tnote{3} & \textit{n.d.}\tnote{3} & \textit{n.d.}\tnote{4} \\
+        $\varnothing$ & N/A & \unconstrainedCompileAvgPy/\unconstrainedTotalAvgPy & \unconstrainedKPathCoverageAvgPy & \unconstrainedGenTimeAvgPy & \unconstrainedCompileTimeAvgPy & \unconstrainedTotalTimeAvgPy \\
+        Validity & \xmark & \validConstrainedCompileAvgPy/\validConstrainedTotalAvgPy & \validConstrainedKPathCoverageAvgPy & \validConstrainedGenTimeAvgPy & \validConstrainedCompileTimeAvgPy & \validConstrainedTotalTimeAvgPy \\
+        Validity $\cup$ Generation & \xmark & \textit{n.d.}\tnote{3} & \textit{n.d.}\tnote{3} & \textit{n.d.}\tnote{3} & \textit{n.d.}\tnote{3} & \textit{n.d.}\tnote{4} \\
         \bottomrule
     \end{tabular}
     \begin{tablenotes}
@@ -55,13 +57,11 @@ cd case-study
 ./compiler_experiment.sh
 ```
 
-To see the results and see the results to fill the table:
+To see the results and see the results to fill the table, simply execute:
 
-- `cat compiler-testing-results/c_lang_unconstrained_results.txt` for the unconstrained fandango-rs experiment;
-- `cat compiler-testing-results/c_lang_validity_only_results.txt` for the fandango-rs experiment with validity constraints;
-- `cat compiler-testing-results/c_lang_validity_and_size_results.txt` for the fandango-rs experiment with generation goals and validity constraints;
-- `cat compiler-testing-results/c_lang_unconstrained_results_python.txt` for the unconstrained experiment with original fandango;
-- `cat compiler-testing-results/c_lang_validity_only_results_python.txt` for the validity constrained experiment with original fandango.
+```
+cat compiler-testing-results/c_lang_*.txt
+```
 
 ## Navigating this repository
 
