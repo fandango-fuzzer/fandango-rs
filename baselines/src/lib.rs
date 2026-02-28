@@ -31,6 +31,8 @@ pub type DataRepr = DatasetBase<ArrayBase<OwnedRepr<f64>, Ix2>, ArrayBase<OwnedR
 pub type ModelWithDataset = (FittedLinearRegression<f64>, DataRepr);
 
 /// Regress over a given set of measurements
+#[must_use]
+#[allow(clippy::missing_panics_doc)]
 pub fn regress<const DIM: usize>(
     measurements: Vec<(f64, [f64; DIM])>,
     features: [&'static str; DIM],

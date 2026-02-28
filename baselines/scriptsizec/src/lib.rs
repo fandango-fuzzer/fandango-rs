@@ -1,4 +1,4 @@
-//! Benchmarking definitions for the ScriptSizeC grammar.
+//! Benchmarking definitions for the `ScriptSizeC` grammar.
 
 #![no_std]
 
@@ -8,7 +8,7 @@ use common::DynamicBenchmarkSuite;
 use core::convert::Infallible;
 use fandango_targets::scriptsizec;
 
-/// The [`BenchmarkSuite`] definition for ScriptSizeC.
+/// The [`BenchmarkSuite`] definition for `ScriptSizeC`.
 pub struct Benchmark(Infallible);
 
 impl DynamicBenchmarkSuite for Benchmark {

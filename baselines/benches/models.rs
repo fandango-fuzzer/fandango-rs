@@ -1,6 +1,10 @@
 //! Benchmarking which produces models of FANDANGO operations
 
+// we use dynamic operations
 #![expect(deprecated)]
+// we cast size values (<<54-bit) to floating point or 32-bits
+#![allow(clippy::cast_possible_truncation)]
+#![allow(clippy::cast_precision_loss)]
 
 use baselines::{OperationModel, regress};
 use common::{BenchmarkSuite, StdGenerator, StdSampler};
@@ -83,7 +87,7 @@ where
         for input in chunk {
             output.push(f(black_box(input)));
         }
-        elapsed = Instant::now() - start;
+        elapsed = start.elapsed();
     }
     drop(inputs); // force late drop
 
@@ -93,6 +97,7 @@ where
     )
 }
 
+#[allow(clippy::too_many_lines)]
 fn perform_benchmark<B>(subject: &str) -> (OperationModel, OperationModel)
 where
     B: BenchmarkSuite<StdSampler, StdGenerator>,
@@ -169,7 +174,7 @@ where
         "  generate: {:.2} nanoseconds/node (MAE = {:.2}, {} samples)",
         generate.params()[0] * 1_000_000_000f64,
         (generate.predict(&data.records) - data.targets)
-            .mapv(|f| f.abs())
+            .mapv(f64::abs)
             .mean()
             .unwrap_or(0.0)
             * 1_000_000_000f64,
@@ -207,7 +212,7 @@ where
         "  generate (dynamic): {:.2} nanoseconds/node (MAE = {:.2}, {} samples)",
         generate_dynamic.params()[0] * 1_000_000_000f64,
         (generate_dynamic.predict(&data.records) - data.targets)
-            .mapv(|f| f.abs())
+            .mapv(f64::abs)
             .mean()
             .unwrap_or(0.0)
             * 1_000_000_000f64,
@@ -218,8 +223,8 @@ where
     let mut samples = Vec::new();
     for &(size, seed) in &distributed {
         let generated = B::generate(&mut StdRng::seed_from_u64(seed), &mut generator);
-        let mut local_sampler = StdSampler::seed_from_u64(0xdeadbeef);
-        let (time, _) = measure(generated, |fixed| {
+        let mut local_sampler = StdSampler::seed_from_u64(0xdead_beef);
+        let (time, ()) = measure(generated, |fixed| {
             B::fix(fixed, &mut local_sampler, &mut generator);
         });
         samples.push((time.as_secs_f64(), [size as f64]));
@@ -229,7 +234,7 @@ where
         "  fix: {:.2} nanoseconds/node (MAE = {:.2}, {} samples)",
         fix.params()[0] * 1_000_000_000f64,
         (fix.predict(&data.records) - data.targets)
-            .mapv(|f| f.abs())
+            .mapv(f64::abs)
             .mean()
             .unwrap_or(0.0)
             * 1_000_000_000f64,
@@ -240,7 +245,7 @@ where
     let mut samples = Vec::new();
     for &(size, seed) in &distributed {
         let generated = B::generate(&mut StdRng::seed_from_u64(seed), &mut generator);
-        let (time, _) = measure(generated, |fixed| {
+        let (time, ()) = measure(generated, |fixed| {
             B::check(fixed);
         });
         samples.push((time.as_secs_f64(), [size as f64]));
@@ -250,7 +255,7 @@ where
         "  evaluate: {:.2} nanoseconds/node (MAE = {:.2}, {} samples)",
         evaluate.params()[0] * 1_000_000_000f64,
         (evaluate.predict(&data.records) - data.targets)
-            .mapv(|f| f.abs())
+            .mapv(f64::abs)
             .mean()
             .unwrap_or(0.0)
             * 1_000_000_000f64,
@@ -262,7 +267,7 @@ where
     for &(size, seed) in &distributed {
         let generated = B::generate(&mut StdRng::seed_from_u64(seed), &mut generator);
         let count = generated.count_nodes();
-        let mut local_sampler = StdRng::seed_from_u64(0xdeadbeef + seed);
+        let mut local_sampler = StdRng::seed_from_u64(0xdead_beef + seed);
         for _ in 0..MUTATIONS {
             let choice = local_sampler.next_u64() as usize % count;
             let mut path = Advance::forward(choice)
@@ -271,7 +276,7 @@ where
                 .break_value()
                 .unwrap();
             let (&idx, path) = path.make_contiguous().split_first().unwrap();
-            let (time, _) = measure(
+            let (time, ()) = measure(
                 (generated.clone(), local_sampler.clone()),
                 |(mutated, sampler)| {
                     black_box(mutated)
@@ -301,7 +306,7 @@ where
         mutate.params()[0] * 1_000_000_000f64,
         mutate.params()[1] * 1_000_000_000f64,
         (mutate.predict(&data.records) - data.targets)
-            .mapv(|f| f.abs())
+            .mapv(f64::abs)
             .mean()
             .unwrap_or(0.0)
             * 1_000_000_000f64,
@@ -322,7 +327,7 @@ where
             0,
         );
         let count = generated.count_nodes();
-        let mut local_sampler = StdRng::seed_from_u64(0xdeadbeef + seed);
+        let mut local_sampler = StdRng::seed_from_u64(0xdead_beef + seed);
         for _ in 0..MUTATIONS {
             let choice = local_sampler.next_u64() as usize % count;
             let mut path = Advance::forward(choice)
@@ -331,7 +336,7 @@ where
                 .break_value()
                 .unwrap();
             let (&idx, path) = path.make_contiguous().split_first().unwrap();
-            let (time, _) = measure(
+            let (time, ()) = measure(
                 (generated.clone(), local_sampler.clone()),
                 |(mutated, sampler)| {
                     let selected = black_box(mutated).go_to_mut(idx, black_box(path)).unwrap();
@@ -376,7 +381,7 @@ where
         mutate_dynamic.params()[0] * 1_000_000_000f64,
         mutate_dynamic.params()[1] * 1_000_000_000f64,
         (mutate_dynamic.predict(&data.records) - data.targets)
-            .mapv(|f| f.abs())
+            .mapv(f64::abs)
             .mean()
             .unwrap_or(0.0)
             * 1_000_000_000f64,
@@ -396,7 +401,7 @@ where
             .map(|a| a.last().unwrap())
         {
             let generated2 = B::generate(&mut StdRng::seed_from_u64(seed2), &mut generator);
-            let mut local_sampler = StdRng::seed_from_u64(0xdeadbeef + seed1);
+            let mut local_sampler = StdRng::seed_from_u64(0xdead_beef + seed1);
             for _ in 0..MUTATIONS {
                 let choice = local_sampler.next_u64() as usize % count1;
                 let mut path = Advance::forward(choice)
@@ -491,7 +496,7 @@ where
         crossover.params()[2] * 1_000_000_000f64,
         crossover.params()[3] * 1_000_000_000f64,
         (crossover.predict(&data.records) - data.targets)
-            .mapv(|f| f.abs())
+            .mapv(f64::abs)
             .mean()
             .unwrap_or(0.0)
             * 1_000_000_000f64,
@@ -529,7 +534,7 @@ where
                 &mut generator,
                 0,
             );
-            let mut local_sampler = StdRng::seed_from_u64(0xdeadbeef + seed1);
+            let mut local_sampler = StdRng::seed_from_u64(0xdead_beef + seed1);
             for _ in 0..MUTATIONS {
                 let choice = local_sampler.next_u64() as usize % count1;
                 let mut path = Advance::forward(choice)
@@ -624,7 +629,7 @@ where
         crossover_dynamic.params()[2] * 1_000_000_000f64,
         crossover_dynamic.params()[3] * 1_000_000_000f64,
         (crossover_dynamic.predict(&data.records) - data.targets)
-            .mapv(|f| f.abs())
+            .mapv(f64::abs)
             .mean()
             .unwrap_or(0.0)
             * 1_000_000_000f64,

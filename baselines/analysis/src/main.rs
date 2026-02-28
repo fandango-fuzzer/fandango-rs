@@ -1,5 +1,9 @@
 //! Analysis for all the things! Run this to reproduce the tables in the paper.
 
+// we cast many memory-bound sizes to floats
+// since this is basically guaranteed to be <54-bit integers, we ignore
+#![allow(clippy::cast_precision_loss)]
+
 use baselines::{DataRepr, OperationModel, regress};
 use hashbrown::HashMap;
 use linfa::dataset::Records;
@@ -61,6 +65,7 @@ struct Mutation {
 const SUBJECTS: &[&str] = &["csv", "rest", "scriptsizec", "xml"];
 const PROPER_NAMES: &[&str] = &["CSV", "REST", "ScriptSizeC", "XML"];
 
+#[allow(clippy::too_many_lines)]
 fn main() -> Result<(), Box<dyn Error>> {
     let mut fandango_models = HashMap::new();
     let mut fandango_data = HashMap::new();
@@ -79,7 +84,7 @@ fn main() -> Result<(), Box<dyn Error>> {
             let mut last = None;
             for line in reader.lines() {
                 let line = line?;
-                let trimmed = line.trim_end_matches(","); // fix format
+                let trimmed = line.trim_end_matches(','); // fix format
                 let measurement: FandangoMeasurement = serde_json::from_str(trimmed)?;
                 match measurement {
                     FandangoMeasurement::Crossover(cross) => crossovers.push((
@@ -108,10 +113,10 @@ fn main() -> Result<(), Box<dyn Error>> {
                         // replicate this behavior in Rust
                     }
                     FandangoMeasurement::EvaluateMissed(eval) => {
-                        evaluates.push((eval.time, [eval.size as f64]))
+                        evaluates.push((eval.time, [eval.size as f64]));
                     }
                     FandangoMeasurement::Generate(generate) => {
-                        generates.push((generate.time, [generate.size as f64]))
+                        generates.push((generate.time, [generate.size as f64]));
                     }
                     FandangoMeasurement::Mutation(mutation) => mutates.push((
                         mutation.time,
@@ -128,7 +133,7 @@ fn main() -> Result<(), Box<dyn Error>> {
             "  generate: {:.2} microseconds/node (MAE = {:.2}, {} samples)",
             generate.params()[0] * 1_000_000f64,
             (generate.predict(&generate_data.records) - generate_data.targets.view())
-                .mapv(|f| f.abs())
+                .mapv(f64::abs)
                 .mean()
                 .unwrap_or(0.0)
                 * 1_000_000f64,
@@ -139,7 +144,7 @@ fn main() -> Result<(), Box<dyn Error>> {
             "  fix: {:.2} microseconds/node (MAE = {:.2}, {} samples)",
             fix.params()[0] * 1_000_000f64,
             (fix.predict(&fix_data.records) - fix_data.targets.view())
-                .mapv(|f| f.abs())
+                .mapv(f64::abs)
                 .mean()
                 .unwrap_or(0.0)
                 * 1_000_000f64,
@@ -150,7 +155,7 @@ fn main() -> Result<(), Box<dyn Error>> {
             "  evaluate: {:.2} microseconds/node (MAE = {:.2}, {} samples)",
             evaluate.params()[0] * 1_000_000f64,
             (evaluate.predict(&evaluate_data.records) - evaluate_data.targets.view())
-                .mapv(|f| f.abs())
+                .mapv(f64::abs)
                 .mean()
                 .unwrap_or(0.0)
                 * 1_000_000f64,
@@ -162,7 +167,7 @@ fn main() -> Result<(), Box<dyn Error>> {
             mutate.params()[0] * 1_000_000f64,
             mutate.params()[1] * 1_000_000f64,
             (mutate.predict(&mutate_data.records) - mutate_data.targets.view())
-                .mapv(|f| f.abs())
+                .mapv(f64::abs)
                 .mean()
                 .unwrap_or(0.0)
                 * 1_000_000f64,
@@ -177,7 +182,7 @@ fn main() -> Result<(), Box<dyn Error>> {
             crossover.params()[2] * 1_000_000f64,
             crossover.params()[3] * 1_000_000f64,
             (crossover.predict(&crossover_data.records) - crossover_data.targets.view())
-                .mapv(|f| f.abs())
+                .mapv(f64::abs)
                 .mean()
                 .unwrap_or(0.0)
                 * 1_000_000f64,
@@ -239,13 +244,13 @@ fn main() -> Result<(), Box<dyn Error>> {
     println!("Table 1: Wall time taken to complete various operations:");
     println!(
         "{}",
-        r#"
+        r"
     \begin{tabular}{lrrrr}
     \toprule
      & \multicolumn{4}{c}{\tool{} (nanoseconds)} \\
      \cmidrule(l{0.25em}r{0.25em}){2-5}
      & \textit{Generate} & \textit{Check} & \textit{Mutate} & \textit{Crossover} \\
-     \midrule"#
+     \midrule"
             .trim_matches('\n')
     );
     for (&subject, &name) in SUBJECTS.iter().zip(PROPER_NAMES) {
@@ -257,16 +262,16 @@ fn main() -> Result<(), Box<dyn Error>> {
             maybe_print_rs(model.evaluate.as_ref().unwrap(), &["n"]),
             maybe_print_rs(&model.mutate, &["n", "m"]),
             maybe_print_rs(&model.crossover, &["n_1", "n_2", "m_1", "m_2"]),
-        )
+        );
     }
     println!(
         "{}",
-        r#"
+        r"
     \midrule
      & \multicolumn{4}{c}{\fandango{} (microseconds)} \\
      \cmidrule(l{0.25em}r{0.25em}){2-5}
      & \textit{Generate} & \textit{Check} & \textit{Mutate} & \textit{Crossover} \\
-     \midrule"#
+     \midrule"
             .trim_matches('\n')
     );
     for (&subject, &name) in SUBJECTS.iter().zip(PROPER_NAMES) {
@@ -283,16 +288,16 @@ fn main() -> Result<(), Box<dyn Error>> {
                 &model.crossover,
                 &["n_1", "n_2", "m_1", "m_2"]
             ),
-        )
+        );
     }
     println!(
         "{}",
-        r#"
+        r"
     \bottomrule
     \end{tabular}
     \begin{tablenotes}
         \item[1] Optimized out (\tool{}) or insufficient samples observed (\fandango{}).
-    \end{tablenotes}"#
+    \end{tablenotes}"
             .trim_matches('\n')
     );
 
@@ -301,31 +306,31 @@ fn main() -> Result<(), Box<dyn Error>> {
     println!("Table 2: Wall time of dynamic operations:");
     println!(
         "{}",
-        r#"
+        r"
     \begin{tabular}{lrrrr}
     \toprule
      & \textit{Generate} & \textit{Check} & \textit{Mutate} & \textit{Crossover} \\
-     \midrule"#
+     \midrule"
             .trim_matches('\n')
     );
     for (&subject, &name) in SUBJECTS.iter().zip(PROPER_NAMES) {
-        let model = rs_models.get(&format!("{}_dyn", subject)).unwrap();
+        let model = rs_models.get(&format!("{subject}_dyn")).unwrap();
         println!(
             r"    {name} & {} & \emph{{n.d.}}\tnote{{2}} & {} & {} \\",
             maybe_print_rs(&model.generate, &["n"]),
             maybe_print_rs(&model.mutate, &["n", "m"]),
             maybe_print_rs(&model.crossover, &["n_1", "n_2", "m_1", "m_2"]),
-        )
+        );
     }
     println!(
         "{}",
-        r#"
+        r"
     \bottomrule
     \end{tabular}
     \begin{tablenotes}
         \item[1] Optimized out.
         \item[2] Unimplemented.
-    \end{tablenotes}"#
+    \end{tablenotes}"
             .trim_matches('\n')
     );
     drop(rs_models);
@@ -339,13 +344,13 @@ fn main() -> Result<(), Box<dyn Error>> {
     println!("Table 3: Wall time taken for unoptimized operations:");
     println!(
         "{}",
-        r#"
+        r"
     \begin{tabular}{lrrrr}
     \toprule
      & \multicolumn{4}{c}{\tool{} (static, unoptimized; nanoseconds)} \\
      \cmidrule(l{0.25em}r{0.25em}){2-5}
      & \textit{Generate} & \textit{Check} & \textit{Mutate} & \textit{Crossover} \\
-     \midrule"#
+     \midrule"
             .trim_matches('\n')
     );
     for (&subject, &name) in SUBJECTS.iter().zip(PROPER_NAMES) {
@@ -356,36 +361,36 @@ fn main() -> Result<(), Box<dyn Error>> {
             maybe_print_rs(model.evaluate.as_ref().unwrap(), &["n"]),
             maybe_print_rs(&model.mutate, &["n", "m"]),
             maybe_print_rs(&model.crossover, &["n_1", "n_2", "m_1", "m_2"]),
-        )
+        );
     }
     println!(
         "{}",
-        r#"
+        r"
     \midrule
      & \multicolumn{4}{c}{\tool{} (dynamic, unoptimized; nanoseconds)} \\
      \cmidrule(l{0.25em}r{0.25em}){2-5}
      & \textit{Generate} & \textit{Check} & \textit{Mutate} & \textit{Crossover} \\
-     \midrule"#
+     \midrule"
             .trim_matches('\n')
     );
     for (&subject, &name) in SUBJECTS.iter().zip(PROPER_NAMES) {
-        let model = rs_models_noopt.get(&format!("{}_dyn", subject)).unwrap();
+        let model = rs_models_noopt.get(&format!("{subject}_dyn")).unwrap();
         println!(
             r"    {name} & {} & \emph{{n.d.}}\tnote{{2}} & {} & {} \\",
             maybe_print_rs(&model.generate, &["n"]),
             maybe_print_rs(&model.mutate, &["n", "m"]),
             maybe_print_rs(&model.crossover, &["n_1", "n_2", "m_1", "m_2"]),
-        )
+        );
     }
     println!(
         "{}",
-        r#"
+        r"
     \bottomrule
     \end{tabular}
     \begin{tablenotes}
         \item[1] Optimized out.
         \item[2] Unimplemented.
-    \end{tablenotes}"#
+    \end{tablenotes}"
             .trim_matches('\n')
     );
     drop(rs_models_noopt);
@@ -399,11 +404,11 @@ fn main() -> Result<(), Box<dyn Error>> {
     println!("Table 4: Wall time of operations without indirection optimization:");
     println!(
         "{}",
-        r#"
+        r"
     \begin{tabular}{lrrrr}
     \toprule
      & \textit{Generate} & \textit{Check} & \textit{Mutate} & \textit{Crossover} \\
-     \midrule"#
+     \midrule"
             .trim_matches('\n')
     );
     for (&subject, &name) in SUBJECTS.iter().zip(PROPER_NAMES) {
@@ -414,16 +419,16 @@ fn main() -> Result<(), Box<dyn Error>> {
             maybe_print_rs(model.evaluate.as_ref().unwrap(), &["n"]),
             maybe_print_rs(&model.mutate, &["n", "m"]),
             maybe_print_rs(&model.crossover, &["n_1", "n_2", "m_1", "m_2"]),
-        )
+        );
     }
     println!(
         "{}",
-        r#"
+        r"
     \bottomrule
     \end{tabular}
     \begin{tablenotes}
         \item[1] Optimized out.
-    \end{tablenotes}"#
+    \end{tablenotes}"
             .trim_matches('\n')
     );
 

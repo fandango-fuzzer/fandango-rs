@@ -58,11 +58,13 @@ mod defs {
 
     impl ConstraintVisitor {
         /// Construct this visitor in the form that was originally evaluated in FANDANGO.
+        #[must_use]
         pub fn evaluated() -> Self {
             ConstraintVisitor::default()
         }
 
         /// Construct this visitor in the form that produces correctly formatted data.
+        #[must_use]
         pub fn corrected() -> Self {
             ConstraintVisitor::default()
         }
@@ -74,7 +76,7 @@ mod defs {
                 if self.checked != 0 {
                     Ratio::new(self.checked - self.violations.len(), self.checked)
                 } else {
-                    Default::default()
+                    Ratio::default()
                 },
                 self.violations,
             )
@@ -272,6 +274,7 @@ mod defs {
     impl XmlFixHook<false> {
         /// The fix hook with the fixes available from the original FANDANGO
         #[deprecated(note = "The XML grammar fixer from FANDANGO is weaker than it could be.")]
+        #[must_use]
         pub fn evaluated() -> Self {
             Self
         }
@@ -279,6 +282,7 @@ mod defs {
 
     impl XmlFixHook<true> {
         /// The fix hook with maximum possible fixes
+        #[must_use]
         pub fn corrected() -> Self {
             Self
         }

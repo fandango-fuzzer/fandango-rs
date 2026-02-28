@@ -2,6 +2,8 @@
 
 #![expect(deprecated)]
 #![expect(missing_docs)]
+// we only work on 64-bit platforms; casting u64->usize is fine
+#![allow(clippy::cast_possible_truncation)]
 
 use common::{BenchmarkSuite, StdGenerator, StdSampler};
 use criterion::{
@@ -27,6 +29,7 @@ use std::time::Duration;
 pub const NUM_SEGMENTS: usize = 25;
 
 /// Do the benchmark! Set `B` to your desired baseline.
+#[allow(clippy::too_many_lines)]
 fn perform_benchmark<B>(c: &mut Criterion)
 where
     B: BenchmarkSuite<StdSampler, StdGenerator>,
@@ -121,7 +124,7 @@ where
                 || StdSampler::seed_from_u64(seeds.choose(&mut global).copied().unwrap()),
                 |sampler| B::generate(black_box(sampler), &mut generator),
                 BatchSize::SmallInput,
-            )
+            );
         });
 
         // raw generation
@@ -141,7 +144,7 @@ where
                     )
                 },
                 BatchSize::SmallInput,
-            )
+            );
         });
 
         // fixing a generated input
@@ -156,7 +159,7 @@ where
                 },
                 |(value, local)| B::fix(black_box(value), black_box(local), &mut generator),
                 BatchSize::SmallInput,
-            )
+            );
         });
 
         // checking the correctness of a generated input
@@ -170,7 +173,7 @@ where
                 },
                 |value| B::check(black_box(value)),
                 BatchSize::SmallInput,
-            )
+            );
         });
 
         // mutate a generated input
@@ -199,7 +202,7 @@ where
                     mutated.generate_in_place(black_box(&mut local), &mut generator, depth);
                 },
                 BatchSize::SmallInput,
-            )
+            );
         });
 
         // mutate a generated input
@@ -242,7 +245,7 @@ where
                     mutated.generate_in_place(&mut sampler, &mut generator, depth);
                 },
                 BatchSize::SmallInput,
-            )
+            );
         });
 
         // crossover a generated input using another sampled input
@@ -278,7 +281,7 @@ where
                     )
                 },
                 BatchSize::SmallInput,
-            )
+            );
         });
 
         // crossover a generated input using another sampled input
@@ -326,7 +329,7 @@ where
                     crossover(&mut value, &base, &mut local)
                 },
                 BatchSize::SmallInput,
-            )
+            );
         });
     }
 }

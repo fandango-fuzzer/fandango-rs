@@ -26,6 +26,10 @@ pub trait Visitor<T> {
     type Error;
 
     /// Visit a provided node. You are responsible for recursion.
+    ///
+    /// # Errors
+    ///
+    /// Emits an implementation-defined [`Visitor::Error`] when visiting fails.
     fn visit<'program, N>(self, node: &'program N, idx: usize) -> VisitResult<Self, T>
     where
         N: Node<Type<'program> = T>,
@@ -42,6 +46,10 @@ pub trait VisitorMut<T> {
     type Error;
 
     /// Visit a provided node. You are responsible for recursion.
+    ///
+    /// # Errors
+    ///
+    /// Emits an implementation-defined [`VisitorMut::Error`] when visiting fails.
     fn visit_mut<'program, N>(self, node: &'program mut N, idx: usize) -> VisitMutResult<Self, T>
     where
         N: Node<TypeMut<'program> = T>,
@@ -56,6 +64,10 @@ pub trait VisitWith<'a, V>: Sized {
     type Visited;
 
     /// Perform the visit on the opaque node.
+    ///
+    /// # Errors
+    ///
+    /// Emits an implementation-defined [`Visitor::Error`] when visiting fails.
     fn visit_with(&'a self, visitor: V, idx: usize) -> VisitResult<V, Self::Visited>
     where
         V: Visitor<Self::Visited>;
@@ -64,6 +76,10 @@ pub trait VisitWith<'a, V>: Sized {
 /// Visits a mutable opaque node with the provided visitor.
 pub trait VisitWithMut<V>: Sized {
     /// Perform the visit on the opaque node.
+    ///
+    /// # Errors
+    ///
+    /// Emits an implementation-defined [`VisitorMut::Error`] when visiting fails.
     fn visit_with_mut(self, visitor: V, idx: usize) -> VisitMutResult<V, Self>
     where
         V: VisitorMut<Self>;
@@ -96,26 +112,46 @@ where
 /// Denotes that a node (and its children) may be visited by a given visitor.
 pub trait VisitableChildren<T> {
     /// Visit each of the children of this node, in order.
+    ///
+    /// # Errors
+    ///
+    /// Emits an implementation-defined [`Visitor::Error`] when visiting fails.
     fn visit_each<V>(self, visitor: V) -> VisitResult<V, T>
     where
         V: Visitor<T, Continue = V>;
 
     /// Visit each of the children of this node, in reverse order.
+    ///
+    /// # Errors
+    ///
+    /// Emits an implementation-defined [`Visitor::Error`] when visiting fails.
     fn visit_each_reverse<V>(self, visitor: V) -> VisitResult<V, T>
     where
         V: Visitor<T, Continue = V>;
 
     /// Visit each of the children of this node, in order, starting at a given node (inclusive).
+    ///
+    /// # Errors
+    ///
+    /// Emits an implementation-defined [`Visitor::Error`] when visiting fails.
     fn visit_each_from<V>(self, visitor: V, idx: usize) -> VisitResult<V, T>
     where
         V: Visitor<T, Continue = V>;
 
     /// Visit each of the children of this node, in reverse order, starting at a given node (inclusive).
+    ///
+    /// # Errors
+    ///
+    /// Emits an implementation-defined [`Visitor::Error`] when visiting fails.
     fn visit_each_reverse_from<V>(self, visitor: V, idx: usize) -> VisitResult<V, T>
     where
         V: Visitor<T, Continue = V>;
 
     /// Visit just the nth child, or return the visitor if the nth child did not exist.
+    ///
+    /// # Errors
+    ///
+    /// Emits an implementation-defined [`Visitor::Error`] when visiting fails.
     fn visit_nth<V>(self, visitor: V, idx: usize) -> MaybeVisitResult<V, T>
     where
         V: Visitor<T>;
@@ -124,26 +160,46 @@ pub trait VisitableChildren<T> {
 /// Denotes that a node (and its children) may be visited by a given visitor.
 pub trait VisitableChildrenMut<T> {
     /// Visit each of the children of this node, in order.
+    ///
+    /// # Errors
+    ///
+    /// Emits an implementation-defined [`VisitorMut::Error`] when visiting fails.
     fn visit_each_mut<V>(self, visitor: V) -> VisitMutResult<V, T>
     where
         V: VisitorMut<T, Continue = V>;
 
     /// Visit each of the children of this node, in reverse order.
+    ///
+    /// # Errors
+    ///
+    /// Emits an implementation-defined [`VisitorMut::Error`] when visiting fails.
     fn visit_each_reverse_mut<V>(self, visitor: V) -> VisitMutResult<V, T>
     where
         V: VisitorMut<T, Continue = V>;
 
     /// Visit each of the children of this node, in order, starting at a given node (inclusive).
+    ///
+    /// # Errors
+    ///
+    /// Emits an implementation-defined [`VisitorMut::Error`] when visiting fails.
     fn visit_each_mut_from<V>(self, visitor: V, idx: usize) -> VisitMutResult<V, T>
     where
         V: VisitorMut<T, Continue = V>;
 
     /// Visit each of the children of this node, in reverse order, starting at a given node (inclusive).
+    ///
+    /// # Errors
+    ///
+    /// Emits an implementation-defined [`VisitorMut::Error`] when visiting fails.
     fn visit_each_reverse_mut_from<V>(self, visitor: V, idx: usize) -> VisitMutResult<V, T>
     where
         V: VisitorMut<T, Continue = V>;
 
     /// Visit just the nth child, or return the visitor if the nth child did not exist.
+    ///
+    /// # Errors
+    ///
+    /// Emits an implementation-defined [`VisitorMut::Error`] when visiting fails.
     fn visit_nth_mut<V>(self, visitor: V, idx: usize) -> MaybeVisitMutResult<V, T>
     where
         V: VisitorMut<T>;

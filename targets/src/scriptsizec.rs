@@ -38,12 +38,12 @@ mod defs {
     use hashbrown::HashSet;
     use num_rational::Ratio;
 
-    /// Base for the ScriptSizeC grammar stored in ssc.fan.
+    /// Base for the `ScriptSizeC` grammar stored in ssc.fan.
     #[derive(Fandango)]
     #[fandango(grammar = "grammars/scriptsizec.fan", parse = false)]
     pub struct ScriptSizeC(Infallible);
 
-    /// A visitor which collects the violations of the constraints in the ScriptSizeC grammar.
+    /// A visitor which collects the violations of the constraints in the `ScriptSizeC` grammar.
     #[derive(Debug, Default)]
     pub struct ConstraintVisitor<S> {
         scope: S,
@@ -57,6 +57,7 @@ mod defs {
     impl ConstraintVisitor<EvaluatedScope> {
         /// Construct this visitor in the form that was originally evaluated in FANDANGO.
         #[deprecated(note = "The ScriptSizeC grammar originally does not implement scoping.")]
+        #[must_use]
         pub fn evaluated() -> Self {
             Self::default()
         }
@@ -71,7 +72,7 @@ mod defs {
                 if self.checked != 0 {
                     Ratio::new(self.checked - self.violations.len(), self.checked)
                 } else {
-                    Default::default()
+                    Ratio::default()
                 },
                 self.violations,
             )
@@ -119,7 +120,7 @@ mod defs {
         }
     }
 
-    /// A visitor which applies fixes based on the constraints in the ScriptSizeC grammar.
+    /// A visitor which applies fixes based on the constraints in the `ScriptSizeC` grammar.
     #[allow(dead_code)]
     pub struct ConstraintFixer<S> {
         scope: S,
@@ -128,6 +129,7 @@ mod defs {
     impl ConstraintFixer<EvaluatedScope> {
         /// Construct this fixer in the form that was originally evaluated in FANDANGO.
         #[deprecated(note = "The ScriptSizeC grammar originally does not implement scoping.")]
+        #[must_use]
         pub fn evaluated() -> Self {
             Self {
                 scope: HashSet::new(),

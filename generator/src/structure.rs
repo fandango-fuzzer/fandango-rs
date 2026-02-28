@@ -5,6 +5,8 @@ use pest::Span;
 use proc_macro2::{Ident, Literal, TokenStream};
 use quote::{format_ident, quote};
 
+// this function is extremely non-trivial to break apart, so I'm not so worried
+#[allow(clippy::too_many_lines)]
 pub(crate) fn tokenize_metadata<'p, 's>(
     node: &FandangoNode<'p, 's>,
     span: Span<'s>,

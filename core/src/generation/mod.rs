@@ -40,6 +40,7 @@ impl<R> RawSampler for R
 where
     R: Rng + SeedableRng,
 {
+    #[allow(clippy::cast_possible_truncation)]
     fn sample(&mut self) -> usize {
         self.next_u64() as usize
     }

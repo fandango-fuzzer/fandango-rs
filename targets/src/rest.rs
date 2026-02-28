@@ -66,6 +66,7 @@ mod defs {
     impl ConstraintVisitor<false> {
         /// Construct this visitor in the form that was originally evaluated in FANDANGO.
         #[deprecated(note = "The REST grammar originally does not represent label deduplication.")]
+        #[must_use]
         pub fn evaluated() -> Self {
             Self::default()
         }
@@ -77,7 +78,7 @@ mod defs {
                 if self.checked != 0 {
                     Ratio::new(self.checked - self.violations.len(), self.checked)
                 } else {
-                    Default::default()
+                    Ratio::default()
                 },
                 self.violations,
             )
@@ -214,6 +215,7 @@ mod defs {
     impl ConstraintFixer<false> {
         /// Construct this fixer in the form that was originally evaluated in FANDANGO.
         #[deprecated(note = "The REST grammar originally does not represent label deduplication.")]
+        #[must_use]
         pub fn evaluated() -> Self {
             Self(())
         }

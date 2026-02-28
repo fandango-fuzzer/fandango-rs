@@ -126,7 +126,7 @@ impl Reducer<ControlFlow<(), Ordering>, Option<Ordering>> for DomReducer {
                 };
                 ControlFlow::Continue(ordering)
             }
-            b @ ControlFlow::Break(_) => b,
+            b @ ControlFlow::Break(()) => b,
         }
     }
 }
@@ -335,7 +335,10 @@ pub trait FitnessMeasurerTuple<'a, N, E> {
     type Measurements;
 
     /// Perform the evaluation over all measurers
-
+    ///
+    /// # Errors
+    ///
+    /// Forwards any [`FitnessMeasurer::Error`] emitted by an inner measurer.
     fn evaluate(&mut self, node: &'a N) -> Result<Self::Measurements, E>;
 }
 

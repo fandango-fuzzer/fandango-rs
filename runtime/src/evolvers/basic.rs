@@ -239,6 +239,10 @@ where
 pub trait BasicHook<N, G, S> {
     /// Hook which is executed immediately after an individual is created, but before it is
     /// evaluated
+    ///
+    /// # Errors
+    ///
+    /// While hooks should generally not error out, they may do so if a hook cannot be run.
     #[allow(unused)]
     fn individual_created(
         &mut self,

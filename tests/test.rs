@@ -320,7 +320,7 @@ mod simple {
     }
 
     #[test]
-    fn kpath() -> Result<(), Box<dyn Error>> {
+    fn kpath() {
         let mut rng = StdRng::seed_from_u64(0);
         let mut kpath = KPaths::new::<TypeMut<'static>>(
             NonZeroUsize::new(5).unwrap(),
@@ -338,8 +338,6 @@ mod simple {
 
             zero = updater.kpaths().k_paths().0;
         }
-
-        Ok(())
     }
 }
 
@@ -414,9 +412,8 @@ mod xml {
     }
 
     #[test]
-    fn default_terminates() -> Result<(), Box<dyn Error>> {
+    fn default_terminates() {
         let _ = nonterminal_start::default();
-        Ok(())
     }
 
     // this looks horrible, but this means we can downcast N1 to N2 conditionally
@@ -431,7 +428,7 @@ mod xml {
     }
 
     #[test]
-    fn find_replace() -> Result<(), Box<dyn Error>> {
+    fn find_replace() {
         let mut rng = StdRng::seed_from_u64(0);
         let mut first = nonterminal_start::generate_default(&mut rng, &mut (), 0);
         let mut second = nonterminal_start::generate_default(&mut rng, &mut (), 0);
@@ -454,8 +451,6 @@ mod xml {
         );
 
         assert_eq!(second, second_clone);
-
-        Ok(())
     }
 
     #[test]
@@ -493,7 +488,7 @@ mod xml {
     }
 
     #[test]
-    fn kpath() -> Result<(), Box<dyn Error>> {
+    fn kpath() {
         let mut rng = StdRng::seed_from_u64(0);
         let mut kpath = KPaths::new::<TypeMut<'static>>(
             NonZeroUsize::new(5).unwrap(),
@@ -511,7 +506,5 @@ mod xml {
 
             zero = updater.kpaths().k_paths().0;
         }
-
-        Ok(())
     }
 }

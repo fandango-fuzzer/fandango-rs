@@ -92,6 +92,10 @@ impl<'source, T> Tagged<'source, T> {
     }
 
     /// The [`Span`] associated with the inner node.
+    ///
+    /// # Panics
+    ///
+    /// Panics if this [`Tagged`] was constructed with an invalidly bounded span.
     pub fn span(&self) -> Span<'source> {
         Span::new(self.source, self.span.0, self.span.1)
             .expect("Should never construct Tagged with invalid span bounds")
@@ -476,7 +480,7 @@ pub enum Operator<'a> {
     Symbol(Tagged<'a, Symbol<'a>>),
 }
 
-fn parse_range(pair: Pair<Rule>) -> Result<usize, ParseError> {
+fn parse_range(pair: &Pair<Rule>) -> Result<usize, ParseError> {
     usize::from_str(pair.as_str()).map_err(|_| {
         Box::new(PestError::new_from_span(
             ErrorVariant::CustomError {
@@ -502,8 +506,8 @@ impl<'a> TryFrom<Pair<'a, Rule>> for Operator<'a> {
             Rule::repeat => {
                 let mut pairs = inner.into_inner();
                 let symbol = pairs.next().unwrap().try_into()?;
-                let range_start = parse_range(pairs.next().unwrap())?;
-                let range_end = pairs.next().map_or(Ok(range_start), parse_range)?;
+                let range_start = parse_range(&pairs.next().unwrap())?;
+                let range_end = pairs.next().as_ref().map_or(Ok(range_start), parse_range)?;
                 Operator::Repeat(symbol, range_start, range_end)
             }
             Rule::symbol => Operator::Symbol(inner.try_into()?),
@@ -655,7 +659,7 @@ mod py_literal {
             Rule::octal_escape => u8::from_str_radix(seq.as_str(), 8).map_err(|err| {
                 Box::new(PestError::new_from_span(
                     ErrorVariant::CustomError {
-                        message: format!("failed to parse \\{} as u8: {}", seq.as_str(), err,),
+                        message: format!("failed to parse \\{} as u8: {}", seq.as_str(), err),
                     },
                     seq.as_span(),
                 ))
@@ -704,10 +708,10 @@ pub(crate) mod test {
         Symbol, parse_string,
     };
     use alloc::borrow::Cow;
-    use alloc::boxed::Box;
+
     use alloc::format;
     use alloc::vec::Vec;
-    use core::error::Error;
+
     use pest::Parser;
     use pest::iterators::Pair;
 
@@ -751,7 +755,7 @@ pub(crate) mod test {
         include_str!("../../../tests/grammars/xml_constrained.fan");
 
     #[test]
-    fn test_grammar() -> Result<(), Box<dyn Error>> {
+    fn test_grammar() {
         let (grammar,) = parse_pairs_as!(
             Fandango::parse(Rule::fandango, SIMPLE_GRAMMAR).unwrap(),
             (Rule::fandango,)
@@ -845,8 +849,6 @@ pub(crate) mod test {
                 check_nonterminal_operator(operator, "non_zero");
             });
         }
-
-        Ok(())
     }
 
     macro_rules! untag_or_die {
@@ -864,7 +866,8 @@ pub(crate) mod test {
     }
 
     #[test]
-    fn test_fullparse() -> Result<(), Box<dyn Error>> {
+    #[allow(clippy::too_many_lines)]
+    fn test_fullparse() {
         let program = Program::try_from(SIMPLE_GRAMMAR).unwrap();
 
         let [start, expr, number, non_zero, digit] =
@@ -1037,8 +1040,6 @@ pub(crate) mod test {
         let nt = untag_or_die!(sym, Symbol::Nonterminal(sym));
         let name = untag_or_die!(nt, Nonterminal { name });
         assert_eq!(name, "non_zero");
-
-        Ok(())
     }
 
     #[test]
@@ -1132,12 +1133,12 @@ impl Display for FandangoNode<'_, '_> {
             }
             FandangoNode::Selection(Selection::Basic(_)) => f.write_str("DIRECT"),
             FandangoNode::BaseSelection(BaseSelection::Nonterminal(_)) => f.write_str("EXACT"),
-            FandangoNode::BaseSelection(BaseSelection::Selector(_)) => f.write_str("SELECTED"),
             FandangoNode::RsPairs(_) => f.write_str("PAIRS"),
             FandangoNode::RsPair(_) => f.write_str("PAIR"),
             FandangoNode::RsSlices(_) => f.write_str("SLICES"),
             FandangoNode::RsSlice(s) => Display::fmt(s.inner(), f),
-            FandangoNode::Inversion(Inversion::Selector(_)) => f.write_str("SELECTED"),
+            FandangoNode::BaseSelection(BaseSelection::Selector(_))
+            | FandangoNode::Inversion(Inversion::Selector(_)) => f.write_str("SELECTED"),
             FandangoNode::Inversion(Inversion::Stringified(_)) => f.write_str("STRINGIFIED"),
         }
     }

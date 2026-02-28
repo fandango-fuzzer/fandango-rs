@@ -15,6 +15,7 @@ pub struct VisitErrorTrace<E, T> {
 }
 
 impl<E, T> VisitErrorTrace<E, T> {
+    #[must_use]
     pub fn extend<'node, N: Node<Type<'node> = T>>(mut self, node: &'node N, idx: usize) -> Self
     where
         N::Type<'node>: From<&'node N>,

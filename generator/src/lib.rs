@@ -231,7 +231,7 @@ impl Parse for FandangoDerivation {
 /// # Panics
 ///
 /// Panics if the canonicalized paths to the grammar files are not UTF-8 compatible.
-
+#[allow(clippy::too_many_lines)] // low priority
 pub fn derive_fandango_or_emit_error(
     source: &FandangoDerivation,
 ) -> Result<TokenStream, TokenStream> {

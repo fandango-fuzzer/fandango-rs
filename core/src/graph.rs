@@ -379,9 +379,9 @@ where
             FandangoNode::RsSlices(s) => s.traverse(consumer),
             FandangoNode::Inversion(s) => s.traverse(consumer),
             // nothing to do in these cases; they are terminals
-            FandangoNode::String(_) => {}
-            FandangoNode::ConstraintOperator(_) => {}
-            FandangoNode::RsSlice(_) => {}
+            FandangoNode::String(_)
+            | FandangoNode::ConstraintOperator(_)
+            | FandangoNode::RsSlice(_) => {}
         }
     }
 }
@@ -620,6 +620,7 @@ pub trait IntoNode {
 /// Computes the shortest derivation trees available from each alternation, returning the variants
 /// with the minimum possible path.
 #[must_use]
+#[allow(clippy::missing_panics_doc)]
 pub fn shortest_path<'program, 'source>(
     graph: &DiGraph<FandangoNode<'program, 'source>, Span<'source>>,
 ) -> HashMap<FandangoNode<'program, 'source>, Vec<usize>> {
@@ -627,13 +628,12 @@ pub fn shortest_path<'program, 'source>(
         .node_references()
         .filter_map(|(idx, node)| matches!(node, FandangoNode::String(_)).then_some((idx, 0usize)))
         .collect::<HashMap<_, _>>();
-    let mut queue = VecDeque::from_iter(
-        depths
-            .keys()
-            .copied()
-            .flat_map(|term| graph.edges_directed(term, Direction::Incoming))
-            .map(|e| e.source()),
-    );
+    let mut queue = depths
+        .keys()
+        .copied()
+        .flat_map(|term| graph.edges_directed(term, Direction::Incoming))
+        .map(|e| e.source())
+        .collect::<VecDeque<_>>();
     let mut alternatives = HashMap::new();
 
     loop {
@@ -706,26 +706,25 @@ pub fn shortest_path<'program, 'source>(
 #[cfg(test)]
 mod test {
     use crate::graph::IntoGraph;
+    use crate::lang::Program;
     use crate::lang::test::SIMPLE_GRAMMAR;
-    use crate::lang::{FandangoNode, Program};
-    use alloc::boxed::Box;
+
     use alloc::format;
-    use alloc::string::ToString;
-    use core::error::Error;
+
     use petgraph::data::{Element, FromElements};
-    use petgraph::dot::{Config, Dot};
+
     use petgraph::graph::DiGraph;
 
     extern crate std;
 
     // this doesn't really test anything, just produces a graph in GraphViz format
     #[test]
-    fn test_graph() -> Result<(), Box<dyn Error>> {
+    fn test_graph() {
         let program = Program::try_from(SIMPLE_GRAMMAR).unwrap();
 
         let (_, graph) = (&program).into_graph();
 
-        let renderable = DiGraph::<_, _>::from_elements(
+        let _renderable = DiGraph::<_, _>::from_elements(
             graph
                 .raw_nodes()
                 .iter()
@@ -745,25 +744,5 @@ mod test {
                     }
                 })),
         );
-
-        let rendered = Dot::with_attr_getters(
-            &renderable,
-            &[Config::NodeNoLabel, Config::EdgeNoLabel],
-            &|_, e| format!("label = {:?}", e.weight()),
-            &|_, (_, node)| {
-                format!(
-                    "label = {:?}",
-                    match node {
-                        FandangoNode::String(s) =>
-                            core::str::from_utf8(s.inner()).unwrap().to_string(),
-                        _ => format!("{node}"),
-                    }
-                )
-            },
-        );
-
-        std::println!("{rendered}");
-
-        Ok(())
     }
 }

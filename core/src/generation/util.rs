@@ -131,6 +131,10 @@ fn flatten(
 
 impl Flattener<()> {
     /// Construct the [`Flattener`] with a static target defined by `N`.
+    ///
+    /// # Errors
+    ///
+    /// Returns an [`Unflattenable`] error when the grammar could not be flattened.
     pub fn flatten<N>() -> Result<Flattener<StaticTarget<N>>, Unflattenable>
     where
         N: Structured + AsStaticNode,
@@ -244,6 +248,14 @@ mod dynamic_impls {
 
     impl Flattener<()> {
         /// Adds a node to the flattening list by root and definition.
+        ///
+        /// # Errors
+        ///
+        /// Returns an [`Unflattenable`] error when the grammar could not be flattened.
+        ///
+        /// # Panics
+        ///
+        /// Panics when `root` is not a [`FandangoNode::Program`].
         pub fn flatten_dynamic(
             root: FandangoNode,
             definition: FandangoNode,

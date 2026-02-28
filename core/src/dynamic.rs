@@ -284,6 +284,7 @@ where
     S: Sampler<DynamicNode> + HasDynamicSampler,
     G: GeneratorTuple<DynamicNode, S>,
 {
+    #[expect(clippy::too_many_lines)]
     fn generate_default(sampler: &mut S, with: &mut G, depth: usize) -> Self {
         let definition = sampler.definition();
         let result = (|| match definition {
@@ -434,12 +435,14 @@ impl AssignFrom<&'_ DynamicNode> for &'_ mut DynamicNode {
 }
 
 impl DiscriminantLookup for &'_ DynamicNode {
+    #[allow(clippy::cast_possible_truncation)]
     fn lookup_discriminant(node: &crate::lang::FandangoNode) -> usize {
         SeedableRandomState::fixed().hash_one(node) as usize
     }
 }
 
 impl DiscriminantLookup for &'_ mut DynamicNode {
+    #[allow(clippy::cast_possible_truncation)]
     fn lookup_discriminant(node: &crate::lang::FandangoNode) -> usize {
         SeedableRandomState::fixed().hash_one(node) as usize
     }

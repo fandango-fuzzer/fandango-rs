@@ -55,21 +55,22 @@ impl<'a> Deserialize<'a> for KPaths {
         D: Deserializer<'a>,
     {
         let (k, edges) = <(NonZeroUsize, HashMap<usize, Vec<usize>>)>::deserialize(deserializer)?;
-        Ok(Self::from_edges(k, edges))
+        Ok(Self::from_edges(k, &edges))
     }
 }
 
 impl KPaths {
-    fn from_edges(k: NonZeroUsize, edges: HashMap<usize, Vec<usize>>) -> Self {
-        let mut paths_len_n = vec![Vec::from_iter(
+    fn from_edges(k: NonZeroUsize, edges: &HashMap<usize, Vec<usize>>) -> Self {
+        let mut paths_len_n = vec![
             edges
                 .keys()
                 .chain(edges.values().flatten())
                 .copied()
                 .collect::<HashSet<_>>()
                 .into_iter()
-                .map(|n| vec![n]),
-        )];
+                .map(|n| vec![n])
+                .collect::<Vec<_>>(),
+        ];
         for _ in 1..k.get() {
             let mut paths_len_i = Vec::new();
             let last = paths_len_n.last_mut().unwrap();
@@ -126,8 +127,7 @@ impl KPaths {
     where
         T: DiscriminantLookup,
     {
-        let children;
-        match definition {
+        let children = match definition {
             nt @ FandangoNode::Nonterminal(_) => return nt, // nothing to do
             FandangoNode::Alternative(alt) => {
                 if alt.concatenations().len() == 1 {
@@ -136,11 +136,10 @@ impl KPaths {
                         collected,
                     );
                 }
-                children = alt
-                    .concatenations()
+                alt.concatenations()
                     .iter()
                     .map(|c| FandangoNode::Concatenation(c.inner()))
-                    .collect();
+                    .collect()
             }
             FandangoNode::Concatenation(concat) => {
                 if concat.operators().len() == 1 {
@@ -149,11 +148,11 @@ impl KPaths {
                         collected,
                     );
                 }
-                children = concat
+                concat
                     .operators()
                     .iter()
                     .map(|c| FandangoNode::Operator(c.inner()))
-                    .collect();
+                    .collect()
             }
             FandangoNode::Operator(op) => {
                 // TODO: is there another way we should be computing k-path here?
@@ -170,7 +169,7 @@ impl KPaths {
                     }
                 };
                 let child = FandangoNode::Symbol(child.inner());
-                children = vec![child];
+                vec![child]
             }
             FandangoNode::Symbol(sym) => {
                 let inner = match sym {
@@ -182,7 +181,7 @@ impl KPaths {
             }
             s @ FandangoNode::String(_) => return s, // nothing to do
             _ => unreachable!("Cannot generate this case."),
-        }
+        };
 
         let discriminant = T::lookup_discriminant(&definition);
         let children = children
@@ -200,6 +199,11 @@ impl KPaths {
     ///
     /// You need to specify `T` here. If you're using a dynamic implementation, use
     /// `::<DynamicNode>`, otherwise specify the `Type` or `TypeMut` of your static grammar.
+    ///
+    /// # Panics
+    ///
+    /// Panics if a nonterminal's discriminant is duplicated, which is not possible with
+    /// static grammars. You'd have to be very unlucky for it to happen with dynamic.
     #[must_use]
     pub fn new<T>(k: NonZeroUsize, program: &'static Program) -> KPaths
     where
@@ -211,10 +215,10 @@ impl KPaths {
             let definition = Self::collect_edges::<T>(*definition, &mut edges);
             let nonterminal = T::lookup_discriminant(nonterminal);
             let definition = T::lookup_discriminant(&definition);
-            assert!(edges.insert(nonterminal, vec![definition],).is_none());
+            assert!(edges.insert(nonterminal, vec![definition]).is_none());
         }
 
-        Self::from_edges(k, edges)
+        Self::from_edges(k, &edges)
     }
 
     /// Get the current k-paths totals expressed as `(#uncovered, #total)`.
@@ -328,6 +332,10 @@ pub trait KPathVisitor {
 
     /// When traversing an input, this callback is invoked with the current number of times that the
     /// given path has been visited. There are no guarantees on the call order of this visitor.
+    ///
+    /// # Errors
+    ///
+    /// This function may emit a [`KPathVisitor::Error`] as defined by implementation.
     fn visit_path(
         &mut self,
         count: usize,

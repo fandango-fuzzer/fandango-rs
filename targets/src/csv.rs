@@ -55,6 +55,7 @@ mod defs {
     impl ConstraintVisitor<false> {
         /// Construct this visitor in the form that was originally evaluated in FANDANGO.
         #[deprecated(note = "The CSV grammar originally incorrectly counts the number of fields.")]
+        #[must_use]
         pub fn evaluated() -> Self {
             Self::default()
         }
@@ -62,6 +63,7 @@ mod defs {
 
     impl ConstraintVisitor<true> {
         /// Construct this visitor in the form that produces correctly formatted data.
+        #[must_use]
         pub fn corrected() -> Self {
             Self::default()
         }
@@ -73,7 +75,7 @@ mod defs {
                 if self.checked != 0 {
                     Ratio::new(self.checked - self.violations.len(), self.checked)
                 } else {
-                    Default::default()
+                    Ratio::default()
                 },
                 self.violations,
             )
@@ -115,7 +117,7 @@ mod defs {
                     if base != cmp {
                         let mut violation = self.path.clone();
                         violation.extend([0, 0, 1, 0, 0, 0, 0, 0]); // interior path to actual node
-                        self.violations.push(violation)
+                        self.violations.push(violation);
                     }
                 }
             }
@@ -162,7 +164,7 @@ mod defs {
         }
     }
 
-    impl<'a, S, G, T> VisitorMut<T> for ConstraintFixer<'a, S, G, true>
+    impl<S, G, T> VisitorMut<T> for ConstraintFixer<'_, S, G, true>
     where
         nonterminal_raw_field: Generated<S, G>,
         T: VisitableChildrenMut<T> + AsNodeMut<nonterminal_csv_records>,
@@ -229,7 +231,7 @@ mod defs {
         }
     }
 
-    impl<'a, S, G, T> VisitorMut<T> for ConstraintFixer<'a, S, G, false> {
+    impl<S, G, T> VisitorMut<T> for ConstraintFixer<'_, S, G, false> {
         type Continue = Self;
         type Break = Infallible;
         type Error = Infallible;

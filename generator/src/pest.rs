@@ -22,6 +22,7 @@ pub trait IntoPestSource<C> {
 impl<'source> IntoPestSource<()> for DiGraph<FandangoNode<'_, 'source>, Span<'source>> {
     type OutputError = fmt::Error;
 
+    #[allow(clippy::similar_names)] // hasher, hashes; not useful to rename
     fn emit_pest(&self, _ctx: &mut (), output: &mut String) -> Result<(), Self::OutputError> {
         let mut hashes = HashSet::new();
         for string in
@@ -139,16 +140,13 @@ impl<'program, 'source> IntoPestSource<PestContext<'_, 'program, 'source>> for N
                     "{pest_name} = {{ {}{} }}",
                     pest_child_names.join(" ~ "),
                     match o {
-                        Operator::Plus(_) => {
+                        Operator::Plus(_) | Operator::Kleene(_) | Operator::Repeat(_, _, _) => {
+                            // we secretly emit repeats as *, since pest doesn't have a clean way to handle
+                            // this for large repetitions
                             '*'
                         }
                         Operator::Option(_) => {
                             '?'
-                        }
-                        Operator::Kleene(_) | Operator::Repeat(_, _, _) => {
-                            // we secretly emit repeats as *, since pest doesn't have a clean way to handle
-                            // this for large repetitions
-                            '*'
                         }
                         Operator::Symbol(_) =>
                             unimplemented!("Unexpected symbol; should be elided."),

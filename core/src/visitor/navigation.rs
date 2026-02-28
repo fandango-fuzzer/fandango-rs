@@ -8,6 +8,7 @@ use crate::visitor::{
 };
 use alloc::collections::VecDeque;
 use alloc::vec::Vec;
+use core::cmp::Ordering;
 use core::convert::Infallible;
 use core::ops::ControlFlow;
 
@@ -75,7 +76,7 @@ where
                     path.push_front(idx);
                     Ok(ControlFlow::Break(path))
                 }
-                c => Ok(c),
+                c @ ControlFlow::Continue(_) => Ok(c),
             }
         }
     }
@@ -94,11 +95,6 @@ where
         N: Node<Type<'program> = T>,
         T: From<&'program N> + AsNodeRef<N>,
     {
-        let mut stack = Vec::new();
-
-        let mut work = VecDeque::new();
-        work.push_back((usize::MAX, idx, node.opaque()));
-
         struct ChildCollector<'a, T, U> {
             reference: &'a U,
             parent: usize,
@@ -127,6 +123,11 @@ where
                 }
             }
         }
+
+        let mut stack = Vec::new();
+
+        let mut work = VecDeque::new();
+        work.push_back((usize::MAX, idx, node.opaque()));
 
         while let Some((parent, idx, next)) = work.pop_front() {
             let next_parent = stack.len();
@@ -358,6 +359,10 @@ pub trait GoTo<'b> {
     type Value;
 
     /// Perform the traversal!
+    ///
+    /// # Errors
+    ///
+    /// Returns an [`InvalidPath`] when the provided path is not traversable.
     fn go_to(self, idx: usize, path: &'b [usize]) -> Result<Self::Value, InvalidPath>;
 }
 
@@ -383,6 +388,10 @@ pub trait GoToMut<'b> {
     type Value;
 
     /// Perform the traversal!
+    ///
+    /// # Errors
+    ///
+    /// Returns an [`InvalidPath`] when the provided path is not traversable.
     fn go_to_mut(self, idx: usize, path: &'b [usize]) -> Result<Self::Value, InvalidPath>;
 }
 
@@ -611,22 +620,22 @@ where
         T: From<&'program N> + AsNodeRef<N>,
     {
         let result = if let Some((&current, from)) = self.from.split_first() {
-            if current == idx {
-                if from.is_empty() {
-                    self.visitor.visit(node, idx)
-                } else {
-                    return node.opaque().visit_each_from(
-                        Self {
-                            from,
-                            visitor: self.visitor,
-                        },
-                        from[0],
-                    );
+            match current.cmp(&idx) {
+                Ordering::Equal => {
+                    if from.is_empty() {
+                        self.visitor.visit(node, idx)
+                    } else {
+                        return node.opaque().visit_each_from(
+                            Self {
+                                from,
+                                visitor: self.visitor,
+                            },
+                            from[0],
+                        );
+                    }
                 }
-            } else if current < idx {
-                self.visitor.visit(node, idx)
-            } else {
-                return Ok(ControlFlow::Continue(self)); // nothing to do
+                Ordering::Less => self.visitor.visit(node, idx),
+                Ordering::Greater => return Ok(ControlFlow::Continue(self)), // nothing to do
             }
         } else {
             // very rare corner case: no path provided, ever

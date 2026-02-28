@@ -195,6 +195,9 @@ impl<'program, 'source> IntoRustSource<FandangoGenContext<'_, '_, 'program, 'sou
 {
     type OutputError = Infallible;
 
+    // this function should probably be broken up, but this is major refactoring effort
+    // I assume responsibility for this technical debt, and I've made an issue
+    #[allow(clippy::too_many_lines)]
     fn emit_rust(
         &self,
         ctx: FandangoGenContext<'_, '_, 'program, 'source>,
@@ -768,11 +771,11 @@ impl<'program, 'source> IntoRustSource<FandangoGenContext<'_, '_, 'program, 'sou
                                     type ChildMut<'a> = #child_mut_types;
 
                                     fn child(&self) -> Self::Child<'_> {
-                                        #ref_visit_prefixes(self.child_0.get())
+                                        #ref_visit_prefixes(self.child_0.get(N))
                                     }
 
                                     fn child_mut(&mut self) -> Self::ChildMut<'_> {
-                                        #visit_prefixes(self.child_0.get_mut())
+                                        #visit_prefixes(self.child_0.get_mut(N))
                                     }
                                 }
                             )*
@@ -786,11 +789,11 @@ impl<'program, 'source> IntoRustSource<FandangoGenContext<'_, '_, 'program, 'sou
                                     type ChildMut<'a> = #child_mut_types;
 
                                     fn child(&self) -> Self::Child<'_> {
-                                        #ref_visit_prefixes(self.child_0.as_ref(N))
+                                        #ref_visit_prefixes(self.child_0.as_ref())
                                     }
 
                                     fn child_mut(&mut self) -> Self::ChildMut<'_> {
-                                        #visit_prefixes(self.child_0.as_mut(N))
+                                        #visit_prefixes(self.child_0.as_mut())
                                     }
                                 }
                             )*

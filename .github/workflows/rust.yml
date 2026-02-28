@@ -64,11 +64,11 @@ jobs:
       - run: rustup update ${{ matrix.toolchain }} && rustup default ${{ matrix.toolchain }}
       - run: rustup component add clippy
       - name: Clippy
-        run: cargo clippy --all-features --workspace --tests --benches --examples -- -D warnings
+        run: cargo clippy --all-features --workspace --tests --benches -- -D warnings
       - name: Clippy no_opt_indirect
         env:
           RUSTFLAGS: -Znext-solver --cfg=no_opt_indirect
-        run: cargo clippy --all-features --workspace --tests --benches --examples -- -D warnings
+        run: cargo clippy --all-features --workspace --tests --benches -- -D warnings
 
   lm3s6965:
     runs-on: ubuntu-latest

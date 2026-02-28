@@ -31,7 +31,11 @@ where
     type Error;
 
     /// Performs the measurement
-
+    ///
+    /// # Errors
+    ///
+    /// While most measurers should be error-resistant, implementations may emit errors when an
+    /// input is not measurable.
     fn evaluate(&mut self, node: &'a N) -> Result<Self::Measurement, Self::Error>;
 }
 
