@@ -127,7 +127,7 @@ impl KPaths {
     where
         T: DiscriminantLookup,
     {
-        let children = match definition {
+        let children: Vec<_> = match definition {
             nt @ FandangoNode::Nonterminal(_) => return nt, // nothing to do
             FandangoNode::Alternative(alt) => {
                 if alt.concatenations().len() == 1 {
@@ -154,22 +154,15 @@ impl KPaths {
                     .map(|c| FandangoNode::Operator(c.inner()))
                     .collect()
             }
-            FandangoNode::Operator(op) => {
+            FandangoNode::Operator(
+                Operator::Kleene(sym)
+                | Operator::Plus(sym)
+                | Operator::Option(sym)
+                | Operator::Repeat(sym, _, _)
+                | Operator::Symbol(sym),
+            ) => {
                 // TODO: is there another way we should be computing k-path here?
-                let child = match op {
-                    Operator::Kleene(kl) => kl,
-                    Operator::Plus(pl) => pl,
-                    Operator::Option(opt) => opt,
-                    Operator::Repeat(rpt, _, _) => rpt,
-                    Operator::Symbol(sym) => {
-                        return Self::collect_edges::<T>(
-                            FandangoNode::Symbol(sym.inner()),
-                            collected,
-                        );
-                    }
-                };
-                let child = FandangoNode::Symbol(child.inner());
-                vec![child]
+                return Self::collect_edges::<T>(FandangoNode::Symbol(sym.inner()), collected);
             }
             FandangoNode::Symbol(sym) => {
                 let inner = match sym {
