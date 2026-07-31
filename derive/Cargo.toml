@@ -1,9 +1,11 @@
 [package]
 name = "fandango-derive"
+description = "Derive macros for fandango-rs."
 version.workspace = true
 edition.workspace = true
 authors.workspace = true
 license.workspace = true
+repository.workspace = true
 
 [dependencies]
 fandango-generator = { path = "../generator" }

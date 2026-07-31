@@ -1,9 +1,11 @@
 [package]
 name = "fandango"
+description = "An extremely performant, compiler-optimizable form of Fandango for high-complexity input languages."
 version.workspace = true
 edition.workspace = true
 authors.workspace = true
 license.workspace = true
+repository.workspace = true
 
 [dependencies]
 fandango-core = { path = "core" }
@@ -60,6 +62,7 @@ version = "0.1.0"
 edition = "2024"
 authors = ["The fandango-rs developers"]
 license = "EUPL-1.2"
+repository = "https://github.com/fandango-fuzzer/fandango-rs"
 
 [workspace.dependencies]
 anyhow = { version = "1.0", default-features = false }

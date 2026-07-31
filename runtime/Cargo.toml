@@ -1,9 +1,11 @@
 [package]
 name = "fandango-runtime"
+description = "Generic runtime support for fandango-rs."
 version.workspace = true
 edition.workspace = true
 authors.workspace = true
 license.workspace = true
+repository.workspace = true
 
 [dependencies]
 fandango = { path = ".." }
