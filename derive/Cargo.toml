@@ -8,7 +8,7 @@ license.workspace = true
 repository.workspace = true
 
 [dependencies]
-fandango-generator = { path = "../generator" }
+fandango-generator.workspace = true
 
 syn.workspace = true
 

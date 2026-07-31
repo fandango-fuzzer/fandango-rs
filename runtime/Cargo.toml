@@ -8,7 +8,7 @@ license.workspace = true
 repository.workspace = true
 
 [dependencies]
-fandango = { path = ".." }
+fandango.workspace = true
 
 anyhow.workspace = true
 either.workspace = true

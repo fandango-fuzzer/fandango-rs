@@ -8,8 +8,8 @@ license.workspace = true
 repository.workspace = true
 
 [dependencies]
-fandango-core = { path = "core" }
-fandango-derive = { path = "derive", default-features = false }
+fandango-core.workspace = true
+fandango-derive = { workspace = true, default-features = false }
 
 pest.workspace = true
 pest_derive.workspace = true
@@ -65,6 +65,11 @@ license = "EUPL-1.2"
 repository = "https://github.com/fandango-fuzzer/fandango-rs"
 
 [workspace.dependencies]
+fandango = { path = ".", version = "0.1.0" }
+fandango-core = { path = "core", version = "0.1.0" }
+fandango-derive = { path = "derive", version = "0.1.0", default-features = false }
+fandango-generator = { path = "generator", version = "0.1.0" }
+
 anyhow = { version = "1.0", default-features = false }
 criterion = { version = "0.7.0", features = ["html_reports"] }
 either = { version = "1.13", default-features = false }

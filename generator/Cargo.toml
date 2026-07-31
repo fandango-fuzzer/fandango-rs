@@ -8,7 +8,7 @@ license.workspace = true
 repository.workspace = true
 
 [dependencies]
-fandango-core = { path = "../core" }
+fandango-core.workspace = true
 
 hashbrown.workspace = true
 pest.workspace = true
