@@ -326,6 +326,7 @@ where
                     assert_eq!(idx, 0);
                     let mut value = value.go_to_mut(0, choice).expect("Must be a valid path");
 
+                    #[allow(clippy::mut_mut)] // clippy overdetection
                     crossover(&mut value, &base, &mut local)
                 },
                 BatchSize::SmallInput,

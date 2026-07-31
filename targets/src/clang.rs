@@ -1454,32 +1454,30 @@ mod defs {
                         match el.nth::<0>() {
                             // Variant 0, single expr.
                             nonterminal_expr_list_0::variant_0(expr) => {
-                                if let Some(t) = infer_expr_type(
+                                {
+                                    let t = infer_expr_type(
                                     expr,
                                     var_defs,
                                     func_defs,
                                     struct_defs,
                                     scope_trace,
-                                ) {
+                                )?;
                                     expr_types.push(t);
-                                } else {
-                                    return None; // Could not infer type of expression.
                                 }
                                 current = None;
                             }
                             // Variant 1, expr followed by more exprs.
                             nonterminal_expr_list_0::variant_1(seq) => {
                                 let (expr, _, _, rest) = seq.children();
-                                if let Some(t) = infer_expr_type(
+                                {
+                                    let t = infer_expr_type(
                                     expr,
                                     var_defs,
                                     func_defs,
                                     struct_defs,
                                     scope_trace,
-                                ) {
+                                )?;
                                     expr_types.push(t);
-                                } else {
-                                    return None; // Could not infer type of expression.
                                 }
                                 current = Some(rest);
                             }
