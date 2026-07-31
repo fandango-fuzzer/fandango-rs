@@ -1,5 +1,6 @@
 //! Utility visitors for navigating type trees.
 
+use crate::lang::FandangoNode;
 use crate::typing::{AsNodeMut, AsNodeRef, Node, Opaque, OpaqueMut};
 use crate::visitor::error::InvalidPath;
 use crate::visitor::{
@@ -525,8 +526,13 @@ where
         N: Node<Type<'program> = T>,
         T: From<&'program N> + AsNodeRef<N>,
     {
-        self.count += 1;
-        node.opaque().visit_each(self)
+        match node.definition() {
+            FandangoNode::String(s) => {
+                self.count += s.inner().len();
+                Ok(ControlFlow::Continue(self))
+            }
+            _ => node.opaque().visit_each(self),
+        }
     }
 }
 
