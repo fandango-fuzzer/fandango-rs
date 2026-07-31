@@ -158,10 +158,12 @@ impl KPaths {
                 Operator::Kleene(sym)
                 | Operator::Plus(sym)
                 | Operator::Option(sym)
-                | Operator::Repeat(sym, _, _)
-                | Operator::Symbol(sym),
+                | Operator::Repeat(sym, _, _),
             ) => {
                 // TODO: is there another way we should be computing k-path here?
+                vec![FandangoNode::Symbol(sym.inner())]
+            }
+            FandangoNode::Operator(Operator::Symbol(sym)) => {
                 return Self::collect_edges::<T>(FandangoNode::Symbol(sym.inner()), collected);
             }
             FandangoNode::Symbol(sym) => {
