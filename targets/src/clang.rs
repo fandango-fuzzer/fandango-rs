@@ -1456,12 +1456,12 @@ mod defs {
                             nonterminal_expr_list_0::variant_0(expr) => {
                                 {
                                     let t = infer_expr_type(
-                                    expr,
-                                    var_defs,
-                                    func_defs,
-                                    struct_defs,
-                                    scope_trace,
-                                )?;
+                                        expr,
+                                        var_defs,
+                                        func_defs,
+                                        struct_defs,
+                                        scope_trace,
+                                    )?;
                                     expr_types.push(t);
                                 }
                                 current = None;
@@ -1471,12 +1471,12 @@ mod defs {
                                 let (expr, _, _, rest) = seq.children();
                                 {
                                     let t = infer_expr_type(
-                                    expr,
-                                    var_defs,
-                                    func_defs,
-                                    struct_defs,
-                                    scope_trace,
-                                )?;
+                                        expr,
+                                        var_defs,
+                                        func_defs,
+                                        struct_defs,
+                                        scope_trace,
+                                    )?;
                                     expr_types.push(t);
                                 }
                                 current = Some(rest);
